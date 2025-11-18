@@ -12,6 +12,88 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 public class FlowTileCell extends StackPane {
+    private enum IconSize { SMALL, MEDIUM, LARGE }
+    private static IconSize currentSize = IconSize.MEDIUM;
+
+    public static void setIconSize(IconSize size) { currentSize = size; }
+
+    private void updateIconSize() {
+        if (getItem() == null) return;
+        javafx.scene.image.ImageView iv = new javafx.scene.image.ImageView(getItem().isDirectory() ? IconLoader.getFolderIcon() : IconLoader.getFileIcon());
+        switch(currentSize) {
+            case SMALL: iv.setFitWidth(32); iv.setFitHeight(32); break;
+            case MEDIUM: iv.setFitWidth(64); iv.setFitHeight(64); break;
+            case LARGE: iv.setFitWidth(128); iv.setFitHeight(128); break;
+        }
+        setGraphic(iv);
+    }
+
+    @Override
+    protected void updateItem(java.io.File item, boolean empty) {
+        super.updateItem(item, empty);
+        if (!empty && item != null) updateIconSize();
+    }
+    private static int lastSelectedIndex = -1;
+
+    @Override
+    protected void updateItem(File item, boolean empty) {
+        super.updateItem(item, empty);
+        if (empty || item == null) {
+            setText(null);
+            setGraphic(null);
+        } else {
+            setText(item.getName());
+            setOnMouseClicked(event -> {
+                if (multiSelectMode && event.isControlDown()) {
+                    selected = !selected;
+                    lastSelectedIndex = getIndex();
+                    updateSelectionStyle();
+                } else if (multiSelectMode && event.isShiftDown()) {
+                    if (lastSelectedIndex >= 0) {
+                        int start = Math.min(lastSelectedIndex, getIndex());
+                        int end = Math.max(lastSelectedIndex, getIndex());
+                        getListView().getSelectionModel().clearSelection();
+                        getListView().getSelectionModel().selectRange(start, end+1);
+                    }
+                } else {
+                    getListView().getSelectionModel().clearSelection();
+                    getListView().getSelectionModel().select(getIndex());
+                    lastSelectedIndex = getIndex();
+                }
+            });
+        }
+    }
+    private boolean selected = false;
+    private boolean multiSelectMode = false;
+
+    public void setMultiSelectMode(boolean enabled) { this.multiSelectMode = enabled; }
+
+    @Override
+    protected void updateItem(File item, boolean empty) {
+        super.updateItem(item, empty);
+        if (empty || item == null) {
+            setText(null);
+            setGraphic(null);
+        } else {
+            setText(item.getName());
+            setOnMouseClicked(event -> {
+                if (multiSelectMode && event.isControlDown()) {
+                    selected = !selected;
+                    updateSelectionStyle();
+                } else if (multiSelectMode && event.isShiftDown()) {
+                    // shift-select range handled in MainController
+                } else {
+                    getListView().getSelectionModel().clearSelection();
+                    getListView().getSelectionModel().select(getIndex());
+                }
+            });
+        }
+    }
+
+    private void updateSelectionStyle() {
+        if (selected) setStyle("-fx-background-color: -fx-accent; -fx-text-fill: white;");
+        else setStyle("");
+    }
     private javafx.scene.image.ImageView imageView = new javafx.scene.image.ImageView();
     public void updateThumbnail(java.io.File file) {
         javafx.scene.image.Image img = thumbnailGenerator.loadThumbnail(file, 128, 128);

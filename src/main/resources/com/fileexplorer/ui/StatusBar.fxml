@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<HBox xmlns:fx="http://javafx.com/fxml" spacing="10" style="-fx-padding: 5; -fx-background-color: #e0e0e0;">
+    <Label fx:id="lblPath" text="Path"/>
+    <Label fx:id="lblSelectionCount" text="0 item(s) selected"/>
+    <Label fx:id="lblTotalSize" text="0 KB"/>
+    <Label fx:id="lblDiskInfo" text="Disk info"/>
+</HBox>

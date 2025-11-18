@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.*?>
+<VBox xmlns:fx="http://javafx.com/fxml" fx:id="favoritesPane" spacing="5" style="-fx-padding:5; -fx-background-color:#f0f0f0;"/>

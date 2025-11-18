@@ -494,3 +494,157 @@ Next steps:
 2) Attach 'enableCrossPaneDrag(leftPane, rightPane)' during pane initialization.
 3) Implement actual file move/copy logic inside DragDropped event handler.
 4) Verify dragging files between panes updates both FlowTileCell displays correctly.
+
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk45.sh
+Patching MainController.java for tab persistence...
+Patching DragAndDropHandler.java for cross-pane drag-and-drop...
+Chunk 45 applied: Tab persistence implemented and cross-pane drag-and-drop enabled.
+
+Next steps:
+1) Call 'saveTabsState()' on application exit, and 'restoreTabsState()' on startup.
+2) Attach 'enableCrossPaneDrag(leftPane, rightPane)' during pane initialization.
+3) Implement actual file move/copy logic inside DragDropped event handler.
+4) Verify dragging files between panes updates both FlowTileCell displays correctly.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk46.sh
+Patching ContextMenuHandler.java to handle Delete, Rename, Copy, Properties...
+Patching MainController.java to wire Ribbon commands...
+Chunk 46 applied: Context menus and Ribbon commands for Delete, Rename, Copy, Properties fully wired.
+
+Next steps:
+1) Test right-click context menu on files in both panes.
+2) Test Ribbon buttons for selected files (Undo/Redo integration works automatically).
+3) Ensure HistoryManager records all operations for undo/redo.
+4) Verify Tab and dual-pane refresh after operations.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk47.sh
+Patching MainController.java for Ribbon dynamic menu updates...
+Chunk 47 applied: Ribbon buttons dynamically enable/disable based on selection type.
+
+Next steps:
+1) Call 'setupSelectionListeners()' during MainController initialization.
+2) Verify Ribbon buttons update when files/folders are selected or deselected.
+3) Extend logic for multiple selection or different file types if needed.
+4) Ribbon now mimics Microsoft Explorer’s dynamic contextual commands.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk48.sh
+Patching FlowTileCell.java for multi-file selection...
+Patching MainController.java for batch operations...
+Chunk 48 applied: Multi-file selection and batch operations enabled.
+
+Next steps:
+1) Enable multi-select mode in FlowTileCell panes.
+2) Use Ctrl+Click and Shift+Click to select multiple files.
+3) Test batch Delete, Rename, Copy, Properties on multiple selections.
+4) Verify HistoryManager records each operation correctly for undo/redo.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk49.sh
+Patching FlowTileCell.java to support Shift+Click range selection...
+Chunk 49 applied: Shift+Click range selection implemented in FlowTileCell.
+
+Next steps:
+1) Ensure multiSelectMode is enabled for both panes.
+2) Test Ctrl+Click to toggle individual files and Shift+Click to select ranges.
+3) Verify batch operations (Delete, Rename, Copy, Properties) work on multi-selection.
+4) Verify preview pane updates only for the last clicked file or batch context.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk50.sh
+Patching MainController.java to support Ribbon View menu switching...
+Writing TilesView.fxml...
+Chunk 50 applied: Ribbon View menu now switches between Tiles, Details, and Preview views.
+
+Next steps:
+1) Add Ribbon buttons/menu items wired to viewTiles(), viewDetails(), viewPreview().
+2) Verify dynamic switching maintains selection, preview, and HistoryManager state.
+3) Style Tiles, Details, and Preview views consistently with themes.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk51.sh
+Patching MainController.java for Ribbon 'Sort By' and 'Group By' dynamic updates...
+Chunk 51 applied: Ribbon 'Sort By' and 'Group By' dynamically updates based on current view.
+
+Next steps:
+1) Wire 'updateRibbonForView()' calls inside viewTiles(), viewDetails(), viewPreview().
+2) Verify Sort By is enabled for Tiles/Details, Group By only for Details.
+3) Ensure selection and HistoryManager state persists when switching views.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk52.sh
+Patching MainController.java for Ribbon 'New' commands...
+Chunk 52 applied: Ribbon 'New Folder', 'New File', and template commands implemented.
+
+Next steps:
+1) Add Ribbon buttons/menu items wired to newFolder(), newFile(), newFromTemplate().
+2) Ensure newly created items appear in the correct pane and are tracked by HistoryManager.
+3) Test creating multiple new files/folders and undoing via HistoryManager.
+4) Optionally pre-populate '~/.fileexplorer_templates' with example templates.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk53.sh
+Patching FlowTileCell.java for multiple icon sizes...
+Patching MainController.java to support Ribbon icon size and list/details switching...
+Chunk 53 applied: Ribbon view options (Large/Medium/Small icons, List, Details) implemented.
+
+Next steps:
+1) Add Ribbon buttons/menu items wired to viewLargeIcons(), viewMediumIcons(), viewSmallIcons(), viewList(), viewDetails().
+2) Verify icon sizes update dynamically in both panes.
+3) Verify List mode adjusts Flow orientation to vertical.
+4) Details view continues to support sortable columns and Group By.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk54.sh
+Patching MainController.java for dynamic StatusBar updates...
+Creating StatusBar.fxml...
+Chunk 54 applied: StatusBar now dynamically updates path, selection count, size, and disk info.
+
+Next steps:
+1) Include StatusBar.fxml at the bottom of MainLayout.fxml.
+2) Call setupStatusBarListeners() during MainController initialization.
+3) Verify updates for both left and right panes, including multi-file selection.
+4) Check disk space, selection count, and size calculations for correctness.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk55.sh
+Creating FavoritesManager.java...
+Patching MainController.java for Quick Access pin/unpin...
+Creating FavoritesPane.fxml...
+Chunk 55 applied: Ribbon 'Favorites / Quick Access' pin/unpin functionality implemented.
+
+Next steps:
+1) Add Ribbon button wired to pinCurrentFolder().
+2) FavoritesPane.fxml included in left navigation area of MainLayout.fxml.
+3) Verify clicking favorite navigates to folder; unpin removes it.
+4) Integrate Favorites with HistoryManager and view updates.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk56.sh
+Patching MainController.java for dual-pane copy/move with progress dialogs...
+Chunk 56 applied: Dual-pane copy/move operations with progress dialogs implemented.
+
+Next steps:
+1) Wire Ribbon buttons or context menu actions to copySelectedFiles() and moveSelectedFiles().
+2) Test multi-file selection across left/right panes.
+3) Verify HistoryManager correctly logs each copy/move action for undo/redo.
+4) Confirm progress bar updates dynamically and pane refreshes upon completion.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk57.sh
+Creating DragAndDropHandler.java...
+Patching MainController.java to wire DragAndDropHandler for left and right panes...
+Chunk 57 applied: Drag-and-drop support with auto copy/move feedback implemented.
+
+Next steps:
+1) Test dragging files between left and right panes; confirm auto-copy (Ctrl) vs move (default).
+2) Verify multi-file selection drag-and-drop works correctly.
+3) Ensure HistoryManager records each operation for undo/redo.
+4) Integrate progress bar for large copy/move operations if desired.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk58.sh
+Patching ThumbnailGenerator.java for Java 25 Virtual Threads support...
+Chunk 58 applied: Multi-threaded thumbnail preloading using Java 25 Virtual Threads implemented.
+
+Next steps:
+1) Call preloadThumbnails() after loading folder content in left/right panes.
+2) Verify thumbnails load asynchronously without freezing UI.
+3) Test large folders (>10,000 items) to ensure Virtual Threads scale efficiently.
+4) Ensure cache handles soft references for memory pressure.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk59.sh
+Patching MainController.java for multi-tab support...
+Creating TabsPane.fxml...
+Chunk 59 applied: Multi-tab support with persistence and context menus implemented.
+
+Next steps:
+1) Ensure each tab maintains its own left/right pane selection and HistoryManager state.
+2) Wire Ribbon/New/View actions to apply to the currently selected tab.
+3) Verify tabs can be added, closed, and navigated without affecting other tabs.
+4) Implement optional persistence (e.g., save open tabs and their directories on exit).
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk60.sh
+Patching MainController.java for tab drag-and-drop and grouping...
+Chunk 60 applied: Tab drag-and-drop reordering and basic grouping implemented.
+
+Next steps:
+1) Test dragging tabs to reorder them within TabPane.
+2) Consider grouping by folder or project (future enhancement).
+3) Verify that Ribbon actions and StatusBar continue to operate per active tab.
+4) Ensure HistoryManager and multi-pane selection persist correctly across reordered tabs.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$
