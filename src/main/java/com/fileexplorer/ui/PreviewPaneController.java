@@ -8,6 +8,57 @@ import javafx.scene.image.Image;
 import java.io.File;
 
 public class PreviewPaneController {
+    private boolean metadataVisible = true;
+    private int thumbSize = 64;
+
+    public void toggleMetadataVisibility(boolean visible) {
+        metadataVisible = visible;
+        // Re-render current selection to update metadata visibility
+        javafx.application.Platform.runLater(() -> showFiles(currentSelection));
+    }
+
+    public void setThumbnailSize(int size) {
+        thumbSize = size;
+        javafx.application.Platform.runLater(() -> showFiles(currentSelection));
+    }
+    @FXML private javafx.scene.layout.VBox previewBox;
+
+    public void showFiles(java.util.List<java.io.File> files) {
+        java.util.List<java.io.File> currentSelection = files;
+        previewBox.getChildren().clear();
+        if (files == null || files.isEmpty()) return;
+        for (java.io.File f : files) {
+            javafx.scene.layout.HBox fileRow = new javafx.scene.layout.HBox();
+            fileRow.setSpacing(10);
+            javafx.scene.image.ImageView thumbView = new javafx.scene.image.ImageView();
+            javafx.scene.image.Image img = new ThumbnailGenerator().generateThumbnail(f, thumbSize, thumbSize);
+            thumbView.setImage(img);
+            javafx.scene.control.Label nameLabel = new javafx.scene.control.Label(f.getName());
+            fileRow.getChildren().add(thumbView);
+            fileRow.getChildren().add(nameLabel);
+            if (metadataVisible) {
+                javafx.scene.control.Label sizeLabel = new javafx.scene.control.Label(f.length()/1024 + " KB");
+                javafx.scene.control.Label typeLabel = new javafx.scene.control.Label(f.isDirectory() ? "Folder" : "File");
+                fileRow.getChildren().addAll(typeLabel, sizeLabel);
+            }
+            previewBox.getChildren().add(fileRow);
+        }
+        previewBox.getChildren().clear();
+        if (files == null || files.isEmpty()) return;
+
+        for (java.io.File f : files) {
+            javafx.scene.layout.HBox fileRow = new javafx.scene.layout.HBox();
+            fileRow.setSpacing(10);
+            javafx.scene.image.ImageView thumbView = new javafx.scene.image.ImageView();
+            javafx.scene.image.Image img = new ThumbnailGenerator().generateThumbnail(f, 64, 64);
+            thumbView.setImage(img);
+            javafx.scene.control.Label nameLabel = new javafx.scene.control.Label(f.getName());
+            javafx.scene.control.Label sizeLabel = new javafx.scene.control.Label(f.length() / 1024 + " KB");
+            javafx.scene.control.Label typeLabel = new javafx.scene.control.Label(f.isDirectory() ? "Folder" : "File");
+            fileRow.getChildren().addAll(thumbView, nameLabel, typeLabel, sizeLabel);
+            previewBox.getChildren().add(fileRow);
+        }
+    }
 
     @FXML
     private Label lblFileName;

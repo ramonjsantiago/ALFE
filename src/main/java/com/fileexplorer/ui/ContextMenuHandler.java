@@ -6,6 +6,22 @@ import javafx.scene.input.MouseEvent;
 import java.io.File;
 
 public class ContextMenuHandler {
+    public static void attachContextMenu(javafx.scene.control.ListView<java.io.File> pane, MainController controller) {
+        javafx.scene.control.ContextMenu menu = new javafx.scene.control.ContextMenu();
+        javafx.scene.control.MenuItem delete = new javafx.scene.control.MenuItem("Delete");
+        delete.setOnAction(e -> controller.deleteSelectedFiles());
+        javafx.scene.control.MenuItem rename = new javafx.scene.control.MenuItem("Rename");
+        rename.setOnAction(e -> controller.renameSelectedFile());
+        javafx.scene.control.MenuItem copy = new javafx.scene.control.MenuItem("Copy");
+        copy.setOnAction(e -> controller.copySelectedFiles(controller.selectTargetFolder()));
+        javafx.scene.control.MenuItem move = new javafx.scene.control.MenuItem("Move");
+        move.setOnAction(e -> controller.moveSelectedFiles(controller.selectTargetFolder()));
+        javafx.scene.control.MenuItem properties = new javafx.scene.control.MenuItem("Properties");
+        properties.setOnAction(e -> controller.showPropertiesDialog());
+
+        menu.getItems().addAll(delete, rename, copy, move, properties);
+        pane.setContextMenu(menu);
+    }
     public static void addOpenWithOption(javafx.scene.control.ContextMenu menu, java.io.File file) {
         javafx.scene.control.Menu openWithMenu = new javafx.scene.control.Menu("Open With");
         // Common applications, extend as needed

@@ -9,6 +9,72 @@
  // * Many methods call MainController wrapper methods (copy/move/delete/undo/refresh/new folder etc.).
  // */
 // public class RibbonBarController {
+    @FXML private javafx.scene.control.Button undoButton;
+    @FXML private javafx.scene.control.Button redoButton;
+
+    public void initializeUndoRedoButtons(HistoryManager historyManager) {
+        undoButton.setOnAction(e -> {
+            historyManager.undo();
+        });
+        redoButton.setOnAction(e -> {
+            historyManager.redo();
+        });
+        // Bind button disable states to history availability
+        undoButton.disableProperty().bind(historyManager.canUndoProperty().not());
+        redoButton.disableProperty().bind(historyManager.canRedoProperty().not());
+    }
+    @FXML private javafx.scene.control.Menu fileMenu;
+    @FXML private javafx.scene.control.Menu editMenu;
+    @FXML private javafx.scene.control.Menu viewMenu;
+    @FXML private javafx.scene.control.Menu helpMenu;
+
+    public void initializeMenus(MainController controller) {
+        // File Menu
+        javafx.scene.control.MenuItem newFolder = new javafx.scene.control.MenuItem("New Folder");
+        newFolder.setOnAction(e -> controller.createNewFolder());
+        javafx.scene.control.MenuItem open = new javafx.scene.control.MenuItem("Open");
+        open.setOnAction(e -> controller.openSelectedFiles());
+        javafx.scene.control.MenuItem properties = new javafx.scene.control.MenuItem("Properties");
+        properties.setOnAction(e -> controller.showPropertiesDialog());
+        fileMenu.getItems().addAll(newFolder, open, properties);
+
+        // Edit Menu
+        javafx.scene.control.MenuItem cut = new javafx.scene.control.MenuItem("Cut");
+        cut.setOnAction(e -> controller.cutSelectedFiles());
+        javafx.scene.control.MenuItem copy = new javafx.scene.control.MenuItem("Copy");
+        copy.setOnAction(e -> controller.copySelectedFilesWithProgress(controller.getCurrentFolder()));
+        javafx.scene.control.MenuItem paste = new javafx.scene.control.MenuItem("Paste");
+        paste.setOnAction(e -> controller.pasteFiles());
+        javafx.scene.control.MenuItem delete = new javafx.scene.control.MenuItem("Delete");
+        delete.setOnAction(e -> controller.deleteSelectedFilesWithUndo());
+        editMenu.getItems().addAll(cut, copy, paste, delete);
+
+        // View Menu
+        javafx.scene.control.CheckMenuItem showPreview = new javafx.scene.control.CheckMenuItem("Show Preview Pane");
+        showPreview.setSelected(true);
+        showPreview.setOnAction(e -> controller.togglePreviewPane(showPreview.isSelected()));
+        javafx.scene.control.CheckMenuItem showDetails = new javafx.scene.control.CheckMenuItem("Details Pane");
+        showDetails.setSelected(true);
+        showDetails.setOnAction(e -> controller.toggleDetailsPane(showDetails.isSelected()));
+        viewMenu.getItems().addAll(showPreview, showDetails);
+
+        // Help Menu
+        javafx.scene.control.MenuItem about = new javafx.scene.control.MenuItem("About");
+        about.setOnAction(e -> controller.showAboutDialog());
+        helpMenu.getItems().addAll(about);
+    }
+    @FXML private javafx.scene.control.ToggleButton toggleMetadataBtn;
+    @FXML private javafx.scene.control.ChoiceBox<String> thumbnailSizeChoice;
+
+    public void initializePreviewPaneControls(PreviewPaneController previewPane) {
+        toggleMetadataBtn.setOnAction(e -> previewPane.toggleMetadataVisibility(toggleMetadataBtn.isSelected()));
+        thumbnailSizeChoice.getItems().addAll("Small", "Medium", "Large");
+        thumbnailSizeChoice.setValue("Medium");
+        thumbnailSizeChoice.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            int size = 64; if ("Small".equals(newVal)) size = 32; else if ("Medium".equals(newVal)) size = 64; else if ("Large".equals(newVal)) size = 128;
+            previewPane.setThumbnailSize(size);
+        });
+    }
 
     // @FXML private ToggleButton toggleNavPane;
     // @FXML private ToggleButton togglePreview;
@@ -93,6 +159,72 @@ import javafx.scene.control.ToggleButton;
  * Many methods call MainController wrapper methods (copy/move/delete/undo/refresh/new folder etc.).
  */
 public class RibbonBarController {
+    @FXML private javafx.scene.control.Button undoButton;
+    @FXML private javafx.scene.control.Button redoButton;
+
+    public void initializeUndoRedoButtons(HistoryManager historyManager) {
+        undoButton.setOnAction(e -> {
+            historyManager.undo();
+        });
+        redoButton.setOnAction(e -> {
+            historyManager.redo();
+        });
+        // Bind button disable states to history availability
+        undoButton.disableProperty().bind(historyManager.canUndoProperty().not());
+        redoButton.disableProperty().bind(historyManager.canRedoProperty().not());
+    }
+    @FXML private javafx.scene.control.Menu fileMenu;
+    @FXML private javafx.scene.control.Menu editMenu;
+    @FXML private javafx.scene.control.Menu viewMenu;
+    @FXML private javafx.scene.control.Menu helpMenu;
+
+    public void initializeMenus(MainController controller) {
+        // File Menu
+        javafx.scene.control.MenuItem newFolder = new javafx.scene.control.MenuItem("New Folder");
+        newFolder.setOnAction(e -> controller.createNewFolder());
+        javafx.scene.control.MenuItem open = new javafx.scene.control.MenuItem("Open");
+        open.setOnAction(e -> controller.openSelectedFiles());
+        javafx.scene.control.MenuItem properties = new javafx.scene.control.MenuItem("Properties");
+        properties.setOnAction(e -> controller.showPropertiesDialog());
+        fileMenu.getItems().addAll(newFolder, open, properties);
+
+        // Edit Menu
+        javafx.scene.control.MenuItem cut = new javafx.scene.control.MenuItem("Cut");
+        cut.setOnAction(e -> controller.cutSelectedFiles());
+        javafx.scene.control.MenuItem copy = new javafx.scene.control.MenuItem("Copy");
+        copy.setOnAction(e -> controller.copySelectedFilesWithProgress(controller.getCurrentFolder()));
+        javafx.scene.control.MenuItem paste = new javafx.scene.control.MenuItem("Paste");
+        paste.setOnAction(e -> controller.pasteFiles());
+        javafx.scene.control.MenuItem delete = new javafx.scene.control.MenuItem("Delete");
+        delete.setOnAction(e -> controller.deleteSelectedFilesWithUndo());
+        editMenu.getItems().addAll(cut, copy, paste, delete);
+
+        // View Menu
+        javafx.scene.control.CheckMenuItem showPreview = new javafx.scene.control.CheckMenuItem("Show Preview Pane");
+        showPreview.setSelected(true);
+        showPreview.setOnAction(e -> controller.togglePreviewPane(showPreview.isSelected()));
+        javafx.scene.control.CheckMenuItem showDetails = new javafx.scene.control.CheckMenuItem("Details Pane");
+        showDetails.setSelected(true);
+        showDetails.setOnAction(e -> controller.toggleDetailsPane(showDetails.isSelected()));
+        viewMenu.getItems().addAll(showPreview, showDetails);
+
+        // Help Menu
+        javafx.scene.control.MenuItem about = new javafx.scene.control.MenuItem("About");
+        about.setOnAction(e -> controller.showAboutDialog());
+        helpMenu.getItems().addAll(about);
+    }
+    @FXML private javafx.scene.control.ToggleButton toggleMetadataBtn;
+    @FXML private javafx.scene.control.ChoiceBox<String> thumbnailSizeChoice;
+
+    public void initializePreviewPaneControls(PreviewPaneController previewPane) {
+        toggleMetadataBtn.setOnAction(e -> previewPane.toggleMetadataVisibility(toggleMetadataBtn.isSelected()));
+        thumbnailSizeChoice.getItems().addAll("Small", "Medium", "Large");
+        thumbnailSizeChoice.setValue("Medium");
+        thumbnailSizeChoice.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            int size = 64; if ("Small".equals(newVal)) size = 32; else if ("Medium".equals(newVal)) size = 64; else if ("Large".equals(newVal)) size = 128;
+            previewPane.setThumbnailSize(size);
+        });
+    }
 
     @FXML private ToggleButton toggleNavPane;
     @FXML private ToggleButton togglePreview;

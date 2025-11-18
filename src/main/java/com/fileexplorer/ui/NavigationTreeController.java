@@ -15,6 +15,42 @@ import java.util.List;
  * Navigation Tree with Pin/Quick Access like MS File Explorer
  */
 public class NavigationTreeController {
+    private java.util.Set<java.io.File> pinnedItems = new java.util.HashSet<>();
+
+    public void initializePins() {
+        treeView.setCellFactory(tv -> {
+            javafx.scene.control.TreeCell<java.io.File> cell = new javafx.scene.control.TreeCell<java.io.File>() {
+                @Override protected void updateItem(java.io.File item, boolean empty) {
+                    super.updateItem(item, empty);
+                    if (empty || item == null) {
+                        setText(null);
+                        setGraphic(null);
+                    } else {
+                        setText(item.getName());
+                        javafx.scene.control.Button pinButton = new javafx.scene.control.Button();
+                        pinButton.setText(pinnedItems.contains(item) ? "📌" : "📍");
+                        pinButton.setOnAction(e -> {
+                            if (pinnedItems.contains(item)) pinnedItems.remove(item);
+                            else pinnedItems.add(item);
+                            pinButton.setText(pinnedItems.contains(item) ? "📌" : "📍");
+                            refreshPinnedSection();
+                        });
+                        setGraphic(pinButton);
+                    }
+                }
+            };
+            return cell;
+        });
+    }
+
+    private void refreshPinnedSection() {
+        javafx.scene.control.TreeItem<java.io.File> pinnedRoot = new javafx.scene.control.TreeItem<>(new java.io.File("Pinned"));
+        for (java.io.File f : pinnedItems) {
+            pinnedRoot.getChildren().add(new javafx.scene.control.TreeItem<>(f));
+        }
+        treeView.getRoot().getChildren().removeIf(t -> t.getValue().getName().equals("Pinned"));
+        treeView.getRoot().getChildren().add(0, pinnedRoot);
+    }
 
     @FXML
     private TreeView<File> treeView;

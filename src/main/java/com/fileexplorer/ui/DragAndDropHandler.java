@@ -6,6 +6,42 @@ import java.io.File;
 import java.util.List;
 
 public class DragAndDropHandler {
+    public static void handleMultiFileDrop(javafx.scene.control.ListView<java.io.File> targetPane, java.util.List<java.io.File> files, MainController controller) {
+        if (files == null || files.isEmpty() || targetPane == null) return;
+
+        javafx.concurrent.Task<Void> task = new javafx.concurrent.Task<Void>() {
+            @Override protected Void call() throws Exception {
+                int total = files.size();
+                int count = 0;
+                for (java.io.File f : files) {
+                    if (isCancelled()) break;
+                    java.nio.file.Files.move(f.toPath(), java.nio.file.Paths.get(targetPane.getId(), f.getName()), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    updateProgress(++count, total);
+                    controller.getHistoryManager().recordAction("Moved via DragDrop: " + f.getAbsolutePath() + " -> " + targetPane.getId());
+                }
+                javafx.application.Platform.runLater(() -> targetPane.getItems().addAll(files));
+                return null;
+            }
+        };
+
+        javafx.scene.control.ProgressBar progressBar = new javafx.scene.control.ProgressBar();
+        progressBar.progressProperty().bind(task.progressProperty());
+        javafx.scene.control.Button cancelButton = new javafx.scene.control.Button("Cancel");
+        cancelButton.setOnAction(e -> task.cancel());
+
+        javafx.scene.layout.VBox dialogBox = new javafx.scene.layout.VBox(progressBar, cancelButton);
+        dialogBox.setSpacing(10);
+        javafx.stage.Stage stage = new javafx.stage.Stage();
+        stage.setTitle("Moving Files via Drag & Drop");
+        stage.setScene(new javafx.scene.Scene(dialogBox, 300, 100));
+        stage.initOwner(targetPane.getScene().getWindow());
+        stage.show();
+
+        new Thread(task).start();
+        task.setOnSucceeded(e -> stage.close());
+        task.setOnCancelled(e -> stage.close());
+        task.setOnFailed(e -> stage.close());
+    }
 
     public static void enableDragAndDrop(ListView<File> sourcePane, ListView<File> targetPane, MainController controller) {
 
