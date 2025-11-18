@@ -29,6 +29,22 @@
 // import java.util.concurrent.atomic.AtomicReference;
 
 // public class MainController {
+    private String currentTheme = "Light";
+
+    public void setTheme(String themeName) {
+        javafx.scene.Scene scene = lblCurrentPath.getScene();
+        if (scene == null) return;
+        scene.getStylesheets().clear();
+        switch(themeName) {
+            case "Light": scene.getStylesheets().add(getClass().getResource("Light.css").toExternalForm()); break;
+            case "Dark": scene.getStylesheets().add(getClass().getResource("Dark.css").toExternalForm()); break;
+            case "Glassy": scene.getStylesheets().add(getClass().getResource("Glassy.css").toExternalForm()); break;
+        }
+        currentTheme = themeName;
+        System.out.println("[Theme] Switched to: " + currentTheme);
+    }
+
+    public String getCurrentTheme() { return currentTheme; }
     @FXML private javafx.scene.layout.HBox statusBar;
     @FXML private javafx.scene.control.Label lblCurrentPath;
     @FXML private javafx.scene.control.Label lblSelectionCount;
@@ -717,6 +733,22 @@
  // * resides in createTabWithLoader(Path).
  // */
 // public class MainController {
+    private String currentTheme = "Light";
+
+    public void setTheme(String themeName) {
+        javafx.scene.Scene scene = lblCurrentPath.getScene();
+        if (scene == null) return;
+        scene.getStylesheets().clear();
+        switch(themeName) {
+            case "Light": scene.getStylesheets().add(getClass().getResource("Light.css").toExternalForm()); break;
+            case "Dark": scene.getStylesheets().add(getClass().getResource("Dark.css").toExternalForm()); break;
+            case "Glassy": scene.getStylesheets().add(getClass().getResource("Glassy.css").toExternalForm()); break;
+        }
+        currentTheme = themeName;
+        System.out.println("[Theme] Switched to: " + currentTheme);
+    }
+
+    public String getCurrentTheme() { return currentTheme; }
     @FXML private javafx.scene.layout.HBox statusBar;
     @FXML private javafx.scene.control.Label lblCurrentPath;
     @FXML private javafx.scene.control.Label lblSelectionCount;

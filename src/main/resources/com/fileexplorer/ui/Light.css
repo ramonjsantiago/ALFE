@@ -1,0 +1,18 @@
+.root {
+    -fx-base: #FFFFFF;
+    -fx-background: #F5F5F5;
+    -fx-text-fill: #000000;
+}
+.tool-bar {
+    -fx-background-color: linear-gradient(#EAEAEA, #CCCCCC);
+}
+.status-bar {
+    -fx-background-color: #EEE;
+    -fx-padding: 5;
+}
+.tab-pane .tab-header-background {
+    -fx-background-color: #DDD;
+}
+.flow-tile-cell {
+    -fx-background-color: #FFF;
+}
