@@ -13,6 +13,15 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 
 public class DetailsViewController {
+    public void groupByColumn(String columnName) {
+        // Simple visual grouping using TableView sorting; real grouping requires custom row factory or TreeTableView
+        switch(columnName) {
+            case "None": tableView.getSortOrder().clear(); break;
+            case "Date": tableView.getSortOrder().setAll(dateCol); break;
+            case "Type": tableView.getSortOrder().setAll(typeCol); break;
+        }
+        tableView.sort();
+    }
 
     @FXML
     private TableView<File> tableView;
@@ -64,6 +73,15 @@ public class DetailsViewController {
 
     // Optional: programmatically sort
     public void sortByColumn(String columnName) {
+    // Extended multi-column sort example (preserves previous sort order)
+    tableView.getSortOrder().clear();
+    switch(columnName) {
+        case "Name": tableView.getSortOrder().add(nameCol); break;
+        case "Size": tableView.getSortOrder().add(sizeCol); break;
+        case "Type": tableView.getSortOrder().add(typeCol); break;
+        case "Date": tableView.getSortOrder().add(dateCol); break;
+    }
+    tableView.sort();
         switch(columnName) {
             case "Name":
                 tableView.getSortOrder().setAll(nameCol); break;

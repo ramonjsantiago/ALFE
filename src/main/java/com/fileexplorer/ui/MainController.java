@@ -29,6 +29,15 @@
 // import java.util.concurrent.atomic.AtomicReference;
 
 // public class MainController {
+    @FXML public void groupByNone() {
+        if (detailsViewController != null) detailsViewController.groupByColumn("None");
+    }
+    @FXML public void groupByDate() {
+        if (detailsViewController != null) detailsViewController.groupByColumn("Date");
+    }
+    @FXML public void groupByType() {
+        if (detailsViewController != null) detailsViewController.groupByColumn("Type");
+    }
     @FXML private DetailsViewController detailsViewController;
 
     @FXML public void sortByName() {
@@ -747,6 +756,15 @@
  // * resides in createTabWithLoader(Path).
  // */
 // public class MainController {
+    @FXML public void groupByNone() {
+        if (detailsViewController != null) detailsViewController.groupByColumn("None");
+    }
+    @FXML public void groupByDate() {
+        if (detailsViewController != null) detailsViewController.groupByColumn("Date");
+    }
+    @FXML public void groupByType() {
+        if (detailsViewController != null) detailsViewController.groupByColumn("Type");
+    }
     @FXML private DetailsViewController detailsViewController;
 
     @FXML public void sortByName() {
