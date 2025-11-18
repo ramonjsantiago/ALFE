@@ -1,67 +1,341 @@
-import javafx.scene.media.Media;
-import javafx.scene.media.MediaPlayer;
-import javafx.scene.media.MediaView;
-import javafx.scene.layout.StackPane;
-import javafx.scene.control.Label;
+package com.fileexplorer.ui;
 
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.rendering.PDFRenderer;
+import com.fileexplorer.thumb.FileOperationManager;
+import com.fileexplorer.thumb.FileOperationManager.CancellableOperation;
+import com.fileexplorer.thumb.FileOperationManager.ProgressListener;
+import javafx.application.Platform;
+import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.control.*;
 import javafx.scene.image.ImageView;
-import javafx.embed.swing.SwingFXUtils;
+import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.StackPane;
 
-import java.awt.image.BufferedImage;
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 
-@FXML private StackPane previewContainer; // parent of ImageView, MediaView, etc.
-@FXML private ImageView previewImage;
+/**
+ * Controller for per-tab content. Each tab contains its own FileOperationManager,
+ * progress bar, cancel button, FlowPane thumbnails, details table, and preview.
+ */
+public class TabContentController {
 
-private MediaPlayer mediaPlayer;
+    @FXML private FlowPane rightFlowPane;
+    @FXML private ImageView previewImage;
+    @FXML private ProgressBar progressBar;
+    @FXML private Button cancelOpButton;
+    @FXML private TableView<?> detailsTable; // keep generic; cast in usages if needed
+    @FXML private StackPane previewContainer;
+    @FXML private TextField tabSearchField;
 
-public void showPreview(Path file) {
-    previewContainer.getChildren().clear();
-    String name = file.getFileName().toString().toLowerCase();
-    try {
-        if (name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") ||
-            name.endsWith(".bmp") || name.endsWith(".tiff") || name.endsWith(".gif")) {
-            // Image preview
-            previewImage.setImage(IconLoader.loadIcon(file.toFile()));
-            previewContainer.getChildren().add(previewImage);
-        } else if (name.endsWith(".mp4") || name.endsWith(".mov") || name.endsWith(".m4v") || name.endsWith(".avi")) {
-            // Video preview
-            Media media = new Media(file.toUri().toString());
-            if (mediaPlayer != null) mediaPlayer.dispose();
-            mediaPlayer = new MediaPlayer(media);
-            MediaView mediaView = new MediaView(mediaPlayer);
-            mediaView.setPreserveRatio(true);
-            mediaView.setFitWidth(previewContainer.getWidth());
-            mediaView.setFitHeight(previewContainer.getHeight());
-            previewContainer.getChildren().add(mediaView);
-            mediaPlayer.setAutoPlay(true);
-        } else if (name.endsWith(".pdf")) {
-            // PDF preview using PDFBox
-            PDDocument document = PDDocument.load(file.toFile());
-            PDFRenderer renderer = new PDFRenderer(document);
-            BufferedImage image = renderer.renderImageWithDPI(0, 150);
-            ImageView pdfView = new ImageView(SwingFXUtils.toFXImage(image, null));
-            pdfView.setPreserveRatio(true);
-            pdfView.setFitWidth(previewContainer.getWidth());
-            pdfView.setFitHeight(previewContainer.getHeight());
-            previewContainer.getChildren().add(pdfView);
-            document.close();
-        } else {
-            // Fallback
-            previewContainer.getChildren().add(new Label("No preview available"));
+    private Path currentFolder;
+    private final List<FlowTileCell> selectedCells = new ArrayList<>();
+
+    // Per-tab file operation manager & current operation
+    private final FileOperationManager fileOpManager = new FileOperationManager();
+    private final AtomicReference<CancellableOperation> currentOperation = new AtomicReference<>(null);
+
+    public void initializeFolder(Path folder) {
+        this.currentFolder = folder;
+        // populate UI: thumbnails, details, preview hooks...
+        loadFolder(folder);
+        setupCancelButton();
+        if (tabSearchField != null) {
+            tabSearchField.textProperty().addListener((obs, oldV, newV) -> {
+                // ideally filter the details table — left as a simple placeholder
+            });
         }
-    } catch (IOException | RuntimeException e) {
-        previewContainer.getChildren().add(new Label("Preview failed: " + e.getMessage()));
     }
-}
 
-// Call this to stop media when tab is closed
-public void cleanup() {
-    if (mediaPlayer != null) {
-        mediaPlayer.stop();
-        mediaPlayer.dispose();
+    public Path getCurrentFolder() {
+        return currentFolder;
+    }
+
+    private void setupCancelButton() {
+        if (cancelOpButton != null) {
+            cancelOpButton.setOnAction(e -> cancelCurrentOperation());
+            cancelOpButton.setDisable(true);
+        }
+        if (progressBar != null) progressBar.setProgress(0);
+    }
+
+    private void loadFolder(Path folder) {
+        // Load thumbnails into rightFlowPane (similar to MainController loadFolder)
+        rightFlowPane.getChildren().clear();
+        selectedCells.clear();
+        if (folder == null) return;
+        try {
+            Files.list(folder).forEach(p -> {
+                FlowTileCell cell = new FlowTileCell(p, (path, cb) -> {
+                    try {
+                        cb.accept(IconLoader.loadIcon(path.toFile()));
+                    } catch (Exception ex) {
+                        cb.accept(IconLoader.getPlaceholder());
+                    }
+                    return null;
+                });
+
+                cell.setOnMouseClicked(e -> {
+                    if (!selectedCells.contains(cell)) selectedCells.add(cell);
+                    else selectedCells.remove(cell);
+                    // update per-tab UI if needed
+                    updateStatus(selectedCells.size() + " items selected");
+                });
+
+                ContextMenuHandler.attach(cell, p.toFile());
+                rightFlowPane.getChildren().add(cell);
+            });
+            updateStatus(Files.list(folder).count() + " items loaded");
+        } catch (IOException ex) {
+            updateStatus("Failed to load folder: " + ex.getMessage());
+        }
+    }
+
+    // ----------------------------
+    // Public per-tab file operations
+    // ----------------------------
+
+    /**
+     * Copy selected items to target folder using per-tab FileOperationManager.
+     */
+    public void copySelectedTo(Path targetFolder) {
+        if (selectedCells.isEmpty()) {
+            updateStatus("No files selected to copy");
+            return;
+        }
+        // For simplicity start one operation per selected item (could be batched)
+        for (FlowTileCell c : new ArrayList<>(selectedCells)) {
+            Path src = c.path;
+            Path dest = targetFolder.resolve(src.getFileName());
+            startCopyOperation(src, dest);
+        }
+    }
+
+    /**
+     * Move selected items to target folder using per-tab FileOperationManager.
+     */
+    public void moveSelectedTo(Path targetFolder) {
+        if (selectedCells.isEmpty()) {
+            updateStatus("No files selected to move");
+            return;
+        }
+        for (FlowTileCell c : new ArrayList<>(selectedCells)) {
+            Path src = c.path;
+            Path dest = targetFolder.resolve(src.getFileName());
+            startMoveOperation(src, dest);
+        }
+    }
+
+    /**
+     * Delete selected items with per-tab progress.
+     */
+    public void deleteSelectedWithProgress() {
+        if (selectedCells.isEmpty()) {
+            updateStatus("No files selected to delete");
+            return;
+        }
+        // Delete first selected item (others can be queued or repeated)
+        Iterator<FlowTileCell> it = selectedCells.iterator();
+        if (it.hasNext()) {
+            startDeleteOperation(it.next().path);
+        }
+    }
+
+    public void cancelCurrentOperation() {
+        CancellableOperation op = currentOperation.getAndSet(null);
+        if (op != null) {
+            op.cancel();
+            Platform.runLater(() -> {
+                if (cancelOpButton != null) cancelOpButton.setDisable(true);
+                if (progressBar != null) progressBar.setProgress(0);
+            });
+            updateStatus("Operation cancellation requested");
+        } else {
+            updateStatus("No running operation to cancel");
+        }
+    }
+
+    // ----------------------------
+    // Internal operation helpers
+    // ----------------------------
+
+    private void startCopyOperation(Path src, Path dest) {
+        updateStatus("Starting copy: " + src.getFileName());
+        if (progressBar != null) progressBar.setProgress(0);
+        if (cancelOpButton != null) cancelOpButton.setDisable(false);
+
+        CancellableOperation op = fileOpManager.copy(src, dest, new ProgressListener() {
+            @Override
+            public void onProgress(long bytesTransferred, long totalBytes) {
+                Platform.runLater(() -> {
+                    if (progressBar != null) {
+                        if (totalBytes > 0) progressBar.setProgress((double) bytesTransferred / totalBytes);
+                        else progressBar.setProgress(ProgressIndicator.INDETERMINATE_PROGRESS);
+                    }
+                });
+            }
+
+            @Override
+            public void onComplete() {
+                Platform.runLater(() -> {
+                    updateStatus("Copy complete: " + src.getFileName());
+                    if (progressBar != null) progressBar.setProgress(1.0);
+                    if (cancelOpButton != null) cancelOpButton.setDisable(true);
+                    // refresh view
+                    loadFolder(currentFolder);
+                });
+                currentOperation.set(null);
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                Platform.runLater(() -> {
+                    updateStatus("Copy failed: " + t.getMessage());
+                    if (cancelOpButton != null) cancelOpButton.setDisable(true);
+                    if (progressBar != null) progressBar.setProgress(0);
+                });
+                currentOperation.set(null);
+            }
+
+            @Override
+            public void onCancelled() {
+                Platform.runLater(() -> {
+                    updateStatus("Copy cancelled");
+                    if (cancelOpButton != null) cancelOpButton.setDisable(true);
+                    if (progressBar != null) progressBar.setProgress(0);
+                });
+                currentOperation.set(null);
+            }
+        });
+
+        currentOperation.set(op);
+    }
+
+    private void startMoveOperation(Path src, Path dest) {
+        updateStatus("Starting move: " + src.getFileName());
+        if (progressBar != null) progressBar.setProgress(0);
+        if (cancelOpButton != null) cancelOpButton.setDisable(false);
+
+        CancellableOperation op = fileOpManager.move(src, dest, new ProgressListener() {
+            @Override
+            public void onProgress(long bytesTransferred, long totalBytes) {
+                Platform.runLater(() -> {
+                    if (progressBar != null) {
+                        if (totalBytes > 0) progressBar.setProgress((double) bytesTransferred / totalBytes);
+                        else progressBar.setProgress(ProgressIndicator.INDETERMINATE_PROGRESS);
+                    }
+                });
+            }
+
+            @Override
+            public void onComplete() {
+                Platform.runLater(() -> {
+                    updateStatus("Move complete: " + src.getFileName());
+                    if (progressBar != null) progressBar.setProgress(1.0);
+                    if (cancelOpButton != null) cancelOpButton.setDisable(true);
+                    loadFolder(currentFolder);
+                });
+                currentOperation.set(null);
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                Platform.runLater(() -> {
+                    updateStatus("Move failed: " + t.getMessage());
+                    if (cancelOpButton != null) cancelOpButton.setDisable(true);
+                    if (progressBar != null) progressBar.setProgress(0);
+                });
+                currentOperation.set(null);
+            }
+
+            @Override
+            public void onCancelled() {
+                Platform.runLater(() -> {
+                    updateStatus("Move cancelled");
+                    if (cancelOpButton != null) cancelOpButton.setDisable(true);
+                    if (progressBar != null) progressBar.setProgress(0);
+                });
+                currentOperation.set(null);
+            }
+        });
+
+        currentOperation.set(op);
+    }
+
+    private void startDeleteOperation(Path path) {
+        updateStatus("Deleting: " + path.getFileName());
+        if (progressBar != null) progressBar.setProgress(0);
+        if (cancelOpButton != null) cancelOpButton.setDisable(false);
+
+        CancellableOperation op = fileOpManager.delete(path, new ProgressListener() {
+            @Override
+            public void onProgress(long bytesTransferred, long totalBytes) {
+                Platform.runLater(() -> {
+                    if (progressBar != null) {
+                        if (totalBytes > 0) progressBar.setProgress((double) bytesTransferred / totalBytes);
+                        else progressBar.setProgress(ProgressIndicator.INDETERMINATE_PROGRESS);
+                    }
+                });
+            }
+
+            @Override
+            public void onComplete() {
+                Platform.runLater(() -> {
+                    updateStatus("Delete complete: " + path.getFileName());
+                    if (progressBar != null) progressBar.setProgress(1.0);
+                    if (cancelOpButton != null) cancelOpButton.setDisable(true);
+                    loadFolder(currentFolder);
+                });
+                currentOperation.set(null);
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                Platform.runLater(() -> {
+                    updateStatus("Delete failed: " + t.getMessage());
+                    if (cancelOpButton != null) cancelOpButton.setDisable(true);
+                    if (progressBar != null) progressBar.setProgress(0);
+                });
+                currentOperation.set(null);
+            }
+
+            @Override
+            public void onCancelled() {
+                Platform.runLater(() -> {
+                    updateStatus("Delete cancelled");
+                    if (cancelOpButton != null) cancelOpButton.setDisable(true);
+                    if (progressBar != null) progressBar.setProgress(0);
+                });
+                currentOperation.set(null);
+            }
+        });
+
+        currentOperation.set(op);
+    }
+
+    // ----------------------------
+    // Utilities
+    // ----------------------------
+
+    private void updateStatus(String msg) {
+        // Tab-level status: show in the preview container or use a global status update via MainController
+        // We'll try to send it to MainController if present
+        Platform.runLater(() -> {
+            // find parent MainController via scene lookup (if needed) or just print to console for now
+            System.out.println("[TabStatus] " + msg);
+        });
+    }
+
+    /**
+     * Should be called when the tab is closed to stop any running operations and free resources.
+     */
+    public void cleanup() {
+        cancelCurrentOperation();
+        try {
+            fileOpManager.shutdown();
+        } catch (Exception ignore) {}
     }
 }

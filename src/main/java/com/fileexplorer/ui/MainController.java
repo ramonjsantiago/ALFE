@@ -319,6 +319,86 @@ public class MainController {
     }
 
     public HistoryManager getHistoryManager() {
+    // helper to retrieve active tab controller (TabContentController)
+    private TabContentController getActiveTabController() {
+        javafx.scene.control.Tab tab = null;
+        try { tab = tabPane.getSelectionModel().getSelectedItem(); } catch(Exception e) {}
+        if (tab == null) return null;
+        Object loaderObj = tab.getProperties().get("loader");
+        if (loaderObj instanceof javafx.fxml.FXMLLoader loader) {
+            Object ctrl = loader.getController();
+            if (ctrl instanceof TabContentController tcc) return tcc;
+        }
+        // fallback: try controller from content properties
+        Object contentCtrl = tab.getContent().getProperties().get("controller");
+        if (contentCtrl instanceof TabContentController tcc2) return tcc2;
+        return null;
+    }
+    // helper to retrieve active tab controller (TabContentController)
+    private TabContentController getActiveTabController() {
+        javafx.scene.control.Tab tab = null;
+        try { tab = tabPane.getSelectionModel().getSelectedItem(); } catch(Exception e) {}
+        if (tab == null) return null;
+        Object loaderObj = tab.getProperties().get("loader");
+        if (loaderObj instanceof javafx.fxml.FXMLLoader loader) {
+            Object ctrl = loader.getController();
+            if (ctrl instanceof TabContentController tcc) return tcc;
+        }
+        // fallback: try controller from content properties
+        Object contentCtrl = tab.getContent().getProperties().get("controller");
+        if (contentCtrl instanceof TabContentController tcc2) return tcc2;
+        return null;
+    }
         return historyManager;
     }
+}
+
+// --- Ribbon bar wrappers to call per-tab operations ---
+public void copySelectedToActiveTab(java.nio.file.Path targetFolder) {
+    TabContentController tcc = getActiveTabController();
+    if (tcc != null) tcc.copySelectedTo(targetFolder);
+    else updateStatus("No active tab to copy from");
+}
+
+public void moveSelectedToActiveTab(java.nio.file.Path targetFolder) {
+    TabContentController tcc = getActiveTabController();
+    if (tcc != null) tcc.moveSelectedTo(targetFolder);
+    else updateStatus("No active tab to move from");
+}
+
+public void deleteSelectedWithProgressActiveTab() {
+    TabContentController tcc = getActiveTabController();
+    if (tcc != null) tcc.deleteSelectedWithProgress();
+    else updateStatus("No active tab to delete from");
+}
+
+public void cancelActiveTabOperation() {
+    TabContentController tcc = getActiveTabController();
+    if (tcc != null) tcc.cancelCurrentOperation();
+    else updateStatus("No active tab operation to cancel");
+}
+
+// --- Ribbon bar wrappers to call per-tab operations ---
+public void copySelectedToActiveTab(java.nio.file.Path targetFolder) {
+    TabContentController tcc = getActiveTabController();
+    if (tcc != null) tcc.copySelectedTo(targetFolder);
+    else updateStatus("No active tab to copy from");
+}
+
+public void moveSelectedToActiveTab(java.nio.file.Path targetFolder) {
+    TabContentController tcc = getActiveTabController();
+    if (tcc != null) tcc.moveSelectedTo(targetFolder);
+    else updateStatus("No active tab to move from");
+}
+
+public void deleteSelectedWithProgressActiveTab() {
+    TabContentController tcc = getActiveTabController();
+    if (tcc != null) tcc.deleteSelectedWithProgress();
+    else updateStatus("No active tab to delete from");
+}
+
+public void cancelActiveTabOperation() {
+    TabContentController tcc = getActiveTabController();
+    if (tcc != null) tcc.cancelCurrentOperation();
+    else updateStatus("No active tab operation to cancel");
 }
