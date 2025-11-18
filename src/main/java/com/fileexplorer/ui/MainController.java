@@ -29,6 +29,18 @@
 // import java.util.concurrent.atomic.AtomicReference;
 
 // public class MainController {
+    @FXML private javafx.scene.layout.HBox statusBar;
+    @FXML private javafx.scene.control.Label lblCurrentPath;
+    @FXML private javafx.scene.control.Label lblSelectionCount;
+    @FXML private javafx.scene.control.Label lblTotalSize;
+    @FXML private javafx.scene.control.ProgressBar operationProgress;
+
+    public void updateStatusBar(String path, int selectedCount, long totalSizeBytes, double progress) {
+        lblCurrentPath.setText("Path: " + path);
+        lblSelectionCount.setText("Selected: " + selectedCount);
+        lblTotalSize.setText("Size: " + (totalSizeBytes/1024) + " KB");
+        operationProgress.setProgress(progress);
+    }
     @FXML private javafx.scene.layout.VBox navigationPane;
     @FXML private NavigationTreeController navTree;
 
@@ -705,6 +717,18 @@
  // * resides in createTabWithLoader(Path).
  // */
 // public class MainController {
+    @FXML private javafx.scene.layout.HBox statusBar;
+    @FXML private javafx.scene.control.Label lblCurrentPath;
+    @FXML private javafx.scene.control.Label lblSelectionCount;
+    @FXML private javafx.scene.control.Label lblTotalSize;
+    @FXML private javafx.scene.control.ProgressBar operationProgress;
+
+    public void updateStatusBar(String path, int selectedCount, long totalSizeBytes, double progress) {
+        lblCurrentPath.setText("Path: " + path);
+        lblSelectionCount.setText("Selected: " + selectedCount);
+        lblTotalSize.setText("Size: " + (totalSizeBytes/1024) + " KB");
+        operationProgress.setProgress(progress);
+    }
     @FXML private javafx.scene.layout.VBox navigationPane;
     @FXML private NavigationTreeController navTree;
 

@@ -51,6 +51,14 @@
             <ProgressBar fx:id="progressBar" prefWidth="200" progress="0.0" />
             <Button fx:id="cancelOpButton" text="Cancel" onAction="#onCancelOperation" />
     </bottom>
+    <bottom>
+        <HBox fx:id="statusBar" spacing="10" style="-fx-padding:5;-fx-background-color:#EEE;">
+            <Label fx:id="lblCurrentPath" text="Path: /"/>
+            <Label fx:id="lblSelectionCount" text="Selected: 0"/>
+            <Label fx:id="lblTotalSize" text="Size: 0 KB"/>
+            <ProgressBar fx:id="operationProgress" progress="0" prefWidth="150"/>
+        </HBox>
+    </bottom>
 </BorderPane>
 <!-- Left-hand navigation tree -->
 <TreeView fx:id="folderTree" prefWidth="200" onMouseClicked="#onTreeItemClicked"/>
