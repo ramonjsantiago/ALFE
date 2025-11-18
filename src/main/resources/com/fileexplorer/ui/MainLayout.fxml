@@ -18,6 +18,10 @@
                 </items>
             </ChoiceBox>
         </ToolBar>
+            <Button fx:id="btnCopy" text="Copy" onAction="#onRibbonCopyWithChooser"/>
+            <Button fx:id="btnMove" text="Move" onAction="#onRibbonMoveWithChooser"/>
+            <Button fx:id="btnDelete" text="Delete" onAction="#onRibbonDeleteWithProgress"/>
+            <Button fx:id="btnCancelOp" text="Cancel" onAction="#onRibbonCancelOperation"/>
     </top>
     <center>
         <fx:include fx:id="historyPanel" source="HistoryPanel.fxml"/>
