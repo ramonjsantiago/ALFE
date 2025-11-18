@@ -29,6 +29,19 @@
 // import java.util.concurrent.atomic.AtomicReference;
 
 // public class MainController {
+    // --- Drag-and-Drop + FlowTileCell integration ---
+    private DragAndDropHandler dragHandler;
+    @FXML public void initialize() {
+        // Register with Ribbon
+        MainControllerAccessor.set(this);
+        // Initialize TabManager already done in previous chunk
+        // Initialize DragAndDropHandler for both panes
+        dragHandler = new DragAndDropHandler(leftTabPane, rightTabPane, previewPane, historyManager);
+        dragHandler.enableDragAndDrop();
+        // Hook FlowTileCell selection to update preview
+        leftTabPane.getSelectionModel().selectedItemProperty().addListener((obs, oldTab, newTab) -> updatePreviewPane());
+        rightTabPane.getSelectionModel().selectedItemProperty().addListener((obs, oldTab, newTab) -> updatePreviewPane());
+    }
     // --- Dual-Pane Mode / Tabs / Preview Pane ---
     @FXML private javafx.scene.control.TabPane leftTabPane;
     @FXML private javafx.scene.control.TabPane rightTabPane;
@@ -673,6 +686,19 @@
  // * resides in createTabWithLoader(Path).
  // */
 // public class MainController {
+    // --- Drag-and-Drop + FlowTileCell integration ---
+    private DragAndDropHandler dragHandler;
+    @FXML public void initialize() {
+        // Register with Ribbon
+        MainControllerAccessor.set(this);
+        // Initialize TabManager already done in previous chunk
+        // Initialize DragAndDropHandler for both panes
+        dragHandler = new DragAndDropHandler(leftTabPane, rightTabPane, previewPane, historyManager);
+        dragHandler.enableDragAndDrop();
+        // Hook FlowTileCell selection to update preview
+        leftTabPane.getSelectionModel().selectedItemProperty().addListener((obs, oldTab, newTab) -> updatePreviewPane());
+        rightTabPane.getSelectionModel().selectedItemProperty().addListener((obs, oldTab, newTab) -> updatePreviewPane());
+    }
     // --- Dual-Pane Mode / Tabs / Preview Pane ---
     @FXML private javafx.scene.control.TabPane leftTabPane;
     @FXML private javafx.scene.control.TabPane rightTabPane;
