@@ -522,177 +522,190 @@
     // cancelActiveTabOperation();
 // }
 
-package com.fileexplorer.controller;
+// package com.fileexplorer.controller;
 
-import com.fileexplorer.events.*;
-import com.fileexplorer.history.HistoryManager;
-import com.fileexplorer.navigation.NavigationBus;
-import com.fileexplorer.tabs.TabState;
-import com.fileexplorer.tabs.TabPersistence;
-import com.fileexplorer.views.DetailsViewController;
-import com.fileexplorer.views.FlowViewController;
-import com.fileexplorer.views.PreviewPaneController;
+// import com.fileexplorer.events.*;
+// import com.fileexplorer.history.HistoryManager;
+// import com.fileexplorer.navigation.NavigationBus;
+// import com.fileexplorer.tabs.TabState;
+// import com.fileexplorer.tabs.TabPersistence;
+// import com.fileexplorer.views.DetailsViewController;
+// import com.fileexplorer.views.FlowViewController;
+// import com.fileexplorer.views.PreviewPaneController;
 
-import javafx.application.Platform;
-import javafx.concurrent.Task;
-import javafx.fxml.FXML;
-import javafx.fxml.FXMLLoader;
-import javafx.scene.Node;
-import javafx.scene.control.Tab;
-import javafx.scene.control.TabPane;
-import javafx.scene.layout.StackPane;
+// import javafx.application.Platform;
+// import javafx.concurrent.Task;
+// import javafx.fxml.FXML;
+// import javafx.fxml.FXMLLoader;
+// import javafx.scene.Node;
+// import javafx.scene.control.Tab;
+// import javafx.scene.control.TabPane;
+// import javafx.scene.layout.StackPane;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
+// import java.io.IOException;
+// import java.nio.file.Files;
+// import java.nio.file.Path;
+// import java.util.concurrent.ExecutorService;
+// import java.util.concurrent.Executors;
+// import java.util.concurrent.ThreadFactory;
+
+// /**
+ // * Main controller — now supports rewritten tab creation.
+ // * createTab(Path) is preserved but deprecated; all real logic now
+ // * resides in createTabWithLoader(Path).
+ // */
+// public class MainController {
+
+    // @FXML private TabPane mainTabPane;
+    // @FXML private StackPane previewPaneContainer;
+
+    // private HistoryManager historyManager;
+    // private PreviewPaneController previewPane;
+
+    // // Virtual thread executor (Java 25 virtual threads)
+    // private final ExecutorService vtExecutor = Executors.newThreadPerTaskExecutor(
+            // Thread.ofVirtual().factory()
+    // );
+
+    // // Persistence + navigation event broadcasting
+    // private final TabPersistence tabPersistence = new TabPersistence();
+    // private final NavigationBus navBus = NavigationBus.getInstance();
+
+    // public void setHistoryManager(HistoryManager manager) {
+        // this.historyManager = manager;
+    // }
+
+    // @FXML
+    // public void initialize() {
+        // loadPreviewPane();
+        // restoreTabsOnStartup();
+        // hookTabSelectionEvents();
+    // }
+
+    // private void loadPreviewPane() {
+        // try {
+            // FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/PreviewPane.fxml"));
+            // Node pane = loader.load();
+            // previewPane = loader.getController();
+            // previewPaneContainer.getChildren().setAll(pane);
+        // } catch (IOException e) {
+            // throw new RuntimeException("Failed to load Preview Pane", e);
+        // }
+    // }
+
+    // private void restoreTabsOnStartup() {
+        // vtExecutor.submit(() -> {
+            // var saved = tabPersistence.loadSavedTabs();
+            // Platform.runLater(() -> {
+                // if (saved.isEmpty()) {
+                    // createTabWithLoader(Path.of(System.getProperty("user.home")));
+                // } else {
+                    // saved.forEach(state -> createTabWithLoader(state.initialPath()));
+                // }
+            // });
+        // });
+    // }
+
+    // private void hookTabSelectionEvents() {
+        // mainTabPane.getSelectionModel().selectedItemProperty().addListener((obs, oldTab, newTab) -> {
+            // if (newTab != null && newTab.getUserData() instanceof Path path) {
+                // navBus.publish(new PathSelectionEvent(path));
+                // if (previewPane != null)
+                    // previewPane.loadPreviewFor(path);
+            // }
+        // });
+    // }
+
+    // // ============================================================
+    // //               NEW METHOD (A) — full implementation
+    // // ============================================================
+
+    // /**
+     // * New authoritative method for creating a tab.
+     // * All prior logic has been relocated here.
+     // */
+    // public Tab createTabWithLoader(Path initialPath) {
+        // if (initialPath == null) throw new IllegalArgumentException("initialPath cannot be null");
+
+        // Tab tab = new Tab(initialPath.getFileName() != null ? initialPath.getFileName().toString() : initialPath.toString());
+        // tab.setClosable(true);
+        // tab.setUserData(initialPath);
+
+        // // — Load the Flow View UI —
+        // FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/FlowView.fxml"));
+        // Node content;
+        // FlowViewController flowController;
+        // try {
+            // content = loader.load();
+            // flowController = loader.getController();
+        // } catch (IOException e) {
+            // throw new RuntimeException("Failed to load FlowView.fxml", e);
+        // }
+
+        // // Set controller dependencies
+        // flowController.setHistoryManager(historyManager);
+        // flowController.setPreviewPane(previewPane);
+
+        // // Start async directory load via virtual threads
+        // vtExecutor.submit(() -> {
+            // try {
+                // var files = Files.list(initialPath).toList();
+                // Platform.runLater(() -> flowController.loadDirectory(files));
+            // } catch (IOException ex) {
+                // Platform.runLater(() -> flowController.showError("Failed to load directory: " + ex.getMessage()));
+            // }
+        // });
+
+        // tab.setContent(content);
+
+        // // When tab closes → persist state
+        // tab.setOnClosed(evt -> {
+            // tabPersistence.removeTabState(initialPath);
+        // });
+
+        // mainTabPane.getTabs().add(tab);
+        // mainTabPane.getSelectionModel().select(tab);
+
+        // // Persist immediately
+        // tabPersistence.addTabState(new TabState(initialPath));
+
+        // // Broadcast navigation event
+        // navBus.publish(new PathSelectionEvent(initialPath));
+
+        // return tab;
+    // }
+
+    // // ============================================================
+    // //          OLD METHOD (B + C) — DEPRECATED WRAPPER
+    // // ============================================================
+
+    // /**
+     // * Deprecated. Use createTabWithLoader(Path) instead.
+     // * Preserved only for backward compatibility.
+     // */
+    // @Deprecated(since="25.0", forRemoval=false)
+    // public Tab createTab(Path path) {
+        // return createTabWithLoader(path);
+    // }
+
+    // // ============================================================
+    // //           Public helper for UI commands
+    // // ============================================================
+
+    // public void openNewTabAt(Path path) {
+        // createTabWithLoader(path);
+    // }
+// }
+
+package com.fileexplorer.ui;
 
 /**
- * Main controller — now supports rewritten tab creation.
- * createTab(Path) is preserved but deprecated; all real logic now
- * resides in createTabWithLoader(Path).
+ * Small static accessor so RibbonBarController can call into MainController
+ * without fragile lookup logic. MainController.initialize() sets the reference.
  */
-public class MainController {
-
-    @FXML private TabPane mainTabPane;
-    @FXML private StackPane previewPaneContainer;
-
-    private HistoryManager historyManager;
-    private PreviewPaneController previewPane;
-
-    // Virtual thread executor (Java 25 virtual threads)
-    private final ExecutorService vtExecutor = Executors.newThreadPerTaskExecutor(
-            Thread.ofVirtual().factory()
-    );
-
-    // Persistence + navigation event broadcasting
-    private final TabPersistence tabPersistence = new TabPersistence();
-    private final NavigationBus navBus = NavigationBus.getInstance();
-
-    public void setHistoryManager(HistoryManager manager) {
-        this.historyManager = manager;
-    }
-
-    @FXML
-    public void initialize() {
-        loadPreviewPane();
-        restoreTabsOnStartup();
-        hookTabSelectionEvents();
-    }
-
-    private void loadPreviewPane() {
-        try {
-            FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/PreviewPane.fxml"));
-            Node pane = loader.load();
-            previewPane = loader.getController();
-            previewPaneContainer.getChildren().setAll(pane);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to load Preview Pane", e);
-        }
-    }
-
-    private void restoreTabsOnStartup() {
-        vtExecutor.submit(() -> {
-            var saved = tabPersistence.loadSavedTabs();
-            Platform.runLater(() -> {
-                if (saved.isEmpty()) {
-                    createTabWithLoader(Path.of(System.getProperty("user.home")));
-                } else {
-                    saved.forEach(state -> createTabWithLoader(state.initialPath()));
-                }
-            });
-        });
-    }
-
-    private void hookTabSelectionEvents() {
-        mainTabPane.getSelectionModel().selectedItemProperty().addListener((obs, oldTab, newTab) -> {
-            if (newTab != null && newTab.getUserData() instanceof Path path) {
-                navBus.publish(new PathSelectionEvent(path));
-                if (previewPane != null)
-                    previewPane.loadPreviewFor(path);
-            }
-        });
-    }
-
-    // ============================================================
-    //               NEW METHOD (A) — full implementation
-    // ============================================================
-
-    /**
-     * New authoritative method for creating a tab.
-     * All prior logic has been relocated here.
-     */
-    public Tab createTabWithLoader(Path initialPath) {
-        if (initialPath == null) throw new IllegalArgumentException("initialPath cannot be null");
-
-        Tab tab = new Tab(initialPath.getFileName() != null ? initialPath.getFileName().toString() : initialPath.toString());
-        tab.setClosable(true);
-        tab.setUserData(initialPath);
-
-        // — Load the Flow View UI —
-        FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/FlowView.fxml"));
-        Node content;
-        FlowViewController flowController;
-        try {
-            content = loader.load();
-            flowController = loader.getController();
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to load FlowView.fxml", e);
-        }
-
-        // Set controller dependencies
-        flowController.setHistoryManager(historyManager);
-        flowController.setPreviewPane(previewPane);
-
-        // Start async directory load via virtual threads
-        vtExecutor.submit(() -> {
-            try {
-                var files = Files.list(initialPath).toList();
-                Platform.runLater(() -> flowController.loadDirectory(files));
-            } catch (IOException ex) {
-                Platform.runLater(() -> flowController.showError("Failed to load directory: " + ex.getMessage()));
-            }
-        });
-
-        tab.setContent(content);
-
-        // When tab closes → persist state
-        tab.setOnClosed(evt -> {
-            tabPersistence.removeTabState(initialPath);
-        });
-
-        mainTabPane.getTabs().add(tab);
-        mainTabPane.getSelectionModel().select(tab);
-
-        // Persist immediately
-        tabPersistence.addTabState(new TabState(initialPath));
-
-        // Broadcast navigation event
-        navBus.publish(new PathSelectionEvent(initialPath));
-
-        return tab;
-    }
-
-    // ============================================================
-    //          OLD METHOD (B + C) — DEPRECATED WRAPPER
-    // ============================================================
-
-    /**
-     * Deprecated. Use createTabWithLoader(Path) instead.
-     * Preserved only for backward compatibility.
-     */
-    @Deprecated(since="25.0", forRemoval=false)
-    public Tab createTab(Path path) {
-        return createTabWithLoader(path);
-    }
-
-    // ============================================================
-    //           Public helper for UI commands
-    // ============================================================
-
-    public void openNewTabAt(Path path) {
-        createTabWithLoader(path);
-    }
+public final class MainControllerAccessor {
+    private static volatile MainController instance;
+    private MainControllerAccessor() {}
+    public static void set(MainController c) { instance = c; }
+    public static MainController get() { return instance; }
 }

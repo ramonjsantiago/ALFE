@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
+    <top>
+        <fx:include source="RibbonBar.fxml"/>
+    </top>
 <BorderPane xmlns="http://javafx.com/javafx/25"
             xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="com.fileexplorer.ui.MainController">
