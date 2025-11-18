@@ -6,6 +6,13 @@ import javafx.scene.Scene;
 import javafx.stage.Stage;
 
 public class MainApp extends Application {
+    // --- ThemeManager integration (added by chunk136) ---
+    private void initThemeManager(javafx.stage.Stage stage) {
+        try {
+            javafx.scene.Scene scene = stage.getScene();
+            if (scene != null) com.fileexplorer.ui.ThemeManager.get().registerScene(scene);
+        } catch (Exception e) { e.printStackTrace(); }
+    }
     private Scene scene;
 
     @Override
@@ -19,6 +26,8 @@ public class MainApp extends Application {
         stage.setTitle("Ultra File Explorer");
         stage.setScene(scene);
         stage.show();
+        // ThemeManager: register primary scene
+        try { initThemeManager(stage); } catch(Exception e) { e.printStackTrace(); }
     }
 
     public void setTheme(String theme) {

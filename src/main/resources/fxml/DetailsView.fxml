@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:controller="com.fileexplorer.ui.DetailsViewController">
+    <top>
+        <ToolBar>
+            <MenuButton fx:id="columnChooserButton" text="Columns"/>
+        </ToolBar>
+    </top>
+    <center>
+        <TableView fx:id="detailsTable"/>
+    </center>
+</BorderPane>

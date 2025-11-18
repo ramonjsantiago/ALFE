@@ -1,0 +1,94 @@
+/* ---------------------------------------------------------
+   DARK MODE (Microsoft Explorer–Inspired, Modernized)
+   --------------------------------------------------------- */
+
+.root {
+    -fx-font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
+    -fx-font-size: 13px;
+    -fx-background-color: #1e1e1e;
+    -fx-text-fill: #e1e1e1;
+}
+
+/* Ribbon bar */
+.ribbon-bar {
+    -fx-background-color: linear-gradient(#2b2b2b, #232323);
+    -fx-border-color: #3b3b3b;
+    -fx-border-width: 0 0 1 0;
+}
+
+/* Ribbon buttons */
+.ribbon-button {
+    -fx-background-color:
+        linear-gradient(#333333, #292929),
+        linear-gradient(#3a3a3a, #2c2c2c 60%, #242424);
+    -fx-text-fill: #efefef;
+    -fx-border-color: #4a4a4a;
+    -fx-border-radius: 3;
+}
+
+.ribbon-button:hover {
+    -fx-background-color:
+        linear-gradient(#3c3c3c, #303030),
+        linear-gradient(#444444, #333333 60%, #252525);
+    -fx-border-color: #7a7a7a;
+}
+
+.ribbon-button:pressed {
+    -fx-background-color:
+        linear-gradient(#262626, #1e1e1e),
+        linear-gradient(#2e2e2e, #222222 60%, #1a1a1a);
+}
+
+/* Navigation tree */
+.nav-tree {
+    -fx-background-color: #1b1b1b;
+}
+
+.nav-tree .tree-cell {
+    -fx-text-fill: #e3e3e3;
+}
+
+.nav-tree .tree-cell:selected {
+    -fx-background-color: #08488b;
+}
+
+/* Table / Details View */
+.table-view {
+    -fx-background-color: #1d1d1d;
+}
+
+.table-row-cell {
+    -fx-background-color: #1d1d1d;
+    -fx-text-fill: #e3e3e3;
+}
+
+.table-row-cell:hover {
+    -fx-background-color: #2b2b2b;
+}
+
+.table-row-cell:selected {
+    -fx-background-color: #08488b;
+    -fx-text-fill: #ffffff;
+}
+
+/* Column headers */
+.table-view .column-header {
+    -fx-background-color: linear-gradient(#2d2d2d, #262626);
+    -fx-border-color: #3a3a3a;
+}
+
+.table-view .column-header:hover {
+    -fx-background-color: linear-gradient(#333333, #2a2a2a);
+}
+
+.table-view .column-header .sort-arrow {
+    -fx-background-color: #cfcfcf;
+}
+
+/* Glassy mode works off this too */
+.glassy-mode {
+    -fx-background-color: rgba(20,20,20,0.40);
+    -fx-border-color: rgba(255,255,255,0.18);
+    -fx-backdrop-filter: blur(16px);
+}
+

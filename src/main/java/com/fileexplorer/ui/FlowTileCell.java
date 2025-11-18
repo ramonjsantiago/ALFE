@@ -12,6 +12,27 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 public class FlowTileCell extends StackPane {
+    private boolean selected = false;
+    private ContextMenuHandler contextMenuHandler;
+    private HistoryManager historyManager;
+
+    public void setContextMenuHandler(ContextMenuHandler handler) { contextMenuHandler = handler; }
+    public void setHistoryManager(HistoryManager hm) { historyManager = hm; }
+
+    private void initializeCell() {
+        setOnMouseClicked(e -> {
+            if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY) {
+                toggleSelection();
+            } else if (e.getButton() == javafx.scene.input.MouseButton.SECONDARY) {
+                if (contextMenuHandler != null) contextMenuHandler.showContextMenu(this, e.getScreenX(), e.getScreenY());
+            }
+        });
+    }
+
+    private void toggleSelection() {
+        selected = !selected;
+        pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("selected"), selected);
+    }
     private static int globalIconSize = 64;
     public static void setGlobalIconSize(int size) { globalIconSize = size; }
     public static int getGlobalIconSize() { return globalIconSize; }

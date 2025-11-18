@@ -1,96 +1,140 @@
 package com.fileexplorer.ui;
 
-import javafx.beans.property.SimpleLongProperty;
-import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableView;
+import javafx.scene.control.*;
+import javafx.scene.input.MouseEvent;
+import javafx.stage.Window;
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.prefs.Preferences;
 
-import java.io.File;
-import java.text.SimpleDateFormat;
-import java.util.Arrays;
-
+/**
+ * DetailsViewController — TableView with sortable columns and column chooser
+ */
 public class DetailsViewController {
-    public void groupByColumn(String columnName) {
-        // Simple visual grouping using TableView sorting; real grouping requires custom row factory or TreeTableView
-        switch(columnName) {
-            case "None": tableView.getSortOrder().clear(); break;
-            case "Date": tableView.getSortOrder().setAll(dateCol); break;
-            case "Type": tableView.getSortOrder().setAll(typeCol); break;
-        }
-        tableView.sort();
-    }
 
-    @FXML
-    private TableView<File> tableView;
+    @FXML public TableView<java.io.File> detailsTable;
+    @FXML private MenuButton columnChooserButton;
 
-    @FXML
-    private TableColumn<File, String> nameCol;
-    @FXML
-    private TableColumn<File, Long> sizeCol;
-    @FXML
-    private TableColumn<File, String> typeCol;
-    @FXML
-    private TableColumn<File, String> dateCol;
-
-    private ObservableList<File> fileList = FXCollections.observableArrayList();
+    private final ObservableList<java.io.File> items = FXCollections.observableArrayList();
+    private final List<TableColumn<java.io.File, ?>> allColumns = new ArrayList<>();
+    private final Preferences prefs = Preferences.userNodeForPackage(DetailsViewController.class);
 
     @FXML
     public void initialize() {
-        // Name column
-        nameCol.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getName()));
+        // Create columns
+        TableColumn<java.io.File, String> nameCol = new TableColumn<>("Name");
+        nameCol.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(cd.getValue().getName()));
         nameCol.setSortable(true);
 
-        // Size column
-        sizeCol.setCellValueFactory(cell -> new SimpleLongProperty(cell.getValue().length()).asObject());
+        TableColumn<java.io.File, String> sizeCol = new TableColumn<>("Size");
+        sizeCol.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(cd.getValue().isFile() ? Long.toString(cd.getValue().length()) : ""));
         sizeCol.setSortable(true);
 
-        // Type column (extension)
-        typeCol.setCellValueFactory(cell -> {
-            String name = cell.getValue().getName();
-            String ext = "";
-            int dot = name.lastIndexOf('.');
-            if (dot > 0 && dot < name.length()-1) ext = name.substring(dot+1);
-            return new SimpleStringProperty(ext.toUpperCase());
+        TableColumn<java.io.File, String> typeCol = new TableColumn<>("Type");
+        typeCol.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(cd.getValue().isDirectory()? "Folder" : "File"));
+        typeCol.setSortable(false);
+
+        TableColumn<java.io.File, String> modifiedCol = new TableColumn<>("Date Modified");
+        modifiedCol.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(
+            new java.util.Date(cd.getValue().lastModified()).toString()));
+        modifiedCol.setSortable(true);
+
+        detailsTable.getColumns().addAll(nameCol, sizeCol, typeCol, modifiedCol);
+        allColumns.addAll(detailsTable.getColumns());
+
+        detailsTable.setItems(items);
+        detailsTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+
+        // Column chooser
+        rebuildColumnChooser();
+
+        // Load persisted column visibility/order
+        restoreColumnPrefs();
+
+        // Double click to open
+        detailsTable.setOnMouseClicked((MouseEvent t) -> {
+            if (t.getClickCount() == 2) {
+                java.io.File selected = detailsTable.getSelectionModel().getSelectedItem();
+                if (selected != null) openFile(selected);
+            }
         });
-        typeCol.setSortable(true);
-
-        // Date Modified column
-        dateCol.setCellValueFactory(cell -> {
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
-            return new SimpleStringProperty(sdf.format(cell.getValue().lastModified()));
-        });
-        dateCol.setSortable(true);
-
-        tableView.setItems(fileList);
     }
 
-    public void setFiles(File[] files) {
-        fileList.setAll(Arrays.asList(files));
-    }
-
-    // Optional: programmatically sort
-    public void sortByColumn(String columnName) {
-    // Extended multi-column sort example (preserves previous sort order)
-    tableView.getSortOrder().clear();
-    switch(columnName) {
-        case "Name": tableView.getSortOrder().add(nameCol); break;
-        case "Size": tableView.getSortOrder().add(sizeCol); break;
-        case "Type": tableView.getSortOrder().add(typeCol); break;
-        case "Date": tableView.getSortOrder().add(dateCol); break;
-    }
-    tableView.sort();
-        switch(columnName) {
-            case "Name":
-                tableView.getSortOrder().setAll(nameCol); break;
-            case "Size":
-                tableView.getSortOrder().setAll(sizeCol); break;
-            case "Type":
-                tableView.getSortOrder().setAll(typeCol); break;
-            case "Date":
-                tableView.getSortOrder().setAll(dateCol); break;
+    private void rebuildColumnChooser() {
+        columnChooserButton.getItems().clear();
+        for (TableColumn<java.io.File, ?> col : allColumns) {
+            CheckMenuItem mi = new CheckMenuItem(col.getText());
+            mi.setSelected(detailsTable.getColumns().contains(col));
+            mi.setOnAction(e -> {
+                if (mi.isSelected()) {
+                    detailsTable.getColumns().add(col);
+                } else {
+                    detailsTable.getColumns().remove(col);
+                }
+                persistColumnPrefs();
+            });
+            columnChooserButton.getItems().add(mi);
         }
+    }
+
+    public void setFolder(Path folder) {
+        items.clear();
+        try (DirectoryStream<Path> ds = Files.newDirectoryStream(folder)) {
+            for (Path p : ds) items.add(p.toFile());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void openFile(java.io.File f) {
+        try {
+            java.awt.Desktop.getDesktop().open(f);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    private void persistColumnPrefs() {
+        try {
+            StringBuilder sb = new StringBuilder();
+            for (TableColumn<java.io.File, ?> col : detailsTable.getColumns()) {
+                sb.append(col.getText()).append(";");
+            }
+            prefs.put("details.columns.order", sb.toString());
+            StringBuilder vis = new StringBuilder();
+            for (TableColumn<java.io.File, ?> col : allColumns) {
+                vis.append(detailsTable.getColumns().contains(col) ? "1" : "0");
+            }
+            prefs.put("details.columns.visible", vis.toString());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void restoreColumnPrefs() {
+        String order = prefs.get("details.columns.order", "");
+        String vis = prefs.get("details.columns.visible", "");
+        if (!order.isEmpty()) {
+            Map<String, TableColumn<java.io.File, ?>> map = new HashMap<>();
+            for (TableColumn<java.io.File, ?> c : allColumns) map.put(c.getText(), c);
+            detailsTable.getColumns().clear();
+            for (String name : order.split(";")) {
+                if (map.containsKey(name)) detailsTable.getColumns().add(map.get(name));
+            }
+        }
+        if (!vis.isEmpty()) {
+            for (int i = 0; i < vis.length() && i < allColumns.size(); i++) {
+                boolean show = vis.charAt(i) == '1';
+                TableColumn<java.io.File, ?> c = allColumns.get(i);
+                if (show && !detailsTable.getColumns().contains(c)) detailsTable.getColumns().add(c);
+                if (!show) detailsTable.getColumns().remove(c);
+            }
+        }
+        // Ensure chooser reflects final state
+        rebuildColumnChooser();
     }
 }

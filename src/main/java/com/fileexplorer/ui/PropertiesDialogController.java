@@ -6,6 +6,25 @@ import javafx.scene.control.DialogPane;
 import java.io.File;
 
 public class PropertiesDialogController {
+    public void showProperties(java.util.List<java.io.File> files) {
+        if (files == null || files.isEmpty()) return;
+        // If multiple files, summarize size, type counts, and earliest/latest modified dates
+        long totalSize = 0;
+        java.util.Map<String,Integer> typeCounts = new java.util.HashMap<>();
+        long earliest = Long.MAX_VALUE, latest = Long.MIN_VALUE;
+        for (java.io.File f : files) {
+            totalSize += f.length();
+            String ext = f.getName().contains(".") ? f.getName().substring(f.getName().lastIndexOf(.)+1) : "<no ext>";
+            typeCounts.put(ext, typeCounts.getOrDefault(ext,0)+1);
+            earliest = Math.min(earliest, f.lastModified());
+            latest = Math.max(latest, f.lastModified());
+        }
+        // Display properties in dialog (simplified)
+        System.out.println("Properties for " + files.size() + " files:");
+        System.out.println("Total size: " + totalSize);
+        System.out.println("Type counts: " + typeCounts);
+        System.out.println("Modified range: " + new java.util.Date(earliest) + " - " + new java.util.Date(latest));
+    }
     private java.io.File file;
     @FXML private javafx.scene.control.Label nameLabel;
     @FXML private javafx.scene.control.Label pathLabel;

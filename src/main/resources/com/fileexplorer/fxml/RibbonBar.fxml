@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- ---------------------------------------------------------
+     RibbonBar.fxml with Microsoft Explorer–style Ribbon Groups
+     Icons are embedded directly
+   --------------------------------------------------------- -->
+
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.image.*?>
+
+<ToolBar fx:id="ribbonBar"
+         xmlns:fx="http://javafx.com/fxml"
+         fx:controller="com.fileexplorer.ui.RibbonBarController"
+         styleClass="ribbon-bar">
+
+    <!-- FILE GROUP -->
+    <Button fx:id="btnNewFolder" styleClass="ribbon-button">
+        <graphic>
+            <ImageView fitHeight="18" fitWidth="18"
+                       image="@../icons/explorer/newfolder.png"/>
+        </graphic>
+        <Tooltip text="New Folder"/>
+    </Button>
+
+    <Button fx:id="btnDelete" styleClass="ribbon-button">
+        <graphic>
+            <ImageView fitHeight="18" fitWidth="18"
+                       image="@../icons/explorer/delete.png"/>
+        </graphic>
+        <Tooltip text="Delete"/>
+    </Button>
+
+    <Separator orientation="VERTICAL"/>
+
+    <!-- CLIPBOARD GROUP -->
+    <Button fx:id="btnCopy" styleClass="ribbon-button">
+        <graphic>
+            <ImageView fitHeight="18" fitWidth="18"
+                       image="@../icons/explorer/copy.png"/>
+        </graphic>
+        <Tooltip text="Copy"/>
+    </Button>
+
+    <Button fx:id="btnPaste" styleClass="ribbon-button">
+        <graphic>
+            <ImageView fitHeight="18" fitWidth="18"
+                       image="@../icons/explorer/paste.png"/>
+        </graphic>
+        <Tooltip text="Paste"/>
+    </Button>
+
+    <Button fx:id="btnCut" styleClass="ribbon-button">
+        <graphic>
+            <ImageView fitHeight="18" fitWidth="18"
+                       image="@../icons/explorer/cut.png"/>
+        </graphic>
+        <Tooltip text="Cut"/>
+    </Button>
+
+    <Separator orientation="VERTICAL"/>
+
+    <!-- VIEW GROUP -->
+    <Button fx:id="btnViewDetails" styleClass="ribbon-button">
+        <graphic>
+            <ImageView fitHeight="18" fitWidth="18"
+                       image="@../icons/explorer/view_details.png"/>
+        </graphic>
+        <Tooltip text="Details View"/>
+    </Button>
+
+    <Button fx:id="btnViewTiles" styleClass="ribbon-button">
+        <graphic>
+            <ImageView fitHeight="18" fitWidth="18"
+                       image="@../icons/explorer/view_tiles.png"/>
+        </graphic>
+        <Tooltip text="Tiles View"/>
+    </Button>
+
+    <Button fx:id="btnViewContent" styleClass="ribbon-button">
+        <graphic>
+            <ImageView fitHeight="18" fitWidth="18"
+                       image="@../icons/explorer/view_content.png"/>
+        </graphic>
+        <Tooltip text="Content View"/>
+    </Button>
+
+    <Separator orientation="VERTICAL"/>
+
+    <!-- NAVIGATION GROUP -->
+    <Button fx:id="btnUp" styleClass="ribbon-button">
+        <graphic>
+            <ImageView fitHeight="18" fitWidth="18"
+                       image="@../icons/explorer/up.png"/>
+        </graphic>
+        <Tooltip text="Up One Level"/>
+    </Button>
+
+    <Separator orientation="VERTICAL"/>
+
+    <!-- MODE SWITCH GROUP -->
+    <MenuButton text="Theme" styleClass="ribbon-button">
+        <items>
+            <MenuItem fx:id="menuLight" text="Light Mode"/>
+            <MenuItem fx:id="menuDark" text="Dark Mode"/>
+            <MenuItem fx:id="menuGlassy" text="Glassy Mode"/>
+        </items>
+    </MenuButton>
+
+</ToolBar>

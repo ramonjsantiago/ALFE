@@ -29,6 +29,171 @@
 // import java.util.concurrent.atomic.AtomicReference;
 
 // public class MainController {
+    // Theme controls (injected by chunk136)
+    @FXML private javafx.scene.control.ChoiceBox<String> baseThemeChoice;
+    @FXML private javafx.scene.control.ChoiceBox<String> overlayChoice;
+
+    @FXML public void initializeThemeControls() {
+        try {
+            baseThemeChoice.getItems().setAll("Light","Dark");
+            baseThemeChoice.setValue(ThemeUtils.BaseTheme.LIGHT.name());
+            overlayChoice.getItems().setAll("None","Glassy","Mica","Acrylic");
+            overlayChoice.setValue("None");
+
+            baseThemeChoice.getSelectionModel().selectedItemProperty().addListener((obs,oldV,newV) -> {
+                ThemeUtils.BaseTheme t = "Dark".equalsIgnoreCase(newV) ? ThemeUtils.BaseTheme.DARK : ThemeUtils.BaseTheme.LIGHT;
+                ThemeManager.get().setBaseTheme(t);
+            });
+
+            overlayChoice.getSelectionModel().selectedItemProperty().addListener((obs,oldV,newV) -> {
+                // Apply overlay to current tab only (mixed model)
+                javafx.scene.control.Tab selected = tabPane.getSelectionModel().getSelectedItem();
+                if (selected != null) {
+                    ThemeUtils.Overlay ov = switch(newV) { case "Glassy" -> ThemeUtils.Overlay.GLASSY; case "Mica" -> ThemeUtils.Overlay.MICA; case "Acrylic" -> ThemeUtils.Overlay.ACRYLIC; default -> ThemeUtils.Overlay.NONE; };
+                    ThemeManager.get().setTabOverlay(selected, ov);
+                }
+            });
+
+            // When tab selection changes, update overlayChoice to reflect current tab
+            tabPane.getSelectionModel().selectedItemProperty().addListener((obs,oldTab,newTab) -> {
+                if (newTab == null) return;
+                ThemeUtils.Overlay ov = ThemeManager.get().getTabOverlay(newTab);
+                overlayChoice.setValue(ov == ThemeUtils.Overlay.NONE ? "None" : ov.name().substring(0,1)+ov.name().substring(1).toLowerCase());
+            });
+
+            // Register the scene with ThemeManager if available
+            if (tabPane != null && tabPane.getScene() != null) ThemeManager.get().registerScene(tabPane.getScene());
+        } catch(Exception e) { e.printStackTrace(); }
+    }
+    private void initializeKeyboardShortcuts() {
+        scene.setOnKeyPressed(event -> {
+            switch (event.getCode()) {
+                case DELETE -> deleteSelectedRibbon();
+                case F2 -> renameSelectedRibbon();
+                case F4 -> showPropertiesRibbon();
+                case Z -> { if (event.isControlDown()) historyManager.undo(); }
+                case Y -> { if (event.isControlDown()) historyManager.redo(); }
+                default -> {}
+            }
+        });
+    }
+    private PropertiesDialogController propertiesDialogController;
+
+    public void showPropertiesDialog(java.util.List<java.io.File> files) {
+        if (propertiesDialogController != null) propertiesDialogController.showProperties(files);
+    }
+
+    // RibbonBar multi-selection actions
+    public void deleteSelectedRibbon() {
+        for (java.io.File f : getSelectedFiles()) deleteFile(f);
+    }
+
+    public void renameSelectedRibbon() {
+        java.util.List<java.io.File> selected = getSelectedFiles();
+        if (selected.size() == 1) renameSelected();
+        else System.out.println("Batch rename not implemented yet");
+    }
+
+    public void showPropertiesRibbon() {
+        showPropertiesDialog(getSelectedFiles());
+    }
+    private DragAndDropHandler dragAndDropHandler;
+
+    private void initializeDragAndDrop() {
+        dragAndDropHandler = new DragAndDropHandler();
+        dragAndDropHandler.setController(this);
+        dragAndDropHandler.attachDragAndDrop(leftPane());
+        dragAndDropHandler.attachDragAndDrop(rightPane());
+    }
+    public void deleteFile(java.io.File file) {
+        if (file != null && historyManager != null) {
+            historyManager.recordDelete(file);
+            file.delete();
+            refreshPanes();
+        }
+    }
+
+    public java.util.List<java.io.File> getSelectedFiles() {
+        java.util.List<java.io.File> selected = new java.util.ArrayList<>();
+        selected.addAll(leftPane().getSelectionModel().getSelectedItems());
+        selected.addAll(rightPane().getSelectionModel().getSelectedItems());
+        return selected;
+    }
+
+    private void attachMultiSelection() {
+        leftPane().getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
+        rightPane().getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
+    }
+    @FXML private void undoAction() {
+        if (historyManager != null) historyManager.undo();
+        refreshPanes();
+    }
+
+    @FXML private void redoAction() {
+        if (historyManager != null) historyManager.redo();
+        refreshPanes();
+    }
+
+    private void refreshPanes() {
+        leftPane().refresh();
+        rightPane().refresh();
+        updateStatusBar();
+        updatePreview(getSelectedFile());
+    }
+    @FXML private TabPane tabPane;
+    private TabManager tabManager;
+
+    private void initializeTabs() {
+        tabManager = new TabManager(tabPane);
+        tabManager.restoreSession();
+    }
+
+    @FXML private void handleClose() {
+        if (tabManager != null) tabManager.saveSession();
+    }
+    @FXML private StatusBarController statusBarController;
+
+    private void attachStatusBarUpdates() {
+        leftPane().getSelectionModel().selectedItemProperty().addListener((obs, oldFile, newFile) -> updateStatusBar());
+        rightPane().getSelectionModel().selectedItemProperty().addListener((obs, oldFile, newFile) -> updateStatusBar());
+    }
+
+    private void updateStatusBar() {
+        if (statusBarController != null) {
+            statusBarController.updateSelection(getSelectedFiles());
+            statusBarController.updateTabInfo();
+        }
+    }
+    @FXML private RibbonBarController ribbonBarController;
+
+    public void initializeRibbonBar() {
+        if (ribbonBarController != null) ribbonBarController.initializeRibbon(this);
+    }
+
+    // Stub methods for menu actions
+    public void copySelected() { /* implement copy logic with HistoryManager */ }
+    public void pasteClipboard() { /* implement paste logic with HistoryManager */ }
+    public void deleteSelected() { /* implement delete logic with HistoryManager */ }
+    public void renameSelected() { /* implement rename logic with HistoryManager */ }
+    public void showProperties() { /* show PropertiesDialog for selected file */ }
+    public java.util.List<java.io.File> getSelectedFiles() { return new java.util.ArrayList<>(); }
+    public boolean clipboardHasFiles() { return false; /* implement clipboard check */ }
+    @FXML private PreviewPaneController previewPaneController;
+
+    public void updatePreview(File file) {
+        if (previewPaneController != null) previewPaneController.showPreview(file);
+    }
+
+    private void attachPreviewOnSelection() {
+        leftPane().getSelectionModel().selectedItemProperty().addListener((obs, oldFile, newFile) -> updatePreview(newFile));
+        rightPane().getSelectionModel().selectedItemProperty().addListener((obs, oldFile, newFile) -> updatePreview(newFile));
+    }
+    @FXML public void initializeDragAndDrop() {
+        dragAndDropHandler.setController(this);
+        dragAndDropHandler.setHistoryManager(historyManager);
+        dragAndDropHandler.enableDragAndDrop(leftPane());
+        dragAndDropHandler.enableDragAndDrop(rightPane());
+    }
     private java.util.Map<javafx.scene.control.Tab, HistoryManager> tabHistoryMap = new java.util.HashMap<>();
 
     public void initializeTabHistory() {
@@ -2689,6 +2854,171 @@
  // * resides in createTabWithLoader(Path).
  // */
 // public class MainController {
+    // Theme controls (injected by chunk136)
+    @FXML private javafx.scene.control.ChoiceBox<String> baseThemeChoice;
+    @FXML private javafx.scene.control.ChoiceBox<String> overlayChoice;
+
+    @FXML public void initializeThemeControls() {
+        try {
+            baseThemeChoice.getItems().setAll("Light","Dark");
+            baseThemeChoice.setValue(ThemeUtils.BaseTheme.LIGHT.name());
+            overlayChoice.getItems().setAll("None","Glassy","Mica","Acrylic");
+            overlayChoice.setValue("None");
+
+            baseThemeChoice.getSelectionModel().selectedItemProperty().addListener((obs,oldV,newV) -> {
+                ThemeUtils.BaseTheme t = "Dark".equalsIgnoreCase(newV) ? ThemeUtils.BaseTheme.DARK : ThemeUtils.BaseTheme.LIGHT;
+                ThemeManager.get().setBaseTheme(t);
+            });
+
+            overlayChoice.getSelectionModel().selectedItemProperty().addListener((obs,oldV,newV) -> {
+                // Apply overlay to current tab only (mixed model)
+                javafx.scene.control.Tab selected = tabPane.getSelectionModel().getSelectedItem();
+                if (selected != null) {
+                    ThemeUtils.Overlay ov = switch(newV) { case "Glassy" -> ThemeUtils.Overlay.GLASSY; case "Mica" -> ThemeUtils.Overlay.MICA; case "Acrylic" -> ThemeUtils.Overlay.ACRYLIC; default -> ThemeUtils.Overlay.NONE; };
+                    ThemeManager.get().setTabOverlay(selected, ov);
+                }
+            });
+
+            // When tab selection changes, update overlayChoice to reflect current tab
+            tabPane.getSelectionModel().selectedItemProperty().addListener((obs,oldTab,newTab) -> {
+                if (newTab == null) return;
+                ThemeUtils.Overlay ov = ThemeManager.get().getTabOverlay(newTab);
+                overlayChoice.setValue(ov == ThemeUtils.Overlay.NONE ? "None" : ov.name().substring(0,1)+ov.name().substring(1).toLowerCase());
+            });
+
+            // Register the scene with ThemeManager if available
+            if (tabPane != null && tabPane.getScene() != null) ThemeManager.get().registerScene(tabPane.getScene());
+        } catch(Exception e) { e.printStackTrace(); }
+    }
+    private void initializeKeyboardShortcuts() {
+        scene.setOnKeyPressed(event -> {
+            switch (event.getCode()) {
+                case DELETE -> deleteSelectedRibbon();
+                case F2 -> renameSelectedRibbon();
+                case F4 -> showPropertiesRibbon();
+                case Z -> { if (event.isControlDown()) historyManager.undo(); }
+                case Y -> { if (event.isControlDown()) historyManager.redo(); }
+                default -> {}
+            }
+        });
+    }
+    private PropertiesDialogController propertiesDialogController;
+
+    public void showPropertiesDialog(java.util.List<java.io.File> files) {
+        if (propertiesDialogController != null) propertiesDialogController.showProperties(files);
+    }
+
+    // RibbonBar multi-selection actions
+    public void deleteSelectedRibbon() {
+        for (java.io.File f : getSelectedFiles()) deleteFile(f);
+    }
+
+    public void renameSelectedRibbon() {
+        java.util.List<java.io.File> selected = getSelectedFiles();
+        if (selected.size() == 1) renameSelected();
+        else System.out.println("Batch rename not implemented yet");
+    }
+
+    public void showPropertiesRibbon() {
+        showPropertiesDialog(getSelectedFiles());
+    }
+    private DragAndDropHandler dragAndDropHandler;
+
+    private void initializeDragAndDrop() {
+        dragAndDropHandler = new DragAndDropHandler();
+        dragAndDropHandler.setController(this);
+        dragAndDropHandler.attachDragAndDrop(leftPane());
+        dragAndDropHandler.attachDragAndDrop(rightPane());
+    }
+    public void deleteFile(java.io.File file) {
+        if (file != null && historyManager != null) {
+            historyManager.recordDelete(file);
+            file.delete();
+            refreshPanes();
+        }
+    }
+
+    public java.util.List<java.io.File> getSelectedFiles() {
+        java.util.List<java.io.File> selected = new java.util.ArrayList<>();
+        selected.addAll(leftPane().getSelectionModel().getSelectedItems());
+        selected.addAll(rightPane().getSelectionModel().getSelectedItems());
+        return selected;
+    }
+
+    private void attachMultiSelection() {
+        leftPane().getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
+        rightPane().getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
+    }
+    @FXML private void undoAction() {
+        if (historyManager != null) historyManager.undo();
+        refreshPanes();
+    }
+
+    @FXML private void redoAction() {
+        if (historyManager != null) historyManager.redo();
+        refreshPanes();
+    }
+
+    private void refreshPanes() {
+        leftPane().refresh();
+        rightPane().refresh();
+        updateStatusBar();
+        updatePreview(getSelectedFile());
+    }
+    @FXML private TabPane tabPane;
+    private TabManager tabManager;
+
+    private void initializeTabs() {
+        tabManager = new TabManager(tabPane);
+        tabManager.restoreSession();
+    }
+
+    @FXML private void handleClose() {
+        if (tabManager != null) tabManager.saveSession();
+    }
+    @FXML private StatusBarController statusBarController;
+
+    private void attachStatusBarUpdates() {
+        leftPane().getSelectionModel().selectedItemProperty().addListener((obs, oldFile, newFile) -> updateStatusBar());
+        rightPane().getSelectionModel().selectedItemProperty().addListener((obs, oldFile, newFile) -> updateStatusBar());
+    }
+
+    private void updateStatusBar() {
+        if (statusBarController != null) {
+            statusBarController.updateSelection(getSelectedFiles());
+            statusBarController.updateTabInfo();
+        }
+    }
+    @FXML private RibbonBarController ribbonBarController;
+
+    public void initializeRibbonBar() {
+        if (ribbonBarController != null) ribbonBarController.initializeRibbon(this);
+    }
+
+    // Stub methods for menu actions
+    public void copySelected() { /* implement copy logic with HistoryManager */ }
+    public void pasteClipboard() { /* implement paste logic with HistoryManager */ }
+    public void deleteSelected() { /* implement delete logic with HistoryManager */ }
+    public void renameSelected() { /* implement rename logic with HistoryManager */ }
+    public void showProperties() { /* show PropertiesDialog for selected file */ }
+    public java.util.List<java.io.File> getSelectedFiles() { return new java.util.ArrayList<>(); }
+    public boolean clipboardHasFiles() { return false; /* implement clipboard check */ }
+    @FXML private PreviewPaneController previewPaneController;
+
+    public void updatePreview(File file) {
+        if (previewPaneController != null) previewPaneController.showPreview(file);
+    }
+
+    private void attachPreviewOnSelection() {
+        leftPane().getSelectionModel().selectedItemProperty().addListener((obs, oldFile, newFile) -> updatePreview(newFile));
+        rightPane().getSelectionModel().selectedItemProperty().addListener((obs, oldFile, newFile) -> updatePreview(newFile));
+    }
+    @FXML public void initializeDragAndDrop() {
+        dragAndDropHandler.setController(this);
+        dragAndDropHandler.setHistoryManager(historyManager);
+        dragAndDropHandler.enableDragAndDrop(leftPane());
+        dragAndDropHandler.enableDragAndDrop(rightPane());
+    }
     private java.util.Map<javafx.scene.control.Tab, HistoryManager> tabHistoryMap = new java.util.HashMap<>();
 
     public void initializeTabHistory() {

@@ -6,6 +6,61 @@ import javafx.scene.input.MouseEvent;
 import java.io.File;
 
 public class ContextMenuHandler {
+    private MainController controller;
+    public void setController(MainController ctrl) { controller = ctrl; }
+
+    public void attachContextMenu(javafx.scene.control.ListView<java.io.File> listView) {
+        listView.setCellFactory(lv -> {
+            javafx.scene.control.ListCell<java.io.File> cell = new javafx.scene.control.ListCell<>() {
+                @Override protected void updateItem(java.io.File file, boolean empty) {
+                    super.updateItem(file, empty);
+                    setText(empty || file == null ? null : file.getName());
+                }
+            };
+
+            javafx.scene.control.ContextMenu contextMenu = new javafx.scene.control.ContextMenu();
+            javafx.scene.control.MenuItem deleteItem = new javafx.scene.control.MenuItem("Delete");
+            deleteItem.setOnAction(e -> {
+                java.util.List<java.io.File> selectedFiles = listView.getSelectionModel().getSelectedItems();
+                for (java.io.File f : selectedFiles) {
+                    controller.deleteFile(f);
+                }
+            });
+            contextMenu.getItems().add(deleteItem);
+
+            cell.setContextMenu(contextMenu);
+            return cell;
+        });
+    }
+    private HistoryManager historyManager;
+    public void setHistoryManager(HistoryManager hm) { historyManager = hm; }
+
+    public void showContextMenu(FlowTileCell cell, double x, double y) {
+        javafx.scene.control.ContextMenu menu = new javafx.scene.control.ContextMenu();
+        javafx.scene.control.MenuItem delete = new javafx.scene.control.MenuItem("Delete");
+        delete.setOnAction(e -> {
+            java.io.File file = cell.getFile();
+            if (file != null && historyManager != null) {
+                historyManager.recordDelete(file);
+                file.delete();
+            }
+        });
+        javafx.scene.control.MenuItem rename = new javafx.scene.control.MenuItem("Rename");
+        rename.setOnAction(e -> {
+            java.io.File file = cell.getFile();
+            if (file != null && historyManager != null) {
+                String oldName = file.getName();
+                String newName = javafx.scene.control.TextInputDialog dlg = new javafx.scene.control.TextInputDialog(oldName);
+                java.util.Optional<String> result = dlg.showAndWait();
+                result.ifPresent(n -> {
+                    java.io.File renamed = new java.io.File(file.getParentFile(), n);
+                    if (file.renameTo(renamed)) { historyManager.recordRename(file, renamed); }
+                });
+            }
+        });
+        menu.getItems().addAll(delete, rename);
+        menu.show(cell, x, y);
+    }
     public static void attachContextMenu(javafx.scene.control.ListView<java.io.File> pane, MainController controller) {
         javafx.scene.control.ContextMenu menu = new javafx.scene.control.ContextMenu();
         javafx.scene.control.MenuItem delete = new javafx.scene.control.MenuItem("Delete");

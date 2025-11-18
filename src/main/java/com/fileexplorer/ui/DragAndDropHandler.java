@@ -6,6 +6,82 @@ import java.io.File;
 import java.util.List;
 
 public class DragAndDropHandler {
+    private MainController controller;
+    public void setController(MainController ctrl) { controller = ctrl; }
+
+    public void attachDragAndDrop(javafx.scene.control.ListView<java.io.File> listView) {
+        listView.setOnDragDetected(event -> {
+            java.util.List<java.io.File> selectedFiles = listView.getSelectionModel().getSelectedItems();
+            if (!selectedFiles.isEmpty()) {
+                javafx.scene.input.Dragboard db = listView.startDragAndDrop(javafx.scene.input.TransferMode.MOVE);
+                javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+                java.util.List<java.io.File> files = new java.util.ArrayList<>(selectedFiles);
+                content.putFiles(files);
+                db.setContent(content);
+            }
+            event.consume();
+        });
+
+        listView.setOnDragOver(event -> {
+            if (event.getGestureSource() != listView && event.getDragboard().hasFiles()) {
+                event.acceptTransferModes(javafx.scene.input.TransferMode.MOVE);
+            }
+            event.consume();
+        });
+
+        listView.setOnDragDropped(event -> {
+            javafx.scene.input.Dragboard db = event.getDragboard();
+            boolean success = false;
+            if (db.hasFiles()) {
+                for (java.io.File f : db.getFiles()) {
+                    java.io.File target = new java.io.File(listView.getItems().get(0).getParentFile(), f.getName());
+                    f.renameTo(target);
+                    if (controller != null && controller.getHistoryManager() != null) {
+                        controller.getHistoryManager().recordMove(f, target);
+                    }
+                }
+                success = true;
+                if (controller != null) controller.refreshPanes();
+            }
+            event.setDropCompleted(success);
+            event.consume();
+        });
+    private HistoryManager historyManager;
+    private MainController controller;
+    public void setHistoryManager(HistoryManager hm) { historyManager = hm; }
+    public void setController(MainController ctrl) { controller = ctrl; }
+
+    public void enableDragAndDrop(javafx.scene.layout.Pane pane) {
+        pane.setOnDragDetected(e -> {
+            javafx.scene.input.Dragboard db = pane.startDragAndDrop(javafx.scene.input.TransferMode.MOVE);
+            javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+            content.putFiles(controller.getSelectedFiles());
+            db.setContent(content);
+            e.consume();
+        });
+
+        pane.setOnDragOver(e -> {
+            if (e.getGestureSource() != pane && e.getDragboard().hasFiles()) {
+                e.acceptTransferModes(javafx.scene.input.TransferMode.MOVE);
+            }
+            e.consume();
+        });
+
+        pane.setOnDragDropped(e -> {
+            javafx.scene.input.Dragboard db = e.getDragboard();
+            boolean success = false;
+            if (db.hasFiles()) {
+                for (java.io.File file : db.getFiles()) {
+                    java.io.File target = new java.io.File(controller.getCurrentFolder(), file.getName());
+                    if (file.renameTo(target)) {
+                        if (historyManager != null) historyManager.recordMove(file, target);
+                    }
+                }
+                success = true;
+            }
+            e.setDropCompleted(success);
+            e.consume();
+        });
     public static void handleMultiFileDrop(javafx.scene.control.ListView<java.io.File> targetPane, java.util.List<java.io.File> files, MainController controller) {
         if (files == null || files.isEmpty() || targetPane == null) return;
 

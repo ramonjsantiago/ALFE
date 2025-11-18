@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.control.Label?>
+
+<HBox fx:id="statusBar"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.explorer.ui.StatusBarController"
+      spacing="12"
+      styleClass="status-bar-root">
+
+    <Label fx:id="leftStatus" text="Ready"/>
+    <Label fx:id="rightStatus" text=""/>
+</HBox>

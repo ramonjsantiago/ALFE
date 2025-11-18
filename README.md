@@ -1251,3 +1251,264 @@ Next steps:
 4) Ensure Preview Pane, StatusBar, RibbonBar controls, and HistoryManager remain consistent.
 5) Optional: add caching of thumbnails with soft/strong references to improve performance.
 
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk121.sh
+Patching FlowTileCell.java for selection, context menu, and HistoryManager logging...
+Chunk 121 applied: FlowTileCell selection, context menu, and HistoryManager logging implemented.
+
+Next steps:
+1) Verify left/right pane FlowTileCells respond to selection clicks.
+2) Right-click context menu should show Delete/Rename and execute with HistoryManager logging.
+3) Undo/Redo buttons should undo delete/rename actions per active tab.
+4) Confirm multi-tab, dual-pane, Preview Pane, StatusBar, RibbonBar, and ThumbnailCache updates correctly after operations.
+5) Optional: add Copy, Move, Open, and Properties to context menu for full Explorer parity.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk122.sh
+Patching DragAndDropHandler.java for dual-pane drag-and-drop...
+Chunk 122 applied: Dual-pane drag-and-drop with HistoryManager integration implemented.
+
+Next steps:
+1) Test dragging files between left and right panes; verify files move correctly.
+2) Confirm HistoryManager records each move operation per active tab.
+3) Ensure Undo/Redo buttons correctly undo/redo move operations.
+4) Check FlowTileCell virtualization, thumbnail updates, StatusBar, and Preview Pane after moves.
+5) Optional: add copy-on-drag (Ctrl modifier), drag hints, and folder hierarchy drag-and-drop.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk123.sh
+Creating PreviewPaneController.java supporting image, text, and file type previews...
+Chunk 123 applied: Preview Pane supporting images, text, and file types implemented.
+
+Next steps:
+1) Select various files in left/right panes and confirm the preview updates correctly.
+2) Verify images display with proper scaling, text files show content, and unsupported types show placeholder message.
+3) Confirm Preview Pane clears on tab switch or folder change.
+4) Ensure integration with FlowTileCell selection, StatusBar, RibbonBar, ThumbnailCache, and HistoryManager.
+5) Optional: add PDF or Office document previews via external libraries for full Explorer parity.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk124.sh
+Patching RibbonBarController.java for full menus and dynamic enable/disable...
+Chunk 124 applied: RibbonBar full menus with dynamic enable/disable integrated.
+
+Next steps:
+1) Implement the stub methods for copy, paste, delete, rename, and properties actions.
+2) Test dynamic enabling/disabling of menu items based on selection in both panes.
+3) Ensure RibbonBar actions update the FlowTileCells, Preview Pane, StatusBar, ThumbnailCache, and HistoryManager.
+4) Verify Undo/Redo buttons still operate correctly after RibbonBar actions.
+5) Optional: add keyboard shortcuts (Ctrl+C, Ctrl+V, Del, F2, Alt+Enter) for Explorer parity.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk125.sh
+Creating StatusBarController.java to show selection count, total size, and active tab...
+Chunk 125 applied: StatusBar with selection count, total file size, and active tab info implemented.
+
+Next steps:
+1) Test selection in left/right panes and confirm StatusBar updates correctly.
+2) Switch between tabs and verify active tab label updates.
+3) Ensure integration with FlowTileCell, Preview Pane, RibbonBar, ThumbnailCache, and HistoryManager.
+4) Optional: add file type counts, total folder sizes, and live update on drag-and-drop operations.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk126.sh
+Creating TabManager.java to manage tab pinning, persistence, and session restoration...
+Chunk 126 applied: Tab pinning, multi-tab persistence, and session restoration implemented.
+
+Next steps:
+1) Pin/unpin tabs and verify closability behavior.
+2) Open multiple tabs, close the app, and restart to verify session restoration.
+3) Ensure integration with FlowTileCell, dual-pane, RibbonBar, StatusBar, Preview Pane, ThumbnailCache, and HistoryManager.
+4) Optional: persist selected files, scroll positions, and tab layouts for full session recovery.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk127.sh
+Patching HistoryManager.java for undo/redo of moves, renames, deletes, and drag-and-drop...
+Chunk 127 applied: Undo/Redo stack fully integrated for moves, renames, deletes, and drag-and-drop across tabs.
+
+Next steps:
+1) Test undo/redo for all file operations in both panes.
+2) Confirm integration with FlowTileCell selection, dual-pane, multi-tab views, RibbonBar, StatusBar, Preview Pane, and ThumbnailCache.
+3) Verify that redo restores actions correctly after multiple undos.
+4) Optional: enhance DeleteAction undo to restore files from OS recycle bin when available.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk128.sh
+Patching ThumbnailGenerator.java for multi-image support (TwelveMonkeys)...
+Chunk 128 applied: Multi-image thumbnail support, enhanced caching, and animated preview transitions implemented.
+
+Next steps:
+1) Test images of multiple formats (PNG, JPG, GIF, BMP, TIFF) display correctly in thumbnails.
+2) Verify caching works: thumbnails are reused, old entries evicted as expected.
+3) Confirm smooth fade transition when switching Preview Pane files.
+4) Ensure integration with FlowTileCell virtualization, dual-pane, multi-tab views, RibbonBar, StatusBar, and HistoryManager.
+5) Optional: add thumbnail placeholder animations or high-res previews for large images.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk129.sh
+Patching ContextMenuHandler.java for multi-selection context menu actions...
+Chunk 129 applied: Multi-selection, batch delete operations, and context menu integration implemented.
+
+Next steps:
+1) Test selecting multiple files in left/right panes and using context menu to delete them.
+2) Confirm HistoryManager records each delete for undo/redo.
+3) Verify integration with FlowTileCell virtualization, dual-pane, multi-tab views, RibbonBar, StatusBar, Preview Pane, and ThumbnailCache.
+4) Optional: add batch copy, move, rename, and properties dialogs for multiple selections.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk130.sh
+Patching DragAndDropHandler.java for multi-file drag-and-drop...
+Chunk 130 applied: Multi-file drag-and-drop between panes and tabs implemented.
+
+Next steps:
+1) Test selecting multiple files and dragging them between left/right panes and different tabs.
+2) Confirm HistoryManager records moves for undo/redo.
+3) Verify refresh of FlowTileCell views, StatusBar, Preview Pane, RibbonBar, and ThumbnailCache after drops.
+4) Optional: add copy vs move detection (Ctrl key), visual drag preview, and conflict resolution.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk131.sh
+Patching PropertiesDialogController.java for multi-selection support...
+Chunk 131 applied: Full context menus, Properties dialog, and RibbonBar integration for multi-selection and multi-tab operations.
+
+Next steps:
+1) Test multi-selection context menu -> Properties shows correct info.
+2) Verify RibbonBar buttons act on multi-selection correctly.
+3) Confirm undo/redo works for delete/rename across multiple files.
+4) Ensure integration with FlowTileCell, dual-pane, multi-tab views, StatusBar, Preview Pane, and ThumbnailCache.
+5) Optional: implement batch rename dialog and additional RibbonBar actions for multi-file operations.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk132.sh
+Creating CSS themes (light, dark, glassy)...
+Creating integration test MainAppTest.java...
+Chunk 132 applied: Keyboard shortcuts, visual selection highlights, CSS themes, and integration tests added.
+
+Final steps:
+1) Test switching themes dynamically (light, dark, glassy).
+2) Verify keyboard shortcuts (Delete, F2, F4, Ctrl+Z, Ctrl+Y).
+3) Confirm selection highlights in all views (ListView, FlowTileCell, TableView).
+4) Run integration tests using TestFX to ensure startup and undo/redo work.
+5) Perform full multi-tab, multi-selection, multi-file drag-and-drop and verify HistoryManager consistency.
+6) Your ultra-expanded WSL-compatible Maven project (~3000 lines) is now fully complete.
+
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk134a.sh
+=== Chunk 134A: Microsoft Explorer–like CSS Expansion ===
+=== Chunk 134B: CSS + Icons + Asset Integration ===
+Creating placeholder for icon: newfolder
+./chunk134a.sh: line 99: convert: command not found
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk134-135.sh
+-bash: ./chunk134-135.sh: No such file or directory
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk134_135.sh
+=== Creating CSS directories ===
+=== Writing Chunk 134 CSS files ===
+=== Chunk 134 complete ===
+=== Writing Chunk 135 Acrylic/Mica CSS ===
+=== Chunk 135 complete ===
+
+All CSS files created successfully:
+  - explorer-base.css
+  - left-nav-tree.css
+  - details-view.css
+  - ribbon.css
+  - mica-acrylic.css
+
+Chunks 134 + 135 complete!
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk136.sh
+Chunk 136: Mixed ThemeManager creation and MainApp/MainController patching
+Writing ThemeManager.java and ThemeUtils.java...
+ThemeManager and ThemeUtils written.
+Patching MainApp.java to register primary Scene with ThemeManager...
+MainApp.java patched (if start()/stage.show() existed).
+Patching MainController.java to add theme controls and per-tab overlay application...
+MainController.java patched: added initializeThemeControls(). Please add ChoiceBoxes to your FXML named baseThemeChoice and overlayChoice and call initializeThemeControls() from initialize().
+
+Chunk 136 applied: ThemeManager created and controllers patched where found.
+
+IMPORTANT:
+- If you use a custom FXML for the Ribbon, add two ChoiceBoxes (fx:id="baseThemeChoice" and fx:id="overlayChoice") to the ribbon area and call initializeThemeControls() in your controller initialize().
+- ThemeManager expects CSS files at: /css/explorer-base.css, /css/explorer-light.css, /css/explorer-dark.css, /css/explorer-glassy.css, /css/mica-acrylic.css
+- If MainApp.java was not auto-patched (not found), call ThemeManager.get().registerScene(primaryScene) in your start(Stage) code.
+
+Done. Run your app and change the base/overlay controls in the Ribbon to see immediate hot-reload.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk137.sh
+-bash: ./chunk137.sh: No such file or directory
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk138.sh
+=== Chunk 138: DARK MODE CSS, FXML ICON RIBBON GROUPS, PATCHED CONTROLLER ===
+=== Chunk 138 complete ===
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk139.sh
+-bash: ./chunk139.sh: No such file or directory
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk140.sh
+-bash: ./chunk140.sh: No such file or directory
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk139*.sh
+=== Generating Chunks 139-142 (DetailsView, Navigation Tree, Tabs, Preview Pane) ===
+Creating Chunk 139: DetailsView Table + Column Chooser + persistence
+Creating Chunk 140: Navigation tree with pin/unpin and Favorites (Quick Access)
+Creating Chunk 141: Chrome-style tabs with reordering and new-tab button
+Creating Chunk 142: PreviewPane with image, text, and PDF fallback preview
+Chunks 139-142 files created:
+ - src/main/java/com/fileexplorer/ui/DetailsViewController.java
+ - src/main/resources/fxml/DetailsView.fxml
+ - src/main/java/com/fileexplorer/ui/NavigationPaneController.java
+ - src/main/resources/fxml/NavigationPane.fxml
+ - src/main/java/com/fileexplorer/ui/TabManagerController.java
+ - src/main/resources/fxml/TabManager.fxml
+ - src/main/java/com/fileexplorer/ui/PreviewPaneController.java
+ - src/main/resources/fxml/PreviewPane.fxml
+ - src/main/resources/css/preview_tabs.css
+Done. Next steps:
+ 1) Add these FXMLs into your main layout (fx:include) where appropriate.
+ 2) Wire controllers: call methods like DetailsViewController.setFolder(Path) when a folder is selected.
+ 3) Ensure your MainController loads the FXMLs and sets scene stylesheets (e.g. explorer-base.css).
+ 4) For PDF: consider integrating PDFBox + JavaFX PDF renderer for rich previews.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk143.sh
+
+Creating Chunks 143 files...
+./chunk143.sh: line 9: /StatusBarController.java: Permission denied
+./chunk143.sh: line 31: /StatusBar.fxml: Permission denied
+./chunk143.sh: line 49: /statusbar.css: Permission denied
+Chunk 143 files created:
+ - /StatusBarController.java
+ - /StatusBar.fxml
+ - /statusbar.css
+Next steps for Chunk 143:
+ 1) Insert <fx:include source="StatusBar.fxml"/> at the bottom of your main root layout.
+ 2) Add 'statusbar.css' to your Scene stylesheets.
+ 3) Use StatusBarController to show folder count, file size, selection info, etc.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk144.sh
+
+Creating Chunks 144 files...
+./chunk144.sh: line 9: /EmptyTrashDialogController.java: Permission denied
+./chunk144.sh: line 53: /EmptyTrashDialog.fxml: Permission denied
+./chunk144.sh: line 81: /dialogs.css: Permission denied
+Chunk 144 files created:
+ - /EmptyTrashDialogController.java
+ - /EmptyTrashDialog.fxml
+ - /dialogs.css
+Next steps for Chunk 144:
+ 1) Use FXMLLoader.load(…EmptyTrashDialog.fxml) when Trash is emptied.
+ 2) Apply dialogs.css in your scene or attach it to dialog stage.
+ 3) Connect onConfirm to your delete-all-trash logic.
+ 4) Integrate with your CommandManager if supporting undo.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk145.sh
+
+Creating Chunks 145 files...
+./chunk145.sh: line 9: /PropertiesSidebarController.java: Permission denied
+./chunk145.sh: line 65: /PropertiesSidebar.fxml: Permission denied
+./chunk145.sh: line 105: /properties_sidebar.css: Permission denied
+Chunk 145 files created:
+ - /PropertiesSidebarController.java
+ - /PropertiesSidebar.fxml
+ - /properties_sidebar.css
+Next steps for Chunk 145:
+ 1) Include this in your main layout via <fx:include source="PropertiesSidebar.fxml"/>.
+ 2) Connect selected item events from DetailsViewController so this panel updates live.
+ 3) Pass file icons from your IconCache / IconService.
+ 4) Allow collapse/expand with a toggle button in NavigationPane or TabManager.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk146.sh
+Creating Chunks 145 files...
+./chunk145.sh: line 9: /PropertiesSidebarController.java: Permission denied
+./chunk145.sh: line 65: /PropertiesSidebar.fxml: Permission denied
+./chunk145.sh: line 105: /properties_sidebar.css: Permission denied
+Chunk 145 files created:
+ - /PropertiesSidebarController.java
+ - /PropertiesSidebar.fxml
+ - /properties_sidebar.css
+Next steps for Chunk 145:
+ 1) Include this in your main layout via <fx:include source="PropertiesSidebar.fxml"/>.
+ 2) Connect selected item events from DetailsViewController so this panel updates live.
+ 3) Pass file icons from your IconCache / IconService.
+ 4) Allow collapse/expand with a toggle button in NavigationPane or TabManager.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk146.sh
+
+Creating Chunks 146 files...
+./chunk146.sh: line 9: /BreadcrumbBarController.java: Permission denied
+./chunk146.sh: line 78: /BreadcrumbBar.fxml: Permission denied
+./chunk146.sh: line 93: /breadcrumb.css: Permission denied
+Chunk 146 files created:
+ - /BreadcrumbBarController.java
+ - /BreadcrumbBar.fxml
+ - /breadcrumb.css
+Next steps for Chunk 146:
+ 1) Add <fx:include source="BreadcrumbBar.fxml"/> above DetailsView in your main layout.
+ 2) When folder changes, call breadcrumbBarController.setPath(newFolderPath).
+ 3) Connect listener to update DetailsView, PreviewPane, TabManager, NavigationPane, etc.
+ 4) Extend breadcrumb with context menu (Open in New Tab, Copy Path, etc.) as needed.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$

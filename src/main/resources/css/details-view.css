@@ -1,0 +1,38 @@
+/* ============================
+   Explorer "Details" Mode Table
+   ============================ */
+
+.table-view {
+    -fx-background-color: -fx-bg-0;
+    -fx-border-color: -fx-border-color-1;
+    -fx-border-width: 1;
+}
+
+.table-view .column-header-background {
+    -fx-background-color:
+        linear-gradient(to bottom, #f9f9f9, #ededed);
+    -fx-border-color: -fx-border-color-2;
+}
+
+.table-view .column-header .label {
+    -fx-font-weight: bold;
+    -fx-text-fill: #333333;
+    -fx-padding: 4 6 4 6;
+}
+
+.table-view .table-row-cell {
+    -fx-background-color: -fx-bg-0;
+    -fx-font-size: 13px;
+}
+
+.table-view .table-row-cell:hover {
+    -fx-background-color: #e5f1fb;
+}
+
+.table-view .table-row-cell:selected {
+    -fx-background-color: #d4e7fb;
+}
+
+.table-view .table-row-cell:selected .text {
+    -fx-fill: black;
+}

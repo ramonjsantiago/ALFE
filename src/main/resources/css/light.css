@@ -1,0 +1,3 @@
+.root { -fx-base: #f0f0f0; -fx-background: #ffffff; -fx-text-fill: #000000; }
+.list-cell:selected { -fx-background-color: #cce5ff; }
+.tab-pane .tab-header-background { -fx-background-color: #e0e0e0; }

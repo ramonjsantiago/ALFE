@@ -3,39 +3,52 @@ package com.fileexplorer.ui;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 
+import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Manages tabs in a dual-pane File Explorer.
- * Each pane has a TabPane. Supports adding/removing/renaming tabs.
- */
 public class TabManager {
 
-    private final TabPane leftPane;
-    private final TabPane rightPane;
+    private final TabPane tabPane;
+    private final File sessionFile = new File(System.getProperty("user.home"), ".fileexplorer_session");
 
-    public TabManager(TabPane left, TabPane right) {
-        this.leftPane = left;
-        this.rightPane = right;
+    public TabManager(TabPane tabPane) {
+        this.tabPane = tabPane;
     }
 
-    public void addTab(boolean leftSide, String title) {
-        Tab tab = new Tab(title);
-        tab.setClosable(true);
-        if (leftSide) leftPane.getTabs().add(tab);
-        else rightPane.getTabs().add(tab);
+    public void pinTab(Tab tab, boolean pinned) {
+        tab.setClosable(!pinned);
+        tab.getProperties().put("pinned", pinned);
     }
 
-    public void closeTab(Tab tab, boolean leftSide) {
-        if (leftSide) leftPane.getTabs().remove(tab);
-        else rightPane.getTabs().remove(tab);
+    public boolean isPinned(Tab tab) {
+        Object val = tab.getProperties().get("pinned");
+        return val != null && (boolean) val;
     }
 
-    public List<String> getAllTabTitles(boolean leftSide) {
-        List<String> titles = new ArrayList<>();
-        TabPane pane = leftSide ? leftPane : rightPane;
-        for (Tab t : pane.getTabs()) titles.add(t.getText());
-        return titles;
+    public void saveSession() {
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(sessionFile))) {
+            List<String> folderPaths = new ArrayList<>();
+            for (Tab tab : tabPane.getTabs()) {
+                folderPaths.add(tab.getText());
+            }
+            oos.writeObject(folderPaths);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void restoreSession() {
+        if (!sessionFile.exists()) return;
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(sessionFile))) {
+            List<String> folderPaths = (List<String>) ois.readObject();
+            tabPane.getTabs().clear();
+            for (String path : folderPaths) {
+                Tab tab = new Tab(path);
+                tabPane.getTabs().add(tab);
+            }
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
     }
 }

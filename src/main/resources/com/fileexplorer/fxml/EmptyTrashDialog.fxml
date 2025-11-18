@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Button?>
+
+<VBox xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.explorer.ui.EmptyTrashDialogController"
+      spacing="16"
+      styleClass="dialog-root"
+      prefWidth="360"
+      prefHeight="160">
+
+    <Label fx:id="messageLabel"
+           wrapText="true"
+           styleClass="dialog-message"/>
+
+    <HBox spacing="12" alignment="CENTER_RIGHT">
+        <Button fx:id="cancelBtn" text="Cancel" styleClass="dialog-btn-cancel" onAction="#onCancelClick"/>
+        <Button fx:id="confirmBtn" text="Empty Trash" styleClass="dialog-btn-confirm" onAction="#onConfirmClick"/>
+    </HBox>
+
+</VBox>

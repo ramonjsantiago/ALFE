@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.image.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.web.*?>
+
+<StackPane xmlns:fx="http://javafx.com/fxml" fx:controller="com.fileexplorer.ui.PreviewPaneController" fx:id="previewContainer" styleClass="preview-pane">
+    <children>
+        <ImageView fx:id="imageView" fitWidth="400" preserveRatio="true" visible="false"/>
+        <TextArea fx:id="textArea" wrapText="true" editable="false" visible="false" prefWidth="400" prefHeight="300"/>
+        <WebView fx:id="webView" visible="false" prefWidth="400" prefHeight="300"/>
+        <Label fx:id="messageLabel" visible="false"/>
+    </children>
+</StackPane>

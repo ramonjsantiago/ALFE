@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns:fx="http://javafx.com/fxml" fx:controller="com.fileexplorer.ui.TabManagerController">
+    <ToolBar>
+        <Button fx:id="btnNewTab" text="+ New Tab"/>
+    </ToolBar>
+    <TabPane fx:id="tabPane" VBox.vgrow="ALWAYS"/>
+</VBox>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.HBox?>
+
+<HBox xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.explorer.ui.BreadcrumbBarController"
+      fx:id="breadcrumbRoot"
+      spacing="4"
+      styleClass="breadcrumb-root"
+      prefHeight="32">
+</HBox>

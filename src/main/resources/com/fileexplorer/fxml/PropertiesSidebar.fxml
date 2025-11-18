@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.layout.HBox?>
+
+<VBox xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.explorer.ui.PropertiesSidebarController"
+      spacing="10"
+      styleClass="properties-sidebar-root"
+      prefWidth="260">
+
+    <ImageView fx:id="fileIcon" fitWidth="64" fitHeight="64" preserveRatio="true"/>
+
+    <VBox spacing="4">
+        <Label text="Name" styleClass="prop-title"/>
+        <Label fx:id="fileName" styleClass="prop-value"/>
+    </VBox>
+
+    <VBox spacing="4">
+        <Label text="Type" styleClass="prop-title"/>
+        <Label fx:id="fileType" styleClass="prop-value"/>
+    </VBox>
+
+    <VBox spacing="4">
+        <Label text="Size" styleClass="prop-title"/>
+        <Label fx:id="fileSize" styleClass="prop-value"/>
+    </VBox>
+
+    <VBox spacing="4">
+        <Label text="Modified" styleClass="prop-title"/>
+        <Label fx:id="fileModified" styleClass="prop-value"/>
+    </VBox>
+
+</VBox>
