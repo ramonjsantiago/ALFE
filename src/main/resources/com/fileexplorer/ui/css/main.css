@@ -1,0 +1,14 @@
+/* main.css – general app styling */
+.root {
+    -fx-font-family: "Segoe UI", sans-serif;
+    -fx-font-size: 12pt;
+    -fx-background-color: #f5f5f5;
+}
+
+.border-pane {
+    -fx-background-color: #f5f5f5;
+}
+
+.label {
+    -fx-text-fill: #333333;
+}
