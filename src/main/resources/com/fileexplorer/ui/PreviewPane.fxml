@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.image.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<VBox xmlns:fx="http://javafx.com/fxml" fx:controller="com.fileexplorer.ui.PreviewPaneController" spacing="5" style="-fx-padding:10;">
+    <Label fx:id="lblFileName" text="Name"/>
+    <Label fx:id="lblFileSize" text="Size"/>
+    <Label fx:id="lblFileType" text="Type"/>
+    <ImageView fx:id="imgPreview" fitWidth="256" fitHeight="256" preserveRatio="true"/>
+</VBox>

@@ -29,6 +29,21 @@
 // import java.util.concurrent.atomic.AtomicReference;
 
 // public class MainController {
+    @FXML private PreviewPaneController previewPaneController;
+    @FXML private FlowTileCell leftPaneFlow;
+    @FXML private FlowTileCell rightPaneFlow;
+
+    private void setupDualPaneSelection() {
+        leftPaneFlow.getSelectionModel().selectedItemProperty().addListener((obs, oldFile, newFile) -> {
+            previewPaneController.showFile(newFile);
+            rightPaneFlow.getSelectionModel().clearSelection();
+        });
+
+        rightPaneFlow.getSelectionModel().selectedItemProperty().addListener((obs, oldFile, newFile) -> {
+            previewPaneController.showFile(newFile);
+            leftPaneFlow.getSelectionModel().clearSelection();
+        });
+    }
     @FXML public void groupByNone() {
         if (detailsViewController != null) detailsViewController.groupByColumn("None");
     }
@@ -756,6 +771,21 @@
  // * resides in createTabWithLoader(Path).
  // */
 // public class MainController {
+    @FXML private PreviewPaneController previewPaneController;
+    @FXML private FlowTileCell leftPaneFlow;
+    @FXML private FlowTileCell rightPaneFlow;
+
+    private void setupDualPaneSelection() {
+        leftPaneFlow.getSelectionModel().selectedItemProperty().addListener((obs, oldFile, newFile) -> {
+            previewPaneController.showFile(newFile);
+            rightPaneFlow.getSelectionModel().clearSelection();
+        });
+
+        rightPaneFlow.getSelectionModel().selectedItemProperty().addListener((obs, oldFile, newFile) -> {
+            previewPaneController.showFile(newFile);
+            leftPaneFlow.getSelectionModel().clearSelection();
+        });
+    }
     @FXML public void groupByNone() {
         if (detailsViewController != null) detailsViewController.groupByColumn("None");
     }
