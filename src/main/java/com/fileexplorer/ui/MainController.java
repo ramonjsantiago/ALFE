@@ -29,6 +29,72 @@
 // import java.util.concurrent.atomic.AtomicReference;
 
 // public class MainController {
+    @FXML public void deleteSelected() {
+        File selected = getSelectedFile();
+        if (selected != null) deleteFile(selected);
+    }
+
+    @FXML public void renameSelected() {
+        File selected = getSelectedFile();
+        if (selected != null) renameFile(selected);
+    }
+
+    @FXML public void copySelected() {
+        File selected = getSelectedFile();
+        if (selected != null) copyFile(selected);
+    }
+
+    @FXML public void propertiesSelected() {
+        File selected = getSelectedFile();
+        if (selected != null) showProperties(selected);
+    }
+
+    private File getSelectedFile() {
+        File f = null;
+        if (!leftPaneFlow.getSelectionModel().isEmpty()) f = leftPaneFlow.getSelectionModel().getSelectedItem();
+        else if (!rightPaneFlow.getSelectionModel().isEmpty()) f = rightPaneFlow.getSelectionModel().getSelectedItem();
+        return f;
+    }
+
+    public void deleteFile(File file) {
+        try {
+            java.awt.Desktop.getDesktop().moveToTrash(file);
+            historyManager.recordAction("Deleted: " + file.getName());
+            refreshCurrentPane();
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
+    public void renameFile(File file) {
+        javafx.scene.control.TextInputDialog dlg = new javafx.scene.control.TextInputDialog(file.getName());
+        dlg.setHeaderText("Rename File");
+        dlg.showAndWait().ifPresent(newName -> {
+            File renamed = new File(file.getParentFile(), newName);
+            if (file.renameTo(renamed)) {
+                historyManager.recordAction("Renamed: " + file.getName() + " → " + newName);
+                refreshCurrentPane();
+            }
+        });
+    }
+
+    public void copyFile(File file) {
+        try {
+            java.nio.file.Path dest = java.nio.file.Paths.get(file.getParent(), "Copy_of_" + file.getName());
+            java.nio.file.Files.copy(file.toPath(), dest);
+            historyManager.recordAction("Copied: " + file.getName());
+            refreshCurrentPane();
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
+    public void showProperties(File file) {
+        PropertiesDialogController dlgCtrl = new PropertiesDialogController();
+        dlgCtrl.showProperties(file);
+    }
+
+    private void refreshCurrentPane() {
+        // Simple refresh: reload FlowTileCells
+        leftPaneFlow.refresh();
+        rightPaneFlow.refresh();
+    }
     // Tab persistence storage (simple example using user home)
     private static final String TAB_STATE_FILE = System.getProperty("user.home") + "/.fileexplorer_tabs.dat";
 
@@ -794,6 +860,72 @@
  // * resides in createTabWithLoader(Path).
  // */
 // public class MainController {
+    @FXML public void deleteSelected() {
+        File selected = getSelectedFile();
+        if (selected != null) deleteFile(selected);
+    }
+
+    @FXML public void renameSelected() {
+        File selected = getSelectedFile();
+        if (selected != null) renameFile(selected);
+    }
+
+    @FXML public void copySelected() {
+        File selected = getSelectedFile();
+        if (selected != null) copyFile(selected);
+    }
+
+    @FXML public void propertiesSelected() {
+        File selected = getSelectedFile();
+        if (selected != null) showProperties(selected);
+    }
+
+    private File getSelectedFile() {
+        File f = null;
+        if (!leftPaneFlow.getSelectionModel().isEmpty()) f = leftPaneFlow.getSelectionModel().getSelectedItem();
+        else if (!rightPaneFlow.getSelectionModel().isEmpty()) f = rightPaneFlow.getSelectionModel().getSelectedItem();
+        return f;
+    }
+
+    public void deleteFile(File file) {
+        try {
+            java.awt.Desktop.getDesktop().moveToTrash(file);
+            historyManager.recordAction("Deleted: " + file.getName());
+            refreshCurrentPane();
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
+    public void renameFile(File file) {
+        javafx.scene.control.TextInputDialog dlg = new javafx.scene.control.TextInputDialog(file.getName());
+        dlg.setHeaderText("Rename File");
+        dlg.showAndWait().ifPresent(newName -> {
+            File renamed = new File(file.getParentFile(), newName);
+            if (file.renameTo(renamed)) {
+                historyManager.recordAction("Renamed: " + file.getName() + " → " + newName);
+                refreshCurrentPane();
+            }
+        });
+    }
+
+    public void copyFile(File file) {
+        try {
+            java.nio.file.Path dest = java.nio.file.Paths.get(file.getParent(), "Copy_of_" + file.getName());
+            java.nio.file.Files.copy(file.toPath(), dest);
+            historyManager.recordAction("Copied: " + file.getName());
+            refreshCurrentPane();
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
+    public void showProperties(File file) {
+        PropertiesDialogController dlgCtrl = new PropertiesDialogController();
+        dlgCtrl.showProperties(file);
+    }
+
+    private void refreshCurrentPane() {
+        // Simple refresh: reload FlowTileCells
+        leftPaneFlow.refresh();
+        rightPaneFlow.refresh();
+    }
     // Tab persistence storage (simple example using user home)
     private static final String TAB_STATE_FILE = System.getProperty("user.home") + "/.fileexplorer_tabs.dat";
 
