@@ -29,6 +29,29 @@
 // import java.util.concurrent.atomic.AtomicReference;
 
 // public class MainController {
+    // Tab persistence storage (simple example using user home)
+    private static final String TAB_STATE_FILE = System.getProperty("user.home") + "/.fileexplorer_tabs.dat";
+
+    public void saveTabsState() {
+        try (java.io.ObjectOutputStream out = new java.io.ObjectOutputStream(new java.io.FileOutputStream(TAB_STATE_FILE))) {
+            java.util.List<String> paths = new java.util.ArrayList<>();
+            for (javafx.scene.control.Tab tab : leftTabPane.getTabs()) {
+                paths.add(tab.getText());
+            }
+            out.writeObject(paths);
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
+    public void restoreTabsState() {
+        java.io.File f = new java.io.File(TAB_STATE_FILE);
+        if (!f.exists()) return;
+        try (java.io.ObjectInputStream in = new java.io.ObjectInputStream(new java.io.FileInputStream(f))) {
+            java.util.List<String> paths = (java.util.List<String>) in.readObject();
+            for (String path : paths) {
+                addTabToLeft(path);
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+    }
     @FXML private PreviewPaneController previewPaneController;
     @FXML private FlowTileCell leftPaneFlow;
     @FXML private FlowTileCell rightPaneFlow;
@@ -771,6 +794,29 @@
  // * resides in createTabWithLoader(Path).
  // */
 // public class MainController {
+    // Tab persistence storage (simple example using user home)
+    private static final String TAB_STATE_FILE = System.getProperty("user.home") + "/.fileexplorer_tabs.dat";
+
+    public void saveTabsState() {
+        try (java.io.ObjectOutputStream out = new java.io.ObjectOutputStream(new java.io.FileOutputStream(TAB_STATE_FILE))) {
+            java.util.List<String> paths = new java.util.ArrayList<>();
+            for (javafx.scene.control.Tab tab : leftTabPane.getTabs()) {
+                paths.add(tab.getText());
+            }
+            out.writeObject(paths);
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
+    public void restoreTabsState() {
+        java.io.File f = new java.io.File(TAB_STATE_FILE);
+        if (!f.exists()) return;
+        try (java.io.ObjectInputStream in = new java.io.ObjectInputStream(new java.io.FileInputStream(f))) {
+            java.util.List<String> paths = (java.util.List<String>) in.readObject();
+            for (String path : paths) {
+                addTabToLeft(path);
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+    }
     @FXML private PreviewPaneController previewPaneController;
     @FXML private FlowTileCell leftPaneFlow;
     @FXML private FlowTileCell rightPaneFlow;

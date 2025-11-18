@@ -13,6 +13,33 @@ import java.util.List;
  * Handles drag-and-drop for dual panes and updates HistoryManager.
  */
 public class DragAndDropHandler {
+    public void enableCrossPaneDrag(javafx.scene.Node sourcePane, javafx.scene.Node targetPane) {
+        sourcePane.setOnDragDetected(event -> {
+            javafx.scene.input.Dragboard db = sourcePane.startDragAndDrop(javafx.scene.input.TransferMode.MOVE);
+            javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+            content.putString("DND_FILE");
+            db.setContent(content);
+            event.consume();
+        });
+
+        targetPane.setOnDragOver(event -> {
+            if (event.getGestureSource() != targetPane && event.getDragboard().hasString()) {
+                event.acceptTransferModes(javafx.scene.input.TransferMode.MOVE);
+            }
+            event.consume();
+        });
+
+        targetPane.setOnDragDropped(event -> {
+            javafx.scene.input.Dragboard db = event.getDragboard();
+            boolean success = false;
+            if (db.hasString()) {
+                success = true;
+                // Implement file move or copy logic here
+            }
+            event.setDropCompleted(success);
+            event.consume();
+        });
+    }
 
     private final TabPane leftPane;
     private final TabPane rightPane;
