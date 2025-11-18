@@ -12,6 +12,9 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 public class FlowTileCell extends StackPane {
+    private static int globalIconSize = 64;
+    public static void setGlobalIconSize(int size) { globalIconSize = size; }
+    public static int getGlobalIconSize() { return globalIconSize; }
     private enum IconSize { SMALL, MEDIUM, LARGE }
     private static IconSize currentSize = IconSize.MEDIUM;
 

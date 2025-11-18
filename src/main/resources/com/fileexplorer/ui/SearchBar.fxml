@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<HBox xmlns:fx="http://javafx.com/fxml" spacing="5" style="-fx-padding:5;">
+    <TextField fx:id="searchField" promptText="Search..." onKeyReleased="#filterFiles"/>
+    <Button text="Clear" onAction="#clearSearch"/>
+</HBox>

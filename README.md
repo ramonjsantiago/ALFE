@@ -648,3 +648,197 @@ Next steps:
 3) Verify that Ribbon actions and StatusBar continue to operate per active tab.
 4) Ensure HistoryManager and multi-pane selection persist correctly across reordered tabs.
 e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$
+
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk61.sh
+Patching MainController.java for Ribbon Sort & Group By in Details view...
+Chunk 61 applied: Ribbon Sort & Group By options with multi-level grouping implemented.
+
+Next steps:
+1) Add Ribbon buttons/dropdown menus wired to sortByName(), sortByDate(), sortBySize(), groupByType().
+2) Test multi-level grouping by type, then by name or date.
+3) Verify selection, HistoryManager, and StatusBar updates are consistent after grouping.
+4) Ensure dual-pane Details views can independently sort/group per tab.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk62.sh
+Patching MainController.java for Ribbon Search & Filter functionality...
+Creating SearchBar.fxml...
+Chunk 62 applied: Ribbon Search & Filter functionality integrated with HistoryManager and multi-tab views.
+
+Next steps:
+1) Include SearchBar.fxml in Ribbon area or top toolbar.
+2) Verify filtering works on left/right panes, respecting focused tab.
+3) Check that HistoryManager records filter actions for undo/redo.
+4) Test Clear button resets view correctly and triggers HistoryManager update.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk63.sh
+Creating ThumbnailCache.java...
+Chunk 63 applied: Thumbnail caching implemented with strong/soft reference strategy.
+
+Next steps:
+1) Integrate ThumbnailCache with ThumbnailGenerator for all FlowTileCell/Thumbnail views.
+2) Configure maxStrongEntries based on typical memory usage (~200-500 for large folders).
+3) Verify soft references are cleared under GC pressure and thumbnails regenerate correctly.
+./chunk63.sh: line 75: unexpected EOF while looking for matching `"'
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk64.sh
+Patching ThumbnailGenerator.java for placeholder thumbnails and error handling...
+Creating IconLoader.java...
+Chunk 64 applied: Placeholder thumbnails and error handling implemented.
+
+Next steps:
+1) Ensure /icons/folder.png and /icons/file.png exist in resources.
+2) Test with corrupted, unreadable, or unsupported files to verify placeholders appear.
+3) Confirm FlowTileCell displays correct placeholder for directories and unknown files.
+4) Integrate seamlessly with Virtual Threads preloading and ThumbnailCache.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk65.sh
+Patching MainController.java for Ribbon view switching...
+Chunk 65 applied: Ribbon view switching implemented with live update hooks.
+
+Next steps:
+1) Wire Ribbon ToggleButtons or RadioButtons to switchToTiles(), switchToDetails(), switchToPreview().
+2) Ensure FlowTileCell, DetailsCell, and PreviewCell implement proper cell rendering.
+3) Test multi-tab and dual-pane scenarios to verify view switching is tab/pane aware.
+4) Confirm StatusBar updates (item count, selection info) respond correctly after view change.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk66.sh
+Patching ContextMenuHandler.java to add 'Open With' support...
+Patching MainController.java for Ribbon 'Open With' integration...
+Chunk 66 applied: Ribbon and Context Menu 'Open With' implemented with file type associations.
+
+Next steps:
+1) Extend ContextMenuHandler.addOpenWithOption() with more applications based on file extensions.
+2) Verify that selecting a file and clicking Ribbon/Open With launches the correct app.
+3) Test multi-tab selection to ensure Open With works for the active tab only.
+4) Ensure HistoryManager optionally records Open With actions for auditing.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk67.sh
+Patching MainController.java for Ribbon Copy, Move, Delete with Undo/HistoryManager...
+Chunk 67 applied: Ribbon Copy/Move/Delete with Undo/HistoryManager implemented.
+
+Next steps:
+1) Wire Ribbon buttons to copyFile(), moveFile(), deleteFile().
+2) Test dual-pane and multi-tab to ensure active pane selection is respected.
+3) Verify Undo actions via HistoryManager work correctly for all file operations.
+4) Ensure Trash integration is consistent with native OS behavior (Desktop.moveToTrash).
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk68.sh
+Creating PreviewCell.java for image/video previews...
+Patching MainController.java to integrate Preview Pane...
+Chunk 68 applied: Preview Pane fully integrated for images and video previews.
+
+Next steps:
+1) Ensure previewPaneContainer exists in FXML (MainLayout.fxml) and is visible when PREVIEW mode is active.
+2) Test image and video previews, including thumbnail caching and error fallback.
+3) Verify multi-tab and dual-pane compatibility; each tab/pane updates its own preview pane.
+4) Confirm smooth scrolling and low memory usage with Virtual Threads preloading and ThumbnailCache.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk69.sh
+Patching MainController.java for Ribbon 'Properties' and F12 preview...
+Patching PropertiesDialogController.java to set file details...
+Chunk 69 applied: Ribbon Properties and F12 preview integrated.
+
+Next steps:
+1) Ensure PropertiesDialog.fxml contains labels with fx:id: fileNameLabel, filePathLabel, fileSizeLabel, lastModifiedLabel, isDirectoryLabel.
+2) Test F12 key binding to switch current pane/tab to Preview mode.
+3) Verify Properties dialog displays correct metadata and logs HistoryManager action.
+4) Ensure multi-tab and dual-pane selection is respected when opening Properties or previewing.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk70.sh
+Creating FolderWatcher.java for Virtual Thread folder monitoring...
+Patching MainController.java for Ribbon Refresh integration...
+Chunk 70 applied: Ribbon Refresh and Virtual Thread folder watchers implemented.
+
+Next steps:
+1) Call initFolderWatchers() during MainController initialization.
+2) Wire Ribbon Refresh button to refreshCurrentPane().
+3) Test folder changes in both panes to confirm automatic refresh.
+4) Verify Virtual Threads handle updates without blocking UI, even with thousands of files.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk71.sh
+Patching MainController.java for Ribbon New Folder and Rename...
+Chunk 71 applied: Ribbon New Folder and Rename with Undo/HistoryManager implemented.
+
+Next steps:
+1) Wire Ribbon buttons for New Folder and Rename to respective methods.
+2) Test dual-pane and multi-tab to ensure the active pane selection is respected.
+3) Confirm HistoryManager logs actions correctly; Undo prints last action.
+4) Future extension: implement full undo of file system operations.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk72.sh
+Patching MainController.java for Ribbon selection operations...
+Chunk 72 applied: Ribbon Select All / Invert Selection / Deselect All implemented.
+
+Next steps:
+1) Wire Ribbon buttons to selectAllFiles(), deselectAllFiles(), and invertSelection().
+2) Test multi-tab and dual-pane behavior; ensure only focused pane is affected.
+3) Confirm HistoryManager logs all selection actions.
+4) Verify integration with FlowTileCell, Details view, and Preview mode selection highlighting.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk73.sh
+Patching MainController.java for multi-selection Ribbon Properties...
+Chunk 73 applied: Ribbon Properties integrated for multiple selected files.
+
+Next steps:
+1) Wire Ribbon Properties button to showPropertiesMulti() when multiple files are selected.
+2) Test multi-tab and dual-pane scenarios; ensure only active pane/tab selection is used.
+3) Verify HistoryManager logs multiple file Properties access.
+4) Extend PropertiesDialog in future to show aggregated metadata (total size, file types, dates).
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk74.sh
+Patching MainController.java for Ribbon Sort By / Group By in Details view...
+Chunk 74 applied: Ribbon Sort By / Group By implemented for Details view.
+
+Next steps:
+1) Wire Ribbon buttons or dropdowns for Sort by Name, Size, Date, and Group by Type.
+2) Test dual-pane and multi-tab behavior; sorting should affect only the active pane.
+3) Verify integration with DetailsCell to reflect sorting and grouping visually.
+4) Ensure HistoryManager logs all sort/group actions for undo/audit.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk75.sh
+Patching MainController.java for Ribbon View Options...
+Chunk 75 applied: Ribbon View Options (Icon Size, Column Visibility, Preview Pane) implemented.
+
+Next steps:
+1) Wire Ribbon buttons for Small/Medium/Large icons to respective setIconSize methods.
+2) Wire Ribbon dropdowns or checkboxes to toggle TableColumn visibility.
+3) Wire Ribbon Preview Pane toggle button to togglePreviewPane().
+4) Test multi-tab and dual-pane behavior; ensure only active pane/tab reflects icon size or column changes.
+5) Verify HistoryManager logs all view option changes.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk76.sh
+Patching MainController.java for Ribbon Copy Path and Open Terminal / CMD...
+Chunk 76 applied: Ribbon Copy Path and Open Terminal / CMD integration implemented.
+
+Next steps:
+1) Wire Ribbon buttons for Copy Path and Open Terminal/CMD Here.
+2) Test multi-pane and multi-tab behavior; active pane/tab selection is respected.
+3) Confirm clipboard operations work on Windows, macOS, and Linux (WSL compatible).
+4) Verify HistoryManager logs all actions for auditing.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk77.sh
+Patching MainController.java for Ribbon Open With menu...
+Chunk 77 applied: Ribbon Open With for single and multiple selected files implemented.
+
+Next steps:
+1) Wire Ribbon Open With buttons to openWithDefaultApp() and openWithCustomApp().
+2) Test single-file and multi-file selection for opening with default and custom applications.
+3) Ensure dual-pane and multi-tab awareness; only the focused pane is considered.
+4) Verify HistoryManager logs all Open With actions.
+5) Confirm error handling for unsupported files or missing applications.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk78.sh
+Creating QuickAccessManager.java to manage pinned/favorite folders...
+Patching MainController.java for Ribbon Send To and Quick Access...
+Chunk 78 applied: Ribbon Send To and Quick Access/Favorites integration implemented.
+
+Next steps:
+1) Wire Ribbon Send To dropdown to call sendToFolder() with target folder selection.
+2) Wire Ribbon Pin/Unpin buttons to pinSelectedFolder() / unpinSelectedFolder().
+3) Test dual-pane and multi-tab scenarios; pinned folders should be reflected in left navigation tree.
+4) Verify HistoryManager logs Send To and Pin/Unpin actions.
+5) Ensure Quick Access favorites persist across sessions (future enhancement: save/load JSON or properties).
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk79.sh
+Patching MainController.java for aggregated Ribbon Properties...
+Chunk 79 applied: Aggregated Properties for multiple selected files implemented.
+
+Next steps:
+1) Wire Ribbon Properties button to showAggregatedProperties() when multiple files are selected.
+2) Test with a variety of file types and sizes; ensure totals and type counts are accurate.
+3) Confirm dual-pane and multi-tab awareness; only the active pane is considered.
+4) Verify HistoryManager logs the aggregated properties action.
+5) Future enhancement: include folder counts, last modified ranges, or thumbnails summary.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk80.sh
+Patching MainController.java for Ribbon Copy / Move / Paste with Undo/Redo...
+Chunk 80 applied: Ribbon Copy / Move / Paste with Undo/Redo implemented.
+
+Next steps:
+1) Wire Ribbon buttons for Copy, Cut, Paste to copyFiles(), cutFiles(), pasteFiles().
+2) Test dual-pane and multi-tab behavior; target folder is always the focused pane.
+3) Confirm HistoryManager logs all Copy/Move actions accurately.
+4) Future enhancement: implement full Undo/Redo of file system operations using HistoryManager stack.
+5) Verify WSL, macOS, and Linux compatibility for file operations.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$
