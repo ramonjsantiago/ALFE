@@ -560,3 +560,62 @@ private void onPinItem(Path path) {
     }
     saveQuickAccessPins();
 }
+// --- RibbonBar actions applied to active tab ---
+@FXML private Button btnNewFolder;
+@FXML private Button btnDelete;
+@FXML private Button btnUndo;
+
+@FXML
+private void initializeRibbonBarActions() {
+    btnNewFolder.setOnAction(e -> {
+        Tab tab = tabPane.getSelectionModel().getSelectedItem();
+        if (tab != null) {
+            TabContentController controller = (TabContentController) ((FXMLLoader) tab.getContent().getProperties().get("loader")).getController();
+            controller.createNewFolder(controller.getCurrentFolder());
+        }
+    });
+
+    btnDelete.setOnAction(e -> {
+        Tab tab = tabPane.getSelectionModel().getSelectedItem();
+        if (tab != null) {
+            TabContentController controller = (TabContentController) ((FXMLLoader) tab.getContent().getProperties().get("loader")).getController();
+            controller.deleteSelectedFilesOrFolders();
+        }
+    });
+
+    btnUndo.setOnAction(e -> historyManager.undo());
+}
+
+// --- Keyboard shortcuts for tabs ---
+private void setupTabShortcuts() {
+    tabPane.getScene().setOnKeyPressed(event -> {
+        switch(event.getCode()) {
+            case T -> { if (event.isControlDown()) openNewTab(); }
+            case W -> { if (event.isControlDown()) closeCurrentTab(); }
+            case TAB -> { if (event.isControlDown()) switchTab(event.isShiftDown() ? -1 : 1); }
+            default -> {}
+        }
+    });
+}
+
+private void closeCurrentTab() {
+    Tab tab = tabPane.getSelectionModel().getSelectedItem();
+    if (tab != null) tabPane.getTabs().remove(tab);
+}
+
+private void switchTab(int direction) {
+    int index = tabPane.getSelectionModel().getSelectedIndex();
+    int count = tabPane.getTabs().size();
+    int newIndex = (index + direction + count) % count;
+    tabPane.getSelectionModel().select(newIndex);
+}
+
+// --- Drag-and-drop between tabs ---
+private void setupTabDragAndDrop() {
+    for (Tab tab : tabPane.getTabs()) {
+        TabContentController controller = (TabContentController) ((FXMLLoader) tab.getContent().getProperties().get("loader")).getController();
+        controller.getRightFlowPane().setOnDragDetected(event -> controller.startDrag(event));
+        controller.getRightFlowPane().setOnDragOver(event -> controller.handleDragOver(event));
+        controller.getRightFlowPane().setOnDragDropped(event -> controller.handleDragDrop(event));
+    }
+}
