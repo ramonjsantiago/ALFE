@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
     <top>
         <fx:include source="RibbonBar.fxml"/>
+        <center>
+            <SplitPane orientation="HORIZONTAL" dividerPositions="0.5">
+                <TabPane fx:id="leftTabPane" prefWidth="400" />
+                <TabPane fx:id="rightTabPane" prefWidth="400" />
+            </SplitPane>
+        </center>
+        <right>
+            <VBox fx:id="previewPane" prefWidth="300">
+                <!-- Preview pane content will be dynamically added here -->
+            </VBox>
+        </right>
     </top>
 <BorderPane xmlns="http://javafx.com/javafx/25"
             xmlns:fx="http://javafx.com/fxml/1"

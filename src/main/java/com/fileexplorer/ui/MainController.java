@@ -29,6 +29,99 @@
 // import java.util.concurrent.atomic.AtomicReference;
 
 // public class MainController {
+    // --- Dual-Pane Mode / Tabs / Preview Pane ---
+    @FXML private javafx.scene.control.TabPane leftTabPane;
+    @FXML private javafx.scene.control.TabPane rightTabPane;
+    @FXML private javafx.scene.layout.VBox previewPane;
+    private TabManager tabManager;
+
+    @FXML public void initialize() {
+        // Register with Ribbon accessor
+        MainControllerAccessor.set(this);
+        tabManager = new TabManager(leftTabPane, rightTabPane);
+        // Add initial tabs
+        tabManager.addTab(true, "Home");
+        tabManager.addTab(false, "Home");
+        // Optional: hook selection listeners to update preview pane
+        leftTabPane.getSelectionModel().selectedItemProperty().addListener((obs, oldTab, newTab) -> updatePreviewPane());
+        rightTabPane.getSelectionModel().selectedItemProperty().addListener((obs, oldTab, newTab) -> updatePreviewPane());
+    }
+
+    public void addTabToLeft(String title) { tabManager.addTab(true, title); }
+    public void addTabToRight(String title) { tabManager.addTab(false, title); }
+
+    private void updatePreviewPane() {
+        previewPane.getChildren().clear();
+        Tab leftTab = leftTabPane.getSelectionModel().getSelectedItem();
+        Tab rightTab = rightTabPane.getSelectionModel().getSelectedItem();
+        // For demo: show selected tab names in preview
+        javafx.scene.control.Label lbl = new javafx.scene.control.Label(
+            "Left: " + (leftTab != null ? leftTab.getText() : "None") +
+            " | Right: " + (rightTab != null ? rightTab.getText() : "None")
+        );
+        previewPane.getChildren().add(lbl);
+    }
+    // --- Ribbon demo wiring ---
+    public void onNewFolder() {
+        System.out.println("[Ribbon Demo] Creating new folder...");
+        // call existing folder creation service here
+        if (historyManager != null) historyManager.recordAction("New Folder");
+    }
+    public void onRibbonDeleteWithProgress() {
+        System.out.println("[Ribbon Demo] Deleting selected items...");
+        if (historyManager != null) historyManager.recordAction("Delete");
+        // existing delete service can be called here
+    }
+    public void onRibbonCopyWithChooser() {
+        System.out.println("[Ribbon Demo] Copying selected items...");
+        if (historyManager != null) historyManager.recordAction("Copy");
+        // call copy service or dialog
+    }
+    public void onRibbonMoveWithChooser() {
+        System.out.println("[Ribbon Demo] Moving selected items...");
+        if (historyManager != null) historyManager.recordAction("Move");
+        // call move service or dialog
+    }
+    public void onRibbonCancelOperation() {
+        System.out.println("[Ribbon Demo] Cancel operation triggered");
+        // cancel pending tasks if needed
+    }
+    public void onHomeProperties() {
+        System.out.println("[Ribbon Demo] Showing properties...");
+        // show PropertiesDialog
+    }
+    public void toggleNavigationPane(boolean show) {
+        System.out.println("[Ribbon Demo] toggleNavigationPane="+show);
+        // show/hide Navigation Pane
+    }
+    public void togglePreviewPane(boolean show) {
+        System.out.println("[Ribbon Demo] togglePreviewPane="+show);
+        // show/hide Preview Pane
+    }
+    public void toggleDetailsPane(boolean show) {
+        System.out.println("[Ribbon Demo] toggleDetailsPane="+show);
+        // show/hide Details Pane
+    }
+    public void setLayout(String layout) {
+        System.out.println("[Ribbon Demo] setLayout="+layout);
+        // update ListView/FlowTileCell layout accordingly
+    }
+    public void sortBy(String criteria) {
+        System.out.println("[Ribbon Demo] sortBy="+criteria);
+        // sort thumbnails/files accordingly
+    }
+    public void groupBy(String criteria) {
+        System.out.println("[Ribbon Demo] groupBy="+criteria);
+        // implement groupBy logic if exists
+    }
+    public void toggleShowExtensions(boolean show) {
+        System.out.println("[Ribbon Demo] toggleShowExtensions="+show);
+        // update display of file extensions
+    }
+    public void toggleShowHidden(boolean show) {
+        System.out.println("[Ribbon Demo] toggleShowHidden="+show);
+        // update display of hidden files
+    }
     // RibbonBar / Toolbar support methods
     public void toggleNavigationPane(boolean show) { System.out.println("toggleNavigationPane="+show); }
     public void togglePreviewPane(boolean show) { System.out.println("togglePreviewPane="+show); }
@@ -580,6 +673,99 @@
  // * resides in createTabWithLoader(Path).
  // */
 // public class MainController {
+    // --- Dual-Pane Mode / Tabs / Preview Pane ---
+    @FXML private javafx.scene.control.TabPane leftTabPane;
+    @FXML private javafx.scene.control.TabPane rightTabPane;
+    @FXML private javafx.scene.layout.VBox previewPane;
+    private TabManager tabManager;
+
+    @FXML public void initialize() {
+        // Register with Ribbon accessor
+        MainControllerAccessor.set(this);
+        tabManager = new TabManager(leftTabPane, rightTabPane);
+        // Add initial tabs
+        tabManager.addTab(true, "Home");
+        tabManager.addTab(false, "Home");
+        // Optional: hook selection listeners to update preview pane
+        leftTabPane.getSelectionModel().selectedItemProperty().addListener((obs, oldTab, newTab) -> updatePreviewPane());
+        rightTabPane.getSelectionModel().selectedItemProperty().addListener((obs, oldTab, newTab) -> updatePreviewPane());
+    }
+
+    public void addTabToLeft(String title) { tabManager.addTab(true, title); }
+    public void addTabToRight(String title) { tabManager.addTab(false, title); }
+
+    private void updatePreviewPane() {
+        previewPane.getChildren().clear();
+        Tab leftTab = leftTabPane.getSelectionModel().getSelectedItem();
+        Tab rightTab = rightTabPane.getSelectionModel().getSelectedItem();
+        // For demo: show selected tab names in preview
+        javafx.scene.control.Label lbl = new javafx.scene.control.Label(
+            "Left: " + (leftTab != null ? leftTab.getText() : "None") +
+            " | Right: " + (rightTab != null ? rightTab.getText() : "None")
+        );
+        previewPane.getChildren().add(lbl);
+    }
+    // --- Ribbon demo wiring ---
+    public void onNewFolder() {
+        System.out.println("[Ribbon Demo] Creating new folder...");
+        // call existing folder creation service here
+        if (historyManager != null) historyManager.recordAction("New Folder");
+    }
+    public void onRibbonDeleteWithProgress() {
+        System.out.println("[Ribbon Demo] Deleting selected items...");
+        if (historyManager != null) historyManager.recordAction("Delete");
+        // existing delete service can be called here
+    }
+    public void onRibbonCopyWithChooser() {
+        System.out.println("[Ribbon Demo] Copying selected items...");
+        if (historyManager != null) historyManager.recordAction("Copy");
+        // call copy service or dialog
+    }
+    public void onRibbonMoveWithChooser() {
+        System.out.println("[Ribbon Demo] Moving selected items...");
+        if (historyManager != null) historyManager.recordAction("Move");
+        // call move service or dialog
+    }
+    public void onRibbonCancelOperation() {
+        System.out.println("[Ribbon Demo] Cancel operation triggered");
+        // cancel pending tasks if needed
+    }
+    public void onHomeProperties() {
+        System.out.println("[Ribbon Demo] Showing properties...");
+        // show PropertiesDialog
+    }
+    public void toggleNavigationPane(boolean show) {
+        System.out.println("[Ribbon Demo] toggleNavigationPane="+show);
+        // show/hide Navigation Pane
+    }
+    public void togglePreviewPane(boolean show) {
+        System.out.println("[Ribbon Demo] togglePreviewPane="+show);
+        // show/hide Preview Pane
+    }
+    public void toggleDetailsPane(boolean show) {
+        System.out.println("[Ribbon Demo] toggleDetailsPane="+show);
+        // show/hide Details Pane
+    }
+    public void setLayout(String layout) {
+        System.out.println("[Ribbon Demo] setLayout="+layout);
+        // update ListView/FlowTileCell layout accordingly
+    }
+    public void sortBy(String criteria) {
+        System.out.println("[Ribbon Demo] sortBy="+criteria);
+        // sort thumbnails/files accordingly
+    }
+    public void groupBy(String criteria) {
+        System.out.println("[Ribbon Demo] groupBy="+criteria);
+        // implement groupBy logic if exists
+    }
+    public void toggleShowExtensions(boolean show) {
+        System.out.println("[Ribbon Demo] toggleShowExtensions="+show);
+        // update display of file extensions
+    }
+    public void toggleShowHidden(boolean show) {
+        System.out.println("[Ribbon Demo] toggleShowHidden="+show);
+        // update display of hidden files
+    }
     // RibbonBar / Toolbar support methods
     public void toggleNavigationPane(boolean show) { System.out.println("toggleNavigationPane="+show); }
     public void togglePreviewPane(boolean show) { System.out.println("togglePreviewPane="+show); }
