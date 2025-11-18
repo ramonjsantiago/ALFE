@@ -1,0 +1,23 @@
+/* glassy.css – Glassy/translucent mode */
+.root {
+    -fx-font-family: "Segoe UI", sans-serif;
+    -fx-font-size: 12pt;
+    -fx-background-color: rgba(255, 255, 255, 0.25);
+}
+
+.label {
+    -fx-text-fill: #111111;
+}
+
+.flow-tile-cell {
+    -fx-border-color: rgba(255,255,255,0.4);
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
+    -fx-background-color: rgba(255,255,255,0.15);
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 5, 0.0, 0, 0);
+}
+
+.flow-tile-cell:hover {
+    -fx-border-color: rgba(0,150,200,0.6);
+    -fx-background-color: rgba(255,255,255,0.3);
+}
