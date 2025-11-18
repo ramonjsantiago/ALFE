@@ -4,10 +4,13 @@ import com.fileexplorer.thumb.HistoryManager;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
+import javafx.scene.input.*;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 
+import java.awt.Desktop;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,7 +35,6 @@ public class MainController {
 
     @FXML
     public void initialize() {
-        // Retrieve included HistoryPanel controller
         Object controller = historyPanel.getProperties().get("fx:controller");
         if (controller instanceof HistoryPanelController hp) {
             historyPanelController = hp;
@@ -42,12 +44,13 @@ public class MainController {
 
         themeSelector.getSelectionModel().select("Light");
 
-        // Initialize folder
         currentFolder = Path.of(System.getProperty("user.home"));
         loadFolder(currentFolder);
+
+        setupDragAndDrop();
     }
 
-    // --- RibbonBar Actions ---
+    // --- Folder / File Actions ---
 
     @FXML
     private void onNewFolder() {
@@ -80,13 +83,17 @@ public class MainController {
         }
 
         for (FlowTileCell cell : selectedCells) {
-            Path p = cell.path;
+            File file = cell.path.toFile();
             try {
-                if (Files.isDirectory(p)) Files.delete(p);
-                else Files.delete(p);
-                historyManager.recordDelete(p);
+                if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.MOVE_TO_TRASH)) {
+                    Desktop.getDesktop().moveToTrash(file);
+                } else {
+                    if (Files.isDirectory(file.toPath())) Files.delete(file.toPath());
+                    else Files.delete(file.toPath());
+                }
+                historyManager.recordDelete(file.toPath());
             } catch (IOException e) {
-                updateStatus("Failed to delete: " + p.getFileName());
+                updateStatus("Failed to delete: " + file.getName());
             }
         }
 
@@ -120,9 +127,12 @@ public class MainController {
         if (app != null) app.setTheme(theme);
     }
 
-    // --- Folder / FlowTileCell Handling ---
+    // --- Folder Grid Loading ---
 
     private void loadFolder(Path folder) {
+        contentGrid.getChildren().forEach(node -> {
+            if (node instanceof FlowTileCell ftc) ftc.dispose();
+        });
         contentGrid.getChildren().clear();
         selectedCells.clear();
         if (!Files.exists(folder) || !Files.isDirectory(folder)) return;
@@ -132,18 +142,20 @@ public class MainController {
         try {
             Files.list(folder).forEach(path -> {
                 FlowTileCell cell = new FlowTileCell(path, (p, cb) -> {
-                    cb.accept(IconLoader.loadIcon(p.toFile()));
+                    try {
+                        cb.accept(IconLoader.loadIcon(p.toFile()));
+                    } catch (Exception ex) {
+                        cb.accept(IconLoader.getPlaceholder());
+                    }
                     return null;
                 });
 
-                // Selection hook
                 cell.setOnMouseClicked(e -> {
                     if (!selectedCells.contains(cell)) selectedCells.add(cell);
                     else selectedCells.remove(cell);
                     updateStatus(selectedCells.size() + " items selected");
                 });
 
-                // Right-click context menu
                 ContextMenuHandler.attach(cell, path.toFile());
 
                 contentGrid.getChildren().add(cell);
@@ -152,6 +164,42 @@ public class MainController {
         } catch (IOException e) {
             updateStatus("Failed to load folder: " + e.getMessage());
         }
+    }
+
+    // --- Advanced Drag-and-Drop ---
+
+    private void setupDragAndDrop() {
+        contentGrid.setOnDragOver(event -> {
+            if (event.getGestureSource() != contentGrid && event.getDragboard().hasFiles()) {
+                event.acceptTransferModes(TransferMode.COPY_OR_MOVE);
+            }
+            event.consume();
+        });
+
+        contentGrid.setOnDragDropped(event -> {
+            Dragboard db = event.getDragboard();
+            boolean success = false;
+            if (db.hasFiles()) {
+                for (File file : db.getFiles()) {
+                    Path target = currentFolder.resolve(file.getName());
+                    try {
+                        if (file.isDirectory()) {
+                            Files.move(file.toPath(), target);
+                        } else {
+                            Files.move(file.toPath(), target);
+                        }
+                        historyManager.recordMove(file.toPath(), target);
+                    } catch (IOException ex) {
+                        updateStatus("Failed to move: " + file.getName());
+                    }
+                }
+                loadFolder(currentFolder);
+                updateStatus(db.getFiles().size() + " items moved via drag-and-drop");
+                success = true;
+            }
+            event.setDropCompleted(success);
+            event.consume();
+        });
     }
 
     // --- StatusBar Update ---
