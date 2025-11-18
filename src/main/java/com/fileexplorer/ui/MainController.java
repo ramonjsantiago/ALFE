@@ -619,3 +619,59 @@ private void setupTabDragAndDrop() {
         controller.getRightFlowPane().setOnDragDropped(event -> controller.handleDragDrop(event));
     }
 }
+import javafx.collections.transformation.FilteredList;
+import java.util.prefs.Preferences;
+import java.util.stream.Collectors;
+
+// Preferences for storing tab sessions
+private static final String TAB_SESSION_KEY = "openTabPaths";
+private final Preferences prefs = Preferences.userNodeForPackage(MainController.class);
+
+// Map to hold per-tab search fields and filtered lists
+private final Map<Tab, FilteredList<FileMetadata>> tabSearchMap = new HashMap<>();
+private final Map<Tab, TextField> tabSearchFields = new HashMap<>();
+
+@FXML
+private void saveTabSession() {
+    String joinedPaths = tabPane.getTabs().stream()
+        .map(tab -> ((TabContentController) ((FXMLLoader) tab.getContent().getProperties().get("loader")).getController())
+                     .getCurrentFolder().toString())
+        .collect(Collectors.joining(";"));
+    prefs.put(TAB_SESSION_KEY, joinedPaths);
+}
+
+@FXML
+private void restoreTabSession() {
+    String saved = prefs.get(TAB_SESSION_KEY, "");
+    if (!saved.isEmpty()) {
+        String[] paths = saved.split(";");
+        for (String p : paths) {
+            Path folder = Paths.get(p);
+            if (Files.exists(folder)) {
+                createTab(folder);
+            }
+        }
+    } else {
+        openNewTab(); // default if no saved tabs
+    }
+}
+
+// Setup per-tab search filter
+private void setupPerTabSearch(Tab tab, TextField searchField, TableView<FileMetadata> table) {
+    FilteredList<FileMetadata> filtered = new FilteredList<>(table.getItems(), f -> true);
+    table.setItems(filtered);
+    searchField.textProperty().addListener((obs, oldText, newText) -> {
+        filtered.setPredicate(fm -> {
+            if (newText == null || newText.isEmpty()) return true;
+            return fm.getName().toLowerCase().contains(newText.toLowerCase());
+        });
+    });
+    tabSearchMap.put(tab, filtered);
+    tabSearchFields.put(tab, searchField);
+}
+
+// Call on application exit
+@FXML
+private void handleAppExit() {
+    saveTabSession();
+}
