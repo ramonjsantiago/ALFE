@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AnchorPane xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.fileexplorer.ui.TabContentController">
+    <children>
+        <SplitPane fx:id="splitPane" orientation="HORIZONTAL" AnchorPane.topAnchor="0" AnchorPane.leftAnchor="0"
+                   AnchorPane.rightAnchor="0" AnchorPane.bottomAnchor="0">
+            <items>
+                <!-- Left pane: Details TableView -->
+                <VBox spacing="4">
+                    <HBox spacing="6" style="-fx-padding:6">
+                        <Label text="Folder:"/>
+                        <Label fx:id="folderLabel" text="(path)"/>
+                    </HBox>
+                    <TableView fx:id="detailsTable" prefWidth="360">
+                        <columns>
+                            <TableColumn fx:id="colName" text="Name" prefWidth="180"/>
+                            <TableColumn fx:id="colType" text="Type" prefWidth="80"/>
+                            <TableColumn fx:id="colSize" text="Size" prefWidth="80"/>
+                            <TableColumn fx:id="colModified" text="Modified" prefWidth="120"/>
+                        </columns>
+                    </TableView>
+                </VBox>
+
+                <!-- Right pane: Flow thumbnails + preview -->
+                <VBox spacing="6" style="-fx-padding:6">
+                    <HBox spacing="6">
+                        <TextField fx:id="tabSearchField" promptText="Search..." HBox.hgrow="ALWAYS"/>
+                        <Button fx:id="btnRefresh" text="Refresh" onAction="#onRefresh"/>
+                    </HBox>
+                    <SplitPane orientation="VERTICAL">
+                        <items>
+                            <ScrollPane fitToWidth="true" fitToHeight="true">
+                                <content>
+                                    <FlowPane fx:id="rightFlowPane" hgap="8" vgap="8" padding="6"/>
+                                </content>
+                            </ScrollPane>
+                            <StackPane fx:id="previewContainer" minHeight="150">
+                                <ImageView fx:id="previewImage" preserveRatio="true" fitWidth="400" fitHeight="300"/>
+                            </StackPane>
+                        </items>
+                    </SplitPane>
+
+                    <HBox spacing="8">
+                        <ProgressBar fx:id="progressBar" prefWidth="200" progress="0.0"/>
+                        <Button fx:id="cancelOpButton" text="Cancel" onAction="#cancelCurrentOperation" disable="true"/>
+                        <Label fx:id="tabStatusLabel" text="Ready" />
+                    </HBox>
+                </VBox>
+            </items>
+        </SplitPane>
+    </children>
+</AnchorPane>
