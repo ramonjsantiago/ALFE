@@ -212,3 +212,96 @@ public class MainController {
         return historyManager;
     }
 }
+// --- Explorer-like additional UI components ---
+@FXML private TreeView<Path> folderTree;
+@FXML private TableView<FileMetadata> leftDetailsTable;
+@FXML private TableColumn<FileMetadata, String> colName;
+@FXML private TableColumn<FileMetadata, String> colType;
+@FXML private TableColumn<FileMetadata, Long> colSize;
+@FXML private TableColumn<FileMetadata, String> colModified;
+@FXML private ImageView previewImage;
+@FXML private FlowPane rightFlowPane;
+
+// --- Folder tree population ---
+private void populateFolderTree(Path rootPath) {
+    TreeItem<Path> rootItem = new TreeItem<>(rootPath);
+    rootItem.setExpanded(true);
+    folderTree.setRoot(rootItem);
+    addSubFolders(rootItem);
+}
+
+private void addSubFolders(TreeItem<Path> parentItem) {
+    File folder = parentItem.getValue().toFile();
+    File[] subfolders = folder.listFiles(File::isDirectory);
+    if (subfolders != null) {
+        for (File f : subfolders) {
+            TreeItem<Path> childItem = new TreeItem<>(f.toPath());
+            parentItem.getChildren().add(childItem);
+        }
+    }
+}
+
+@FXML
+private void onTreeItemClicked() {
+    TreeItem<Path> selected = folderTree.getSelectionModel().getSelectedItem();
+    if (selected != null) {
+        Path path = selected.getValue();
+        loadDetailsTable(path);
+        loadRightFlowPane(path);
+    }
+}
+
+// --- Details table population ---
+private void loadDetailsTable(Path folder) {
+    leftDetailsTable.getItems().clear();
+    try {
+        Files.list(folder).forEach(p -> {
+            FileMetadata fm = new FileMetadata(p.toFile());
+            leftDetailsTable.getItems().add(fm);
+        });
+    } catch (IOException e) {
+        updateStatus("Failed to load details table: " + e.getMessage());
+    }
+}
+
+// --- Right pane FlowPane / preview ---
+private void loadRightFlowPane(Path folder) {
+    rightFlowPane.getChildren().clear();
+    try {
+        Files.list(folder).forEach(p -> {
+            FlowTileCell cell = new FlowTileCell(p, (path, cb) -> {
+                try {
+                    cb.accept(IconLoader.loadIcon(path.toFile()));
+                } catch (Exception ex) {
+                    cb.accept(IconLoader.getPlaceholder());
+                }
+                return null;
+            });
+            cell.setOnMouseClicked(e -> showPreview(p));
+            rightFlowPane.getChildren().add(cell);
+        });
+    } catch (IOException e) {
+        updateStatus("Failed to load right pane: " + e.getMessage());
+    }
+}
+
+// --- Preview Pane ---
+private void showPreview(Path file) {
+    try {
+        previewImage.setImage(IconLoader.loadIcon(file.toFile()));
+    } catch (Exception e) {
+        previewImage.setImage(IconLoader.getPlaceholder());
+    }
+}
+
+// --- Metadata class for Details TableView ---
+public static class FileMetadata {
+    private final File file;
+    public FileMetadata(File f) { this.file = f; }
+    public String getName() { return file.getName(); }
+    public String getType() { return file.isDirectory() ? "Folder" : "File"; }
+    public Long getSize() { return file.isFile() ? file.length() : 0L; }
+    public String getModified() { return java.time.format.DateTimeFormatter.ISO_LOCAL_DATE.format(
+            java.time.Instant.ofEpochMilli(file.lastModified()).atZone(java.time.ZoneId.systemDefault()).toLocalDate()); }
+    public File getFile() { return file; }
+}

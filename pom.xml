@@ -64,3 +64,24 @@
         </plugins>
     </build>
 </project>
+    <!-- TwelveMonkeys ImageIO dependencies for multi-image support -->
+    <dependency>
+        <groupId>com.twelvemonkeys.imageio</groupId>
+        <artifactId>imageio-core</artifactId>
+        <version>3.9.5</version>
+    </dependency>
+    <dependency>
+        <groupId>com.twelvemonkeys.imageio</groupId>
+        <artifactId>imageio-jpeg</artifactId>
+        <version>3.9.5</version>
+    </dependency>
+    <dependency>
+        <groupId>com.twelvemonkeys.imageio</groupId>
+        <artifactId>imageio-tiff</artifactId>
+        <version>3.9.5</version>
+    </dependency>
+    <dependency>
+        <groupId>com.twelvemonkeys.imageio</groupId>
+        <artifactId>imageio-bmp</artifactId>
+        <version>3.9.5</version>
+    </dependency>

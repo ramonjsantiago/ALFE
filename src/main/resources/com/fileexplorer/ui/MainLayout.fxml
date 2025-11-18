@@ -28,3 +28,24 @@
         </HBox>
     </bottom>
 </BorderPane>
+<!-- Left-hand navigation tree -->
+<TreeView fx:id="folderTree" prefWidth="200" onMouseClicked="#onTreeItemClicked"/>
+
+<!-- Dual-pane layout: two FlowPanes or TableViews -->
+<SplitPane orientation="HORIZONTAL">
+    <!-- Left pane: folder contents -->
+    <TableView fx:id="leftDetailsTable" prefWidth="400">
+        <columns>
+            <TableColumn text="Name" fx:id="colName"/>
+            <TableColumn text="Type" fx:id="colType"/>
+            <TableColumn text="Size" fx:id="colSize"/>
+            <TableColumn text="Modified" fx:id="colModified"/>
+        </columns>
+    </TableView>
+
+    <!-- Right pane: preview / thumbnails -->
+    <VBox>
+        <ImageView fx:id="previewImage" fitWidth="300" fitHeight="300" preserveRatio="true"/>
+        <FlowPane fx:id="rightFlowPane" hgap="5" vgap="5"/>
+    </VBox>
+</SplitPane>
