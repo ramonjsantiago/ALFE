@@ -268,3 +268,113 @@ Next steps:
 2) Update Ribbon actions (Copy/Move/Delete) to reflect progress in operationProgress.
 3) Launch app and verify StatusBar updates dynamically as files are selected or operations run.
 e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$
+
+Next steps:
+1) Launch app: mvn javafx:run or via IDE.
+2) Test dragging files into either pane and observe HistoryManager recording.
+3) FlowTileCell selection changes will trigger preview updates.
+4) Ribbon buttons (Copy/Move/Delete/Undo) now interact with HistoryManager.
+5) Optional: replace System.out with real file operations and update PreviewPane to show thumbnails.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk34.sh
+Patching ThumbnailGenerator.java for TwelveMonkeys multi-image support...
+awk: fatal: cannot open file `src/main/java/com/fileexplorer/ui/ThumbnailGenerator.java' for reading: No such file or directory
+Updating FlowTileCell.java to display multi-image thumbnails...
+Chunk 34 applied: Multi-image thumbnail support implemented using TwelveMonkeys.
+
+Next steps:
+1) Ensure TwelveMonkeys ImageIO dependencies are in pom.xml:
+   <dependency>
+       <groupId>com.twelvemonkeys.imageio</groupId>
+       <artifactId>imageio-core</artifactId>
+       <version>3.9.2</version>
+   </dependency>
+   (and all other plugins you need: jpeg, png, tiff, bmp, webp, gif)
+2) Launch app, test image previews in both panes.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ touch src/main/java/com/fileexplorer/ui/ThumbnailGenerator.java
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk34.sh
+Patching ThumbnailGenerator.java for TwelveMonkeys multi-image support...
+Updating FlowTileCell.java to display multi-image thumbnails...
+Chunk 34 applied: Multi-image thumbnail support implemented using TwelveMonkeys.
+
+Next steps:
+1) Ensure TwelveMonkeys ImageIO dependencies are in pom.xml:
+   <dependency>
+       <groupId>com.twelvemonkeys.imageio</groupId>
+       <artifactId>imageio-core</artifactId>
+       <version>3.9.2</version>
+   </dependency>
+   (and all other plugins you need: jpeg, png, tiff, bmp, webp, gif)
+2) Launch app, test image previews in both panes.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk35.sh
+Patching HistoryManager.java for Undo/Redo support...
+awk: fatal: cannot open file `src/main/java/com/fileexplorer/ui/HistoryManager.java' for reading: No such file or directory
+Patching MainController.java to wire Ribbon Undo/Redo...
+Chunk 35 applied: Full Undo/Redo stack with Ribbon integration is ready.
+
+Next steps:
+1) Run app and test: perform Delete, Move, Copy, Rename → Undo → Redo
+2) Verify HistoryPanel displays the timeline of actions
+3) Optionally integrate with FlowTileCell selection to enable multi-item undo/redo
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ touch src/main/java/com/fileexplorer/ui/HistoryManager.java
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk35.sh
+Patching HistoryManager.java for Undo/Redo support...
+Patching MainController.java to wire Ribbon Undo/Redo...
+Chunk 35 applied: Full Undo/Redo stack with Ribbon integration is ready.
+
+Next steps:
+1) Run app and test: perform Delete, Move, Copy, Rename → Undo → Redo
+2) Verify HistoryPanel displays the timeline of actions
+3) Optionally integrate with FlowTileCell selection to enable multi-item undo/redo
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk36.sh
+Writing NavigationTreeController.java...
+Patching MainLayout.fxml to include NavigationTree...
+Patching MainController.java to include NavigationTree reference...
+Chunk 36 applied: Left Navigation Tree with Pin/Quick Access is wired.
+
+Next steps:
+1) Run app and test double-click navigation, pin/unpin items.
+2) Right-click context menu should allow Open, Rename, Delete, Properties, New Folder.
+3) Pinned items are logged; optionally display them in a Quick Access panel.
+4) Integration with dual-pane tabs and HistoryManager is ready.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk37.sh
+Writing RibbonBar.fxml with full Home, Share, View menus...
+Chunk 37 applied: RibbonBar FXML with Home/Share/View fully generated.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk38.sh
+Patching MainLayout.fxml to add StatusBar...
+Patching MainController.java to update StatusBar labels...
+Chunk 38 applied: StatusBar with live path, selection count, total size, and operation progress integrated.
+
+Next steps:
+1) Update MainController / FlowTileCell selection listeners to call updateStatusBar().
+2) Update Ribbon actions (Copy/Move/Delete) to reflect progress in operationProgress.
+3) Launch app and verify StatusBar updates dynamically as files are selected or operations run.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ^C
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk39.sh
+Writing Light.css...
+Writing Dark.css...
+Writing Glassy.css...
+Patching MainController.java to add theme switching...
+Chunk 39 applied: Light, Dark, Glassy CSS themes added with runtime switching.
+
+Next steps:
+1) Call mainController.setTheme("Dark") or "Glassy" to switch themes at runtime.
+2) Optionally add Ribbon MenuButton to select themes dynamically.
+3) Test all panes, Ribbon, StatusBar, and FlowTileCells for proper theme application.
+e322692@M014-1VXZKR3:/mnt/c/workspace/ALFE$ ./chunk40.sh
+Writing HistoryManagerTest.java...
+Writing ThumbnailCacheTest.java...
+Writing FlowTileCellTest.java...
+Writing FileExplorerUITest.java...
+Chunk 40 applied: Unit tests + TestFX UI tests for HistoryManager, ThumbnailCache, FlowTileCell, Ribbon, Tabs, and Theme switching.
+
+Next steps:
+1) Add TestFX Maven dependency:
+   <dependency>
+       <groupId>org.testfx</groupId>
+       <artifactId>testfx-junit5</artifactId>
+       <version>4.0.16-alpha</version>
+       <scope>test</scope>
+   </dependency>
+2) Run tests: mvn test
+3) Verify HistoryManager undo/redo, thumbnails, FlowTileCell graphics, tabs, Ribbon actions, and theme switching.
+

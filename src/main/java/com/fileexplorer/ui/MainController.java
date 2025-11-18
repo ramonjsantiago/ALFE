@@ -29,6 +29,20 @@
 // import java.util.concurrent.atomic.AtomicReference;
 
 // public class MainController {
+    @FXML private DetailsViewController detailsViewController;
+
+    @FXML public void sortByName() {
+        if (detailsViewController != null) detailsViewController.sortByColumn("Name");
+    }
+    @FXML public void sortBySize() {
+        if (detailsViewController != null) detailsViewController.sortByColumn("Size");
+    }
+    @FXML public void sortByType() {
+        if (detailsViewController != null) detailsViewController.sortByColumn("Type");
+    }
+    @FXML public void sortByDate() {
+        if (detailsViewController != null) detailsViewController.sortByColumn("Date");
+    }
     private String currentTheme = "Light";
 
     public void setTheme(String themeName) {
@@ -733,6 +747,20 @@
  // * resides in createTabWithLoader(Path).
  // */
 // public class MainController {
+    @FXML private DetailsViewController detailsViewController;
+
+    @FXML public void sortByName() {
+        if (detailsViewController != null) detailsViewController.sortByColumn("Name");
+    }
+    @FXML public void sortBySize() {
+        if (detailsViewController != null) detailsViewController.sortByColumn("Size");
+    }
+    @FXML public void sortByType() {
+        if (detailsViewController != null) detailsViewController.sortByColumn("Type");
+    }
+    @FXML public void sortByDate() {
+        if (detailsViewController != null) detailsViewController.sortByColumn("Date");
+    }
     private String currentTheme = "Light";
 
     public void setTheme(String themeName) {

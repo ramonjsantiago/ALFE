@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<TableView fx:id="tableView" xmlns:fx="http://javafx.com/fxml" fx:controller="com.fileexplorer.ui.DetailsViewController">
+    <columns>
+        <TableColumn fx:id="nameCol" text="Name"/>
+        <TableColumn fx:id="sizeCol" text="Size"/>
+        <TableColumn fx:id="typeCol" text="Type"/>
+        <TableColumn fx:id="dateCol" text="Date Modified"/>
+    </columns>
+</TableView>

@@ -1,85 +1,78 @@
 package com.fileexplorer.ui;
 
-import javafx.application.HostServices;
-import javafx.beans.property.ReadOnlyObjectWrapper;
+import javafx.beans.property.SimpleLongProperty;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
-import javafx.scene.control.*;
-import javafx.scene.input.MouseButton;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
 
 import java.io.File;
-import java.nio.file.Path;
-import java.nio.file.Files;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.util.Comparator;
+import java.text.SimpleDateFormat;
+import java.util.Arrays;
 
-/**
- * DetailsViewController manages the TableView that lists files with metadata columns.
- */
 public class DetailsViewController {
 
-    @FXML private TableView<TabContentController.FileMetadata> detailsTable;
-    @FXML private TableColumn<TabContentController.FileMetadata, String> colName;
-    @FXML private TableColumn<TabContentController.FileMetadata, String> colType;
-    @FXML private TableColumn<TabContentController.FileMetadata, Long> colSize;
-    @FXML private TableColumn<TabContentController.FileMetadata, String> colModified;
+    @FXML
+    private TableView<File> tableView;
 
-    private final ObservableList<TabContentController.FileMetadata> items = FXCollections.observableArrayList();
-    private HostServices hostServices;
+    @FXML
+    private TableColumn<File, String> nameCol;
+    @FXML
+    private TableColumn<File, Long> sizeCol;
+    @FXML
+    private TableColumn<File, String> typeCol;
+    @FXML
+    private TableColumn<File, String> dateCol;
+
+    private ObservableList<File> fileList = FXCollections.observableArrayList();
 
     @FXML
     public void initialize() {
-        detailsTable.setItems(items);
+        // Name column
+        nameCol.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getName()));
+        nameCol.setSortable(true);
 
-        colName.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getName()));
-        colType.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getType()));
-        colSize.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getSize()));
-        colModified.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getModified()));
+        // Size column
+        sizeCol.setCellValueFactory(cell -> new SimpleLongProperty(cell.getValue().length()).asObject());
+        sizeCol.setSortable(true);
 
-        // Sorting
-        colName.setComparator(Comparator.nullsFirst(String::compareToIgnoreCase));
-        colSize.setComparator(Comparator.nullsFirst(Long::compareTo));
-        colModified.setComparator(Comparator.nullsFirst(String::compareTo));
-
-        detailsTable.setRowFactory(tv -> {
-            TableRow<TabContentController.FileMetadata> row = new TableRow<>();
-            row.setOnMouseClicked(evt -> {
-                if (! row.isEmpty() && evt.getButton() == MouseButton.PRIMARY && evt.getClickCount() == 2) {
-                    TabContentController.FileMetadata fm = row.getItem();
-                    if (fm.getFile().isDirectory()) {
-                        // navigate into folder
-                        try {
-                            // locate parent TabContentController via scene lookup: simple approach - find controller and call loadFolder
-                            // This is a lightweight action — in the TabContentController the loadFolder method exists.
-                            // Unsafe reflection-free approach omitted for brevity — prefer calling from TabContentController directly.
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    } else {
-                        // open file with host OS
-                        try {
-                            java.awt.Desktop.getDesktop().open(fm.getFile());
-                        } catch (Exception ex) {
-                            ex.printStackTrace();
-                        }
-                    }
-                }
-            });
-            return row;
+        // Type column (extension)
+        typeCol.setCellValueFactory(cell -> {
+            String name = cell.getValue().getName();
+            String ext = "";
+            int dot = name.lastIndexOf('.');
+            if (dot > 0 && dot < name.length()-1) ext = name.substring(dot+1);
+            return new SimpleStringProperty(ext.toUpperCase());
         });
+        typeCol.setSortable(true);
+
+        // Date Modified column
+        dateCol.setCellValueFactory(cell -> {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+            return new SimpleStringProperty(sdf.format(cell.getValue().lastModified()));
+        });
+        dateCol.setSortable(true);
+
+        tableView.setItems(fileList);
     }
 
-    public void setItemsFromDirectory(Path folder) {
-        items.clear();
-        try {
-            Files.list(folder).forEach(p -> items.add(new TabContentController.FileMetadata(p.toFile())));
-        } catch (Exception e) {
-            e.printStackTrace();
+    public void setFiles(File[] files) {
+        fileList.setAll(Arrays.asList(files));
+    }
+
+    // Optional: programmatically sort
+    public void sortByColumn(String columnName) {
+        switch(columnName) {
+            case "Name":
+                tableView.getSortOrder().setAll(nameCol); break;
+            case "Size":
+                tableView.getSortOrder().setAll(sizeCol); break;
+            case "Type":
+                tableView.getSortOrder().setAll(typeCol); break;
+            case "Date":
+                tableView.getSortOrder().setAll(dateCol); break;
         }
     }
-
-    public void clear() { items.clear(); }
 }
