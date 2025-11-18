@@ -1,5 +1,15 @@
 package com.fileexplorer.ui;
 
+import java.nio.file.Paths;
+
+import javafx.scene.control.TabPane;
+
+import javafx.scene.Parent;
+
+import javafx.stage.Stage;
+
+import javafx.stage.DirectoryChooser;
+
 import com.fileexplorer.thumb.FileOperationManager;
 import com.fileexplorer.thumb.FileOperationManager.CancellableOperation;
 import com.fileexplorer.thumb.FileOperationManager.ProgressListener;
@@ -401,4 +411,113 @@ public void cancelActiveTabOperation() {
     TabContentController tcc = getActiveTabController();
     if (tcc != null) tcc.cancelCurrentOperation();
     else updateStatus("No active tab operation to cancel");
+}
+
+/*
+ * Helper: create a tab that stores its FXMLLoader in tab.properties ("loader"),
+ * so other code can retrieve the controller via loader.getController().
+ */
+private void createTabWithLoader(java.nio.file.Path folder) {
+    try {
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/fileexplorer/ui/TabContent.fxml"));
+        Parent content = loader.load();
+        Tab tab = new Tab(folder.getFileName() != null ? folder.getFileName().toString() : folder.toString(), content);
+        // store loader so MainController can retrieve per-tab controller later
+        tab.getProperties().put("loader", loader);
+
+        // when closing, call cleanup on the TabContentController if present
+        tab.setOnClosed(evt -> {
+            try {
+                Object ctrl = loader.getController();
+                if (ctrl instanceof com.fileexplorer.ui.TabContentController tcc) {
+                    tcc.cleanup();
+                }
+            } catch (Exception e) {
+                // ignore cleanup exceptions
+            }
+        });
+
+        // add tab and select it
+        try {
+            if (this.tabPane != null) {
+                this.tabPane.getTabs().add(tab);
+                this.tabPane.getSelectionModel().select(tab);
+            } else {
+                // fallback: try to find a TabPane in the scene
+                TabPane tp = (TabPane) statusBar.getScene().lookup("#tabPane");
+                if (tp != null) {
+                    tp.getTabs().add(tab);
+                    tp.getSelectionModel().select(tab);
+                }
+            }
+        } catch (Exception e) {
+            // if adding fails, add to default location
+            System.out.println("Warning: could not add tab to tabPane: " + e.getMessage());
+        }
+    } catch (Exception ex) {
+        ex.printStackTrace();
+        updateStatus("Failed to open folder in tab: " + folder);
+    }
+}
+
+/*
+ * Ribbon button helpers that prompt for a destination folder (DirectoryChooser) and call per-tab operations.
+ * These methods assume the per-tab wrappers were added earlier:
+ *   copySelectedToActiveTab(Path), moveSelectedToActiveTab(Path), deleteSelectedWithProgressActiveTab(), cancelActiveTabOperation()
+ */
+
+@FXML
+private void onRibbonCopyWithChooser() {
+    try {
+        Stage stage = (Stage) statusBar.getScene().getWindow();
+        DirectoryChooser chooser = new DirectoryChooser();
+        chooser.setTitle("Select target folder for copy");
+        java.io.File selected = chooser.showDialog(stage);
+        if (selected != null) {
+            java.nio.file.Path target = selected.toPath();
+            copySelectedToActiveTab(target);
+        } else {
+            updateStatus("Copy cancelled: no target selected");
+        }
+    } catch (Exception e) {
+        updateStatus("Copy failed: " + e.getMessage());
+    }
+}
+
+@FXML
+private void onRibbonMoveWithChooser() {
+    try {
+        Stage stage = (Stage) statusBar.getScene().getWindow();
+        DirectoryChooser chooser = new DirectoryChooser();
+        chooser.setTitle("Select target folder for move");
+        java.io.File selected = chooser.showDialog(stage);
+        if (selected != null) {
+            java.nio.file.Path target = selected.toPath();
+            moveSelectedToActiveTab(target);
+        } else {
+            updateStatus("Move cancelled: no target selected");
+        }
+    } catch (Exception e) {
+        updateStatus("Move failed: " + e.getMessage());
+    }
+}
+
+@FXML
+private void onRibbonDeleteWithProgress() {
+    // Confirm deletion with user
+    Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+    confirm.setTitle("Confirm Delete");
+    confirm.setHeaderText("Delete selected items");
+    confirm.setContentText("Are you sure you want to delete the selected items? This will attempt to use the OS recycle/trash where available.");
+    java.util.Optional<javafx.scene.control.ButtonType> res = confirm.showAndWait();
+    if (res.isPresent() && res.get() == javafx.scene.control.ButtonType.OK) {
+        deleteSelectedWithProgressActiveTab();
+    } else {
+        updateStatus("Delete cancelled");
+    }
+}
+
+@FXML
+private void onRibbonCancelOperation() {
+    cancelActiveTabOperation();
 }
