@@ -3,6 +3,10 @@
         <fx:include source="RibbonBar.fxml"/>
         <center>
             <SplitPane orientation="HORIZONTAL" dividerPositions="0.5">
+    <items>
+        <VBox fx:id="navigationPane" prefWidth="200">
+            <fx:include fx:id="navTree" source="NavigationTree.fxml"/>
+        </VBox>
                 <TabPane fx:id="leftTabPane" prefWidth="400" />
                 <TabPane fx:id="rightTabPane" prefWidth="400" />
             </SplitPane>
@@ -53,6 +57,10 @@
 
 <!-- Dual-pane layout: two FlowPanes or TableViews -->
 <SplitPane orientation="HORIZONTAL">
+    <items>
+        <VBox fx:id="navigationPane" prefWidth="200">
+            <fx:include fx:id="navTree" source="NavigationTree.fxml"/>
+        </VBox>
     <!-- Left pane: folder contents -->
     <TableView fx:id="leftDetailsTable" prefWidth="400">
         <columns>

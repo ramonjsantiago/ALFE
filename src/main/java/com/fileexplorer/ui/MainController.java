@@ -29,6 +29,25 @@
 // import java.util.concurrent.atomic.AtomicReference;
 
 // public class MainController {
+    @FXML private javafx.scene.layout.VBox navigationPane;
+    @FXML private NavigationTreeController navTree;
+
+    @FXML public void initialize() {
+        navTree.setMainController(this);
+        // Existing initialization (TabManager, DragDrop) continues
+    }
+    @FXML public void onRibbonUndo() {
+        if (historyManager != null) historyManager.undo();
+    }
+    @FXML public void onRibbonRedo() {
+        if (historyManager != null) historyManager.redo();
+    }
+    @FXML public void onRibbonUndo() {
+        if (historyManager != null) historyManager.undo();
+    }
+    @FXML public void onRibbonRedo() {
+        if (historyManager != null) historyManager.redo();
+    }
     // --- Drag-and-Drop + FlowTileCell integration ---
     private DragAndDropHandler dragHandler;
     @FXML public void initialize() {
@@ -686,6 +705,25 @@
  // * resides in createTabWithLoader(Path).
  // */
 // public class MainController {
+    @FXML private javafx.scene.layout.VBox navigationPane;
+    @FXML private NavigationTreeController navTree;
+
+    @FXML public void initialize() {
+        navTree.setMainController(this);
+        // Existing initialization (TabManager, DragDrop) continues
+    }
+    @FXML public void onRibbonUndo() {
+        if (historyManager != null) historyManager.undo();
+    }
+    @FXML public void onRibbonRedo() {
+        if (historyManager != null) historyManager.redo();
+    }
+    @FXML public void onRibbonUndo() {
+        if (historyManager != null) historyManager.undo();
+    }
+    @FXML public void onRibbonRedo() {
+        if (historyManager != null) historyManager.redo();
+    }
     // --- Drag-and-Drop + FlowTileCell integration ---
     private DragAndDropHandler dragHandler;
     @FXML public void initialize() {
