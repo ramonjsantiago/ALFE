@@ -12,6 +12,22 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 public class FlowTileCell extends StackPane {
+    private javafx.scene.image.ImageView imageView = new javafx.scene.image.ImageView();
+    public void updateThumbnail(java.io.File file) {
+        javafx.scene.image.Image img = thumbnailGenerator.loadThumbnail(file, 128, 128);
+        imageView.setImage(img);
+        imageView.setFitWidth(128); imageView.setFitHeight(128);
+        imageView.setPreserveRatio(true);
+        setGraphic(imageView);
+    }
+    private javafx.scene.image.ImageView imageView = new javafx.scene.image.ImageView();
+    public void updateThumbnail(java.io.File file) {
+        javafx.scene.image.Image img = thumbnailGenerator.loadThumbnail(file, 128, 128);
+        imageView.setImage(img);
+        imageView.setFitWidth(128); imageView.setFitHeight(128);
+        imageView.setPreserveRatio(true);
+        setGraphic(imageView);
+    }
 
     public final Path path;
     private final ImageView imageView = new ImageView();
