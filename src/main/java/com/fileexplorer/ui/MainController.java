@@ -500,3 +500,63 @@ private void initializeTreeEnhancements() {
     setupTreeKeyboardNavigation();
     setupTreeDragAndDrop();
 }
+import javafx.collections.transformation.FilteredList;
+import javafx.scene.control.TextField;
+
+import java.nio.file.Paths;
+import java.util.prefs.Preferences;
+
+@FXML private TextField searchField;
+
+// Preferences for persistent Quick Access
+private final Preferences prefs = Preferences.userNodeForPackage(MainController.class);
+private static final String QUICK_ACCESS_KEY = "quickAccessPaths";
+
+@FXML
+private void initializeSearchAndQuickAccess() {
+    // Load pinned Quick Access from preferences
+    String savedPins = prefs.get(QUICK_ACCESS_KEY, "");
+    if (!savedPins.isEmpty()) {
+        for (String pathStr : savedPins.split(";")) {
+            Path p = Paths.get(pathStr);
+            pinnedItems.add(p);
+            quickAccessRoot.getChildren().add(new TreeItem<>(p));
+        }
+    }
+
+    // Setup search filter for Details Table
+    FilteredList<FileMetadata> filteredItems = new FilteredList<>(leftDetailsTable.getItems(), p -> true);
+    leftDetailsTable.setItems(filteredItems);
+
+    searchField.textProperty().addListener((obs, oldText, newText) -> {
+        filteredItems.setPredicate(fileMeta -> {
+            if (newText == null || newText.isEmpty()) return true;
+            return fileMeta.getName().toLowerCase().contains(newText.toLowerCase());
+        });
+    });
+}
+
+// Persist Quick Access pins
+private void saveQuickAccessPins() {
+    StringBuilder sb = new StringBuilder();
+    for (Path p : pinnedItems) {
+        if (sb.length() > 0) sb.append(";");
+        sb.append(p.toString());
+    }
+    prefs.put(QUICK_ACCESS_KEY, sb.toString());
+}
+
+// Override pin/unpin to save preferences
+@FXML
+private void onPinItem(Path path) {
+    if (pinnedItems.contains(path)) {
+        pinnedItems.remove(path);
+        quickAccessRoot.getChildren().removeIf(t -> t.getValue().equals(path));
+        updateStatus("Unpinned " + path.getFileName());
+    } else {
+        pinnedItems.add(path);
+        quickAccessRoot.getChildren().add(new TreeItem<>(path));
+        updateStatus("Pinned " + path.getFileName());
+    }
+    saveQuickAccessPins();
+}
