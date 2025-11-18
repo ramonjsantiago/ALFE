@@ -422,3 +422,81 @@ private void showProperties(Path folderOrFile) {
     PropertiesDialogController props = new PropertiesDialogController();
     props.show(folderOrFile);
 }
+// --- Keyboard navigation for folder tree ---
+private void setupTreeKeyboardNavigation() {
+    folderTree.setOnKeyPressed(event -> {
+        TreeItem<Path> selected = folderTree.getSelectionModel().getSelectedItem();
+        if (selected == null) return;
+
+        switch (event.getCode()) {
+            case ENTER -> {
+                // Open folder: load details and right pane
+                Path path = selected.getValue();
+                loadDetailsTable(path);
+                loadRightFlowPane(path);
+            }
+            case DELETE -> deleteFolder(selected.getValue());
+            case F2 -> folderTree.edit(selected);
+            case UP, DOWN -> {
+                // Handled automatically by TreeView
+            }
+            default -> {}
+        }
+    });
+}
+
+// --- Drag-and-drop support for folder tree ---
+private void setupTreeDragAndDrop() {
+    folderTree.setOnDragDetected(event -> {
+        TreeItem<Path> selected = folderTree.getSelectionModel().getSelectedItem();
+        if (selected == null) return;
+
+        Dragboard db = folderTree.startDragAndDrop(TransferMode.MOVE);
+        ClipboardContent content = new ClipboardContent();
+        content.putString(selected.getValue().toString());
+        db.setContent(content);
+        event.consume();
+    });
+
+    folderTree.setOnDragOver(event -> {
+        if (event.getGestureSource() != folderTree && event.getDragboard().hasString()) {
+            event.acceptTransferModes(TransferMode.MOVE);
+        }
+        event.consume();
+    });
+
+    folderTree.setOnDragDropped(event -> {
+        Dragboard db = event.getDragboard();
+        boolean success = false;
+
+        if (db.hasString()) {
+            Path sourcePath = Path.of(db.getString());
+            TreeItem<Path> targetItem = folderTree.getSelectionModel().getSelectedItem();
+            if (targetItem != null) {
+                Path targetPath = targetItem.getValue().resolve(sourcePath.getFileName());
+                try {
+                    Files.move(sourcePath, targetPath);
+                    historyManager.recordMove(sourcePath, targetPath);
+
+                    // Refresh tree and details
+                    targetItem.getChildren().clear();
+                    addSubFolders(targetItem);
+                    loadDetailsTable(targetPath.getParent());
+                    success = true;
+                    updateStatus("Moved folder " + sourcePath.getFileName() + " to " + targetPath.getFileName());
+                } catch (IOException e) {
+                    updateStatus("Failed to move folder: " + e.getMessage());
+                }
+            }
+        }
+        event.setDropCompleted(success);
+        event.consume();
+    });
+}
+
+// Call these in initialize()
+@FXML
+private void initializeTreeEnhancements() {
+    setupTreeKeyboardNavigation();
+    setupTreeDragAndDrop();
+}
