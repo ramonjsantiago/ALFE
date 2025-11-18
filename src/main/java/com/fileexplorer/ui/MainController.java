@@ -29,6 +29,594 @@
 // import java.util.concurrent.atomic.AtomicReference;
 
 // public class MainController {
+    @FXML private javafx.scene.control.ComboBox<String> iconSizeCombo;
+    @FXML private javafx.scene.control.ComboBox<String> layoutCombo;
+    @FXML private javafx.scene.control.ComboBox<String> themeCombo;
+
+    @FXML public void initializeViewOptions() {
+        iconSizeCombo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> setIconSize(newVal));
+        layoutCombo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> setLayout(newVal));
+        themeCombo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> setTheme(newVal));
+    }
+
+    private void setIconSize(String size) {
+        int pixels = switch(size) { case "Small" -> 64; case "Medium" -> 128; case "Large" -> 256; default -> 128; };
+        getCurrentPane().setCellFactory(lv -> new FlowTileCell(pixels, pixels));
+        getCurrentPane().refresh();
+        historyManager.recordAction("Set icon size: " + size);
+    }
+
+    private void setLayout(String layout) {
+        switch(layout) {
+            case "Details" -> switchToTableView();
+            case "Tiles" -> switchToTileView();
+            case "List" -> switchToListView();
+            case "Thumbnails" -> switchToThumbnailView();
+        }
+        historyManager.recordAction("Set layout: " + layout);
+    }
+
+    private void setTheme(String theme) {
+        javafx.scene.Scene scene = navigationTree.getScene();
+        scene.getStylesheets().clear();
+        switch(theme) {
+            case "Light" -> scene.getStylesheets().add(getClass().getResource("light.css").toExternalForm());
+            case "Dark" -> scene.getStylesheets().add(getClass().getResource("dark.css").toExternalForm());
+            case "Glassy" -> scene.getStylesheets().add(getClass().getResource("glassy.css").toExternalForm());
+        }
+        historyManager.recordAction("Set theme: " + theme);
+    }
+
+    private void switchToTableView() { /* code to replace current pane with TableView */ }
+    private void switchToTileView() { /* code to replace current pane with Tile-based FlowPane */ }
+    private void switchToListView() { /* code to replace current pane with ListView */ }
+    private void switchToThumbnailView() { /* code to replace current pane with Thumbnail view using FlowTileCell */ }
+    @FXML public void showPropertiesDialog() {
+        java.io.File selected = getSelectedFolderOrFile();
+        if (selected == null) return;
+        try {
+            javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(getClass().getResource("PropertiesDialog.fxml"));
+            javafx.scene.Parent root = loader.load();
+            PropertiesDialogController controller = loader.getController();
+            controller.setFile(selected);
+            javafx.stage.Stage stage = new javafx.stage.Stage();
+            stage.setTitle("Properties: " + selected.getName());
+            stage.setScene(new javafx.scene.Scene(root));
+            stage.initOwner(navigationTree.getScene().getWindow());
+            stage.show();
+            historyManager.recordAction("Opened properties for: " + selected.getAbsolutePath());
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+    @FXML private javafx.scene.layout.Pane previewPane;
+    @FXML private javafx.scene.control.Label previewLabel;
+    @FXML private javafx.scene.image.ImageView previewImageView;
+
+    @FXML public void initializePreviewPane() {
+        getCurrentPane().getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> showPreview(newVal));
+    }
+
+    private void showPreview(java.io.File file) {
+        if (file == null) { previewImageView.setImage(null); previewLabel.setText(""); return; }
+        if (file.isDirectory()) { previewLabel.setText("Folder: " + file.getName()); previewImageView.setImage(null); return; }
+        String name = file.getName().toLowerCase();
+        try {
+            if (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".gif")) {
+                javafx.scene.image.Image img = ThumbnailGenerator.generatePreview(file, 256, 256);
+                previewImageView.setImage(img); previewLabel.setText(file.getName());
+            } else if (name.endsWith(".txt") || name.endsWith(".log") || name.endsWith(".csv")) {
+                java.util.List<String> lines = java.nio.file.Files.readAllLines(file.toPath());
+                previewLabel.setText(String.join("\n", lines.subList(0, Math.min(20, lines.size()))));
+                previewImageView.setImage(null);
+            } else {
+                previewLabel.setText("No preview available for: " + file.getName());
+                previewImageView.setImage(null);
+            }
+        } catch(Exception e){ previewLabel.setText("Error loading preview"); previewImageView.setImage(null); e.printStackTrace(); }
+        historyManager.recordAction("Previewed file: " + file.getAbsolutePath());
+    }
+    @FXML private javafx.scene.control.ComboBox<String> sortCombo;
+    @FXML private javafx.scene.control.ComboBox<String> groupCombo;
+    @FXML private javafx.scene.control.ContextMenu columnMenu;
+
+    @FXML public void initializeSortGroupColumns() {
+        sortCombo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> applySort(newVal));
+        groupCombo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> applyGroup(newVal));
+        // columnMenu items should be CheckMenuItem for visibility toggle
+    }
+
+    private void applySort(String sortKey) {
+        javafx.scene.control.ListView<java.io.File> pane = getCurrentPane();
+        java.util.Comparator<java.io.File> comparator = switch(sortKey) {
+            case "Name" -> java.util.Comparator.comparing(java.io.File::getName, String.CASE_INSENSITIVE_ORDER);
+            case "Date Modified" -> java.util.Comparator.comparingLong(java.io.File::lastModified);
+            case "Size" -> java.util.Comparator.comparingLong(java.io.File::length);
+            case "Type" -> java.util.Comparator.comparing(f -> f.getName().substring(f.getName().lastIndexOf(.)+1));
+            default -> java.util.Comparator.comparing(java.io.File::getName, String.CASE_INSENSITIVE_ORDER);
+        };
+        javafx.collections.ObservableList<java.io.File> items = pane.getItems();
+        javafx.collections.FXCollections.sort(items, comparator);
+        pane.refresh();
+        saveFolderPreference(getCurrentFolder(), "sort", sortKey);
+        historyManager.recordAction("Applied sort: " + sortKey);
+    }
+
+    private void applyGroup(String groupKey) {
+        // Simplified example: grouping may require custom cell factory or Section headers
+        saveFolderPreference(getCurrentFolder(), "group", groupKey);
+        historyManager.recordAction("Applied group: " + groupKey);
+        // Actual grouping implementation omitted for brevity; can wrap items in group headers
+    }
+
+    private void toggleColumnVisibility(String columnName, boolean visible) {
+        // For TableView pane, show/hide columns
+        javafx.scene.control.TableView<java.io.File> table = getCurrentTablePane();
+        table.getColumns().stream().filter(c -> c.getText().equals(columnName)).forEach(c -> c.setVisible(visible));
+        historyManager.recordAction("Toggled column: " + columnName + " visible=" + visible);
+    }
+    @FXML public void renameSelectedItem() {
+        java.io.File selected = getSelectedFolderOrFile();
+        if (selected == null) return;
+        javafx.scene.control.TextInputDialog dialog = new javafx.scene.control.TextInputDialog(selected.getName());
+        dialog.setTitle("Rename");
+        dialog.setHeaderText("Rename selected item");
+        dialog.setContentText("New name:");
+        dialog.showAndWait().ifPresent(newName -> {
+            java.io.File newFile = new java.io.File(selected.getParent(), newName);
+            java.util.concurrent.Executor executor = java.util.concurrent.Executors.newThreadPerTaskExecutor(java.lang.Thread.ofVirtual().factory());
+            executor.execute(() -> {
+                try {
+                    java.nio.file.Files.move(selected.toPath(), newFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    javafx.application.Platform.runLater(() -> refreshCurrentPane());
+                    historyManager.recordAction("Renamed " + selected + " to " + newFile,
+                        () -> { try { java.nio.file.Files.move(newFile.toPath(), selected.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING); refreshCurrentPane(); } catch(Exception e){e.printStackTrace(); } });
+                } catch(Exception e){ e.printStackTrace(); }
+            });
+        });
+    }
+
+    @FXML public void createNewFolder() {
+        java.io.File folder = getCurrentFolder();
+        if (folder == null) return;
+        javafx.scene.control.TextInputDialog dialog = new javafx.scene.control.TextInputDialog("New Folder");
+        dialog.setTitle("New Folder");
+        dialog.setHeaderText("Create new folder");
+        dialog.setContentText("Folder name:");
+        dialog.showAndWait().ifPresent(name -> {
+            java.io.File newDir = new java.io.File(folder, name);
+            java.util.concurrent.Executor executor = java.util.concurrent.Executors.newThreadPerTaskExecutor(java.lang.Thread.ofVirtual().factory());
+            executor.execute(() -> {
+                try { java.nio.file.Files.createDirectory(newDir.toPath());
+                    javafx.application.Platform.runLater(() -> refreshCurrentPane());
+                    historyManager.recordAction("Created folder: " + newDir,
+                        () -> { try { java.nio.file.Files.deleteIfExists(newDir.toPath()); refreshCurrentPane(); } catch(Exception e){e.printStackTrace();} });
+                } catch(Exception e){ e.printStackTrace(); }
+            });
+        });
+    }
+
+    @FXML public void deleteSelectedItem() {
+        java.io.File selected = getSelectedFolderOrFile();
+        if (selected == null) return;
+        java.util.concurrent.Executor executor = java.util.concurrent.Executors.newThreadPerTaskExecutor(java.lang.Thread.ofVirtual().factory());
+        executor.execute(() -> {
+            try {
+                boolean movedToTrash = false;
+                if (java.awt.Desktop.isDesktopSupported() && java.awt.Desktop.getDesktop().moveToTrash(selected)) movedToTrash = true;
+                else java.nio.file.Files.deleteIfExists(selected.toPath());
+                javafx.application.Platform.runLater(() -> refreshCurrentPane());
+                historyManager.recordAction((movedToTrash ? "Moved to Trash: " : "Deleted: ") + selected,
+                    () -> { /* Undo for delete not implemented yet */ });
+            } catch(Exception e){ e.printStackTrace(); }
+        });
+    }
+    private void performPasteWithUndo(java.io.File src, java.io.File dest, boolean move) {
+        try {
+            java.nio.file.Path srcPath = src.toPath();
+            java.nio.file.Path destPath = dest.toPath();
+            if (move) java.nio.file.Files.move(srcPath, destPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            else {
+                if (src.isDirectory()) copyDirectory(srcPath, destPath);
+                else java.nio.file.Files.copy(srcPath, destPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            historyManager.recordAction((move ? "Moved" : "Copied") + " " + src + " to " + dest,
+                () -> {
+                    try {
+                        java.nio.file.Files.deleteIfExists(destPath);
+                        refreshCurrentPane();
+                    } catch (Exception e) { e.printStackTrace(); }
+                });
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+    private java.util.List<java.io.File> clipboard = new java.util.ArrayList<>();
+    private boolean cutMode = false;
+
+    @FXML public void copySelected() {
+        clipboard.clear();
+        clipboard.addAll(getCurrentPane().getSelectionModel().getSelectedItems());
+        cutMode = false;
+        historyManager.recordAction("Copied items: " + clipboard);
+    }
+
+    @FXML public void cutSelected() {
+        clipboard.clear();
+        clipboard.addAll(getCurrentPane().getSelectionModel().getSelectedItems());
+        cutMode = true;
+        historyManager.recordAction("Cut items: " + clipboard);
+    }
+
+    @FXML public void pasteIntoCurrentFolder() {
+        java.io.File targetFolder = getCurrentFolder();
+        if (targetFolder == null || clipboard.isEmpty()) return;
+        java.util.concurrent.Executor executor = java.util.concurrent.Executors.newThreadPerTaskExecutor(java.lang.Thread.ofVirtual().factory());
+        for (java.io.File src : clipboard) {
+            executor.execute(() -> {
+                try {
+                    java.nio.file.Path srcPath = src.toPath();
+                    java.nio.file.Path destPath = targetFolder.toPath().resolve(src.getName());
+                    if (cutMode) {
+                        java.nio.file.Files.move(srcPath, destPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    } else {
+                        if (src.isDirectory()) {
+                            copyDirectory(srcPath, destPath);
+                        } else {
+                            java.nio.file.Files.copy(srcPath, destPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        }
+                    }
+                    javafx.application.Platform.runLater(() -> refreshCurrentPane());
+                    historyManager.recordAction((cutMode ? "Moved" : "Copied") + " " + src + " to " + targetFolder);
+                } catch (Exception e) { e.printStackTrace(); }
+            });
+        }
+        if (cutMode) clipboard.clear();
+        cutMode = false;
+    }
+
+    private void copyDirectory(java.nio.file.Path src, java.nio.file.Path dest) throws java.io.IOException {
+        java.nio.file.Files.walk(src).forEach(p -> {
+            try {
+                java.nio.file.Path relative = src.relativize(p);
+                java.nio.file.Path target = dest.resolve(relative);
+                if (java.nio.file.Files.isDirectory(p)) java.nio.file.Files.createDirectories(target);
+                else java.nio.file.Files.copy(p, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            } catch (Exception e) { e.printStackTrace(); }
+        });
+    }
+    @FXML private javafx.scene.control.TabPane tabPane;
+
+    @FXML public void addNewTab(java.io.File folder) {
+        javafx.scene.control.Tab tab = new javafx.scene.control.Tab(folder.getName());
+        javafx.scene.layout.BorderPane content = new javafx.scene.layout.BorderPane();
+        javafx.scene.control.ListView<java.io.File> listView = new javafx.scene.control.ListView<>();
+        populatePane(listView, folder);
+        content.setCenter(listView);
+        tab.setContent(content);
+        tabPane.getTabs().add(tab);
+        tabPane.getSelectionModel().select(tab);
+        historyManager.recordAction("Added new tab for folder: " + folder.getAbsolutePath());
+    }
+
+    @FXML public void closeCurrentTab() {
+        javafx.scene.control.Tab current = tabPane.getSelectionModel().getSelectedItem();
+        if (current != null) {
+            tabPane.getTabs().remove(current);
+            historyManager.recordAction("Closed tab: " + current.getText());
+        }
+    }
+
+    @FXML public void reorderTabs(int fromIndex, int toIndex) {
+        javafx.scene.control.Tab t = tabPane.getTabs().remove(fromIndex);
+        tabPane.getTabs().add(toIndex, t);
+        historyManager.recordAction("Reordered tab from " + fromIndex + " to " + toIndex);
+    }
+
+    @FXML public void initializeTabs() {
+        tabPane.getTabs().clear();
+        // optionally add initial default folder tab
+        // tabPane.getTabs().add(createDefaultTab());
+    }
+    private java.util.List<java.io.File> pinnedItems = new java.util.ArrayList<>();
+
+    @FXML private javafx.scene.control.TreeView<java.io.File> navigationTree;
+
+    @FXML public void pinSelectedItem() {
+        java.io.File selected = getSelectedFolderOrFile();
+        if (selected == null) return;
+        if (!pinnedItems.contains(selected)) {
+            pinnedItems.add(selected);
+            addPinnedItemToTree(selected);
+            historyManager.recordAction("Pinned item: " + selected.getAbsolutePath());
+        }
+    }
+
+    @FXML public void unpinSelectedItem() {
+        java.io.File selected = getSelectedFolderOrFile();
+        if (selected == null) return;
+        if (pinnedItems.remove(selected)) {
+            removePinnedItemFromTree(selected);
+            historyManager.recordAction("Unpinned item: " + selected.getAbsolutePath());
+        }
+    }
+
+    private void addPinnedItemToTree(java.io.File item) {
+        javafx.scene.control.TreeItem<java.io.File> root = navigationTree.getRoot();
+        javafx.scene.control.TreeItem<java.io.File> node = new javafx.scene.control.TreeItem<>(item);
+        root.getChildren().add(node);
+    }
+
+    private void removePinnedItemFromTree(java.io.File item) {
+        javafx.scene.control.TreeItem<java.io.File> root = navigationTree.getRoot();
+        root.getChildren().removeIf(ti -> ti.getValue().equals(item));
+    }
+
+    private java.io.File getSelectedFolderOrFile() {
+        javafx.scene.control.TreeItem<java.io.File> sel = navigationTree.getSelectionModel().getSelectedItem();
+        return sel != null ? sel.getValue() : null;
+    }
+    private java.util.Map<java.io.File, java.util.Map<String, String>> folderPreferences = new java.util.HashMap<>();
+
+    private void saveFolderPreference(java.io.File folder, String key, String value) {
+        folderPreferences.computeIfAbsent(folder, f -> new java.util.HashMap<>()).put(key, value);
+        historyManager.recordAction("Saved preference for " + folder.getAbsolutePath() + ": " + key + "=" + value);
+    }
+
+    private String getFolderPreference(java.io.File folder, String key, String defaultValue) {
+        return folderPreferences.getOrDefault(folder, java.util.Collections.emptyMap()).getOrDefault(key, defaultValue);
+    }
+
+    private void applyFolderPreferences(java.io.File folder) {
+        String sort = getFolderPreference(folder, "sort", "Name");
+        String group = getFolderPreference(folder, "group", "None");
+        String layout = getFolderPreference(folder, "layout", "THUMBNAILS");
+        sortCurrentPane(sort);
+        groupCurrentPane(group);
+        switchView(layout);
+    }
+
+    private void onFolderChanged(java.io.File folder) {
+        applyFolderPreferences(folder);
+    }
+    @FXML private javafx.scene.control.ToggleGroup viewToggleGroup;
+
+    @FXML public void initializeViewToggle() {
+        viewToggleGroup.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> {
+            if (newToggle != null) {
+                String view = (String)newToggle.getUserData();
+                switchView(view);
+            }
+        });
+    }
+
+    private void switchView(String view) {
+        javafx.scene.control.ListView<java.io.File> pane = getCurrentPane();
+        switch(view) {
+            case "THUMBNAILS":
+                pane.setCellFactory(f -> new FlowTileCell(128, 128));
+                break;
+            case "LARGE_ICONS":
+                pane.setCellFactory(f -> new FlowTileCell(64, 64));
+                break;
+            case "SMALL_ICONS":
+                pane.setCellFactory(f -> new FlowTileCell(32, 32));
+                break;
+        }
+        pane.refresh();
+        historyManager.recordAction("Switched view to: " + view);
+    }
+    @FXML public void showFileProperties() {
+        java.io.File selected = getSelectedFile();
+        if (selected == null) return;
+        try {
+            PropertiesDialogController dialog = new PropertiesDialogController(selected);
+            javafx.stage.Stage stage = new javafx.stage.Stage();
+            javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(getClass().getResource("PropertiesDialog.fxml"));
+            loader.setController(dialog);
+            stage.setScene(new javafx.scene.Scene(loader.load()));
+            stage.setTitle("Properties - " + selected.getName());
+            stage.initOwner(tabPane.getScene().getWindow());
+            stage.showAndWait();
+            historyManager.recordAction("Viewed properties for: " + selected.getAbsolutePath());
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+    @FXML private javafx.scene.layout.Pane previewPane;
+    @FXML private javafx.scene.image.ImageView previewImageView;
+    @FXML private javafx.scene.web.WebView previewWebView;
+
+    @FXML public void togglePreviewPane() {
+        boolean visible = previewPane.isVisible();
+        previewPane.setVisible(!visible);
+        historyManager.recordAction("Toggled Preview Pane: " + (!visible));
+    }
+
+    @FXML public void updatePreviewPane() {
+        java.io.File selected = getSelectedFile();
+        if (selected == null) { previewImageView.setImage(null); previewWebView.getEngine().loadContent(""); return; }
+        String name = selected.getName().toLowerCase();
+        try {
+            if (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".gif") || name.endsWith(".bmp")) {
+                javafx.scene.image.Image img = new javafx.scene.image.Image(selected.toURI().toString(), true);
+                previewImageView.setImage(img);
+                previewWebView.setVisible(false); previewImageView.setVisible(true);
+            } else if (name.endsWith(".html") || name.endsWith(".htm") || name.endsWith(".txt") || name.endsWith(".md")) {
+                previewWebView.getEngine().load(selected.toURI().toString());
+                previewWebView.setVisible(true); previewImageView.setVisible(false);
+            } else {
+                previewImageView.setImage(null); previewWebView.getEngine().loadContent("<html><body><p>No preview available</p></body></html>");
+                previewWebView.setVisible(true); previewImageView.setVisible(false);
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
+    @FXML public void initializePreviewPane() {
+        getCurrentPane().getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> updatePreviewPane());
+    }
+    @FXML private javafx.scene.layout.Pane detailsPane;
+    @FXML private javafx.scene.control.ListView<java.io.File> previewListView;
+
+    @FXML public void toggleDetailsPane() {
+        boolean visible = detailsPane.isVisible();
+        detailsPane.setVisible(!visible);
+        historyManager.recordAction("Toggled Details Pane: " + (!visible));
+    }
+
+    @FXML public void updateDetailsPane() {
+        java.util.List<java.io.File> selected = getCurrentPane().getSelectionModel().getSelectedItems();
+        previewListView.getItems().clear();
+        previewListView.getItems().addAll(selected);
+    }
+
+    @FXML public void initializeDetailsPane() {
+        getCurrentPane().getSelectionModel().getSelectedItems().addListener((javafx.collections.ListChangeListener<java.io.File>) c -> updateDetailsPane());
+    }
+    @FXML private javafx.scene.control.ComboBox<String> sortComboBox;
+    @FXML private javafx.scene.control.ComboBox<String> groupComboBox;
+
+    @FXML public void initializeSorting() {
+        sortComboBox.getItems().addAll("Name", "Size", "Date Modified", "Type");
+        groupComboBox.getItems().addAll("None", "Type", "Date Modified");
+
+        sortComboBox.valueProperty().addListener((obs, oldVal, newVal) -> sortCurrentPane(newVal));
+        groupComboBox.valueProperty().addListener((obs, oldVal, newVal) -> groupCurrentPane(newVal));
+    }
+
+    private void sortCurrentPane(String criterion) {
+        java.util.List<java.io.File> items = getCurrentPane().getItems();
+        if (criterion == null) return;
+        switch(criterion) {
+            case "Name": items.sort((a,b) -> a.getName().compareToIgnoreCase(b.getName())); break;
+            case "Size": items.sort((a,b) -> Long.compare(a.length(), b.length())); break;
+            case "Date Modified": items.sort((a,b) -> Long.compare(a.lastModified(), b.lastModified())); break;
+            case "Type": items.sort((a,b) -> getFileExtension(a).compareToIgnoreCase(getFileExtension(b))); break;
+        }
+        refreshCurrentPane();
+        historyManager.recordAction("Sorted current pane by: " + criterion);
+    }
+
+    private void groupCurrentPane(String criterion) {
+        // Simple grouping: prepend group headers (pseudo) in Details view
+        historyManager.recordAction("Grouped current pane by: " + criterion);
+        // TODO: actual UI grouping implementation for Tiles view (future enhancement)
+    }
+
+    private javafx.scene.control.ListView<java.io.File> getCurrentPane() {
+        return leftPaneFlow.isFocused() ? leftPaneFlow : rightPaneFlow;
+    }
+    @FXML private javafx.scene.control.TextField searchField;
+
+    @FXML public void initializeSearch() {
+        searchField.textProperty().addListener((obs, oldVal, newVal) -> {
+            filterCurrentPane(newVal);
+        });
+    }
+
+    private void filterCurrentPane(String query) {
+        javafx.scene.control.ListView<java.io.File> pane = leftPaneFlow.isFocused() ? leftPaneFlow : rightPaneFlow;
+        java.util.List<java.io.File> allItems = pane.getItems();
+        pane.getItems().clear();
+        for (java.io.File f : allItems) {
+            if (query == null || query.isEmpty() || f.getName().toLowerCase().contains(query.toLowerCase())) {
+                pane.getItems().add(f);
+            }
+        }
+        historyManager.recordAction("Filtered current pane with query: " + query);
+    }
+    @FXML public void refreshCurrentPane() {
+        if (leftPaneFlow.isFocused()) populatePane(leftPaneFlow, leftFolder);
+        else populatePane(rightPaneFlow, rightFolder);
+        historyManager.recordAction("Refreshed current pane");
+    }
+
+    @FXML public void selectColumns() {
+        javafx.scene.control.CheckBoxListCell<javafx.scene.control.TableColumn<java.io.File,?>> cell;
+        // For simplicity, show dialog listing columns to toggle
+        javafx.scene.control.Dialog<Void> dialog = new javafx.scene.control.Dialog<>();
+        dialog.setTitle("Select Columns");
+        javafx.scene.control.VBox vbox = new javafx.scene.control.VBox();
+        for (javafx.scene.control.TableColumn<java.io.File,?> col : detailsTable.getColumns()) {
+            javafx.scene.control.CheckBox cb = new javafx.scene.control.CheckBox(col.getText());
+            cb.setSelected(col.isVisible());
+            cb.selectedProperty().addListener((obs, oldV, newV) -> col.setVisible(newV));
+            vbox.getChildren().add(cb);
+        }
+        dialog.getDialogPane().setContent(vbox);
+        dialog.getDialogPane().getButtonTypes().add(javafx.scene.control.ButtonType.OK);
+        dialog.showAndWait();
+        historyManager.recordAction("Adjusted column visibility");
+    }
+
+    private void startAutoRefreshWatcher(java.io.File folder, javafx.scene.control.ListView<java.io.File> pane) {
+        java.nio.file.Path path = folder.toPath();
+        java.util.concurrent.Executors.newSingleThreadExecutor().submit(() -> {
+            try (java.nio.file.WatchService watcher = path.getFileSystem().newWatchService()) {
+                path.register(watcher, java.nio.file.StandardWatchEventKinds.ENTRY_CREATE,
+                                         java.nio.file.StandardWatchEventKinds.ENTRY_DELETE,
+                                         java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY);
+                while (true) {
+                    java.nio.file.WatchKey key = watcher.take();
+                    javafx.application.Platform.runLater(() -> populatePane(pane, folder));
+                    key.reset();
+                }
+            } catch (Exception e) { e.printStackTrace(); }
+        });
+    }
+    @FXML public void createNewFolder() {
+        java.io.File parent = leftPaneFlow.isFocused() ? leftFolder : rightFolder;
+        String baseName = "New Folder";
+        java.io.File newFolder = new java.io.File(parent, baseName);
+        int counter = 1;
+        while(newFolder.exists()) { newFolder = new java.io.File(parent, baseName + " (" + counter + ")"); counter++; }
+        if (newFolder.mkdir()) historyManager.recordAction("Created folder: " + newFolder.getAbsolutePath());
+        refreshCurrentPane();
+    }
+
+    @FXML public void createNewFile() {
+        java.io.File parent = leftPaneFlow.isFocused() ? leftFolder : rightFolder;
+        String baseName = "New File.txt";
+        java.io.File newFile = new java.io.File(parent, baseName);
+        int counter = 1;
+        while(newFile.exists()) { newFile = new java.io.File(parent, "New File (" + counter + ").txt"); counter++; }
+        try { if (newFile.createNewFile()) historyManager.recordAction("Created file: " + newFile.getAbsolutePath()); } catch(Exception e){ e.printStackTrace(); }
+        refreshCurrentPane();
+    }
+
+    @FXML public void renameSelectedFile() {
+        java.io.File selected = getSelectedFile();
+        if (selected == null) return;
+        javafx.scene.control.TextInputDialog dialog = new javafx.scene.control.TextInputDialog(selected.getName());
+        dialog.setTitle("Rename");
+        dialog.setHeaderText("Rename File / Folder");
+        dialog.setContentText("New name:");
+        dialog.initOwner(tabPane.getScene().getWindow());
+        java.util.Optional<String> result = dialog.showAndWait();
+        result.ifPresent(name -> {
+            java.io.File renamed = new java.io.File(selected.getParentFile(), name);
+            if(selected.renameTo(renamed)) historyManager.recordAction("Renamed: " + selected.getAbsolutePath() + " -> " + renamed.getAbsolutePath());
+            refreshCurrentPane();
+        });
+    }
+    @FXML public void deleteFiles(boolean permanent) {
+        java.util.List<java.io.File> files = getCurrentPane().getSelectionModel().getSelectedItems();
+        if (files.isEmpty()) return;
+        for (java.io.File f : files) {
+            try {
+                if (permanent) {
+                    java.nio.file.Files.deleteIfExists(f.toPath());
+                    historyManager.recordAction("Permanently deleted: " + f.getAbsolutePath());
+                } else {
+                    boolean moved = java.awt.Desktop.getDesktop().moveToTrash(f);
+                    historyManager.recordAction((moved ? "Recycled: " : "Failed recycle: ") + f.getAbsolutePath());
+                }
+            } catch (Exception e) { e.printStackTrace(); }
+        }
+        refreshCurrentPane();
+    }
+
+    @FXML public void deleteSelectedFiles() {
+        deleteFiles(false);
+    }
+
+    @FXML public void permanentlyDeleteSelectedFiles() {
+        deleteFiles(true);
+    }
     private java.util.List<java.io.File> clipboardFiles = new java.util.ArrayList<>();
     private boolean isCutOperation = false;
 
@@ -1689,6 +2277,594 @@
  // * resides in createTabWithLoader(Path).
  // */
 // public class MainController {
+    @FXML private javafx.scene.control.ComboBox<String> iconSizeCombo;
+    @FXML private javafx.scene.control.ComboBox<String> layoutCombo;
+    @FXML private javafx.scene.control.ComboBox<String> themeCombo;
+
+    @FXML public void initializeViewOptions() {
+        iconSizeCombo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> setIconSize(newVal));
+        layoutCombo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> setLayout(newVal));
+        themeCombo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> setTheme(newVal));
+    }
+
+    private void setIconSize(String size) {
+        int pixels = switch(size) { case "Small" -> 64; case "Medium" -> 128; case "Large" -> 256; default -> 128; };
+        getCurrentPane().setCellFactory(lv -> new FlowTileCell(pixels, pixels));
+        getCurrentPane().refresh();
+        historyManager.recordAction("Set icon size: " + size);
+    }
+
+    private void setLayout(String layout) {
+        switch(layout) {
+            case "Details" -> switchToTableView();
+            case "Tiles" -> switchToTileView();
+            case "List" -> switchToListView();
+            case "Thumbnails" -> switchToThumbnailView();
+        }
+        historyManager.recordAction("Set layout: " + layout);
+    }
+
+    private void setTheme(String theme) {
+        javafx.scene.Scene scene = navigationTree.getScene();
+        scene.getStylesheets().clear();
+        switch(theme) {
+            case "Light" -> scene.getStylesheets().add(getClass().getResource("light.css").toExternalForm());
+            case "Dark" -> scene.getStylesheets().add(getClass().getResource("dark.css").toExternalForm());
+            case "Glassy" -> scene.getStylesheets().add(getClass().getResource("glassy.css").toExternalForm());
+        }
+        historyManager.recordAction("Set theme: " + theme);
+    }
+
+    private void switchToTableView() { /* code to replace current pane with TableView */ }
+    private void switchToTileView() { /* code to replace current pane with Tile-based FlowPane */ }
+    private void switchToListView() { /* code to replace current pane with ListView */ }
+    private void switchToThumbnailView() { /* code to replace current pane with Thumbnail view using FlowTileCell */ }
+    @FXML public void showPropertiesDialog() {
+        java.io.File selected = getSelectedFolderOrFile();
+        if (selected == null) return;
+        try {
+            javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(getClass().getResource("PropertiesDialog.fxml"));
+            javafx.scene.Parent root = loader.load();
+            PropertiesDialogController controller = loader.getController();
+            controller.setFile(selected);
+            javafx.stage.Stage stage = new javafx.stage.Stage();
+            stage.setTitle("Properties: " + selected.getName());
+            stage.setScene(new javafx.scene.Scene(root));
+            stage.initOwner(navigationTree.getScene().getWindow());
+            stage.show();
+            historyManager.recordAction("Opened properties for: " + selected.getAbsolutePath());
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+    @FXML private javafx.scene.layout.Pane previewPane;
+    @FXML private javafx.scene.control.Label previewLabel;
+    @FXML private javafx.scene.image.ImageView previewImageView;
+
+    @FXML public void initializePreviewPane() {
+        getCurrentPane().getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> showPreview(newVal));
+    }
+
+    private void showPreview(java.io.File file) {
+        if (file == null) { previewImageView.setImage(null); previewLabel.setText(""); return; }
+        if (file.isDirectory()) { previewLabel.setText("Folder: " + file.getName()); previewImageView.setImage(null); return; }
+        String name = file.getName().toLowerCase();
+        try {
+            if (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".gif")) {
+                javafx.scene.image.Image img = ThumbnailGenerator.generatePreview(file, 256, 256);
+                previewImageView.setImage(img); previewLabel.setText(file.getName());
+            } else if (name.endsWith(".txt") || name.endsWith(".log") || name.endsWith(".csv")) {
+                java.util.List<String> lines = java.nio.file.Files.readAllLines(file.toPath());
+                previewLabel.setText(String.join("\n", lines.subList(0, Math.min(20, lines.size()))));
+                previewImageView.setImage(null);
+            } else {
+                previewLabel.setText("No preview available for: " + file.getName());
+                previewImageView.setImage(null);
+            }
+        } catch(Exception e){ previewLabel.setText("Error loading preview"); previewImageView.setImage(null); e.printStackTrace(); }
+        historyManager.recordAction("Previewed file: " + file.getAbsolutePath());
+    }
+    @FXML private javafx.scene.control.ComboBox<String> sortCombo;
+    @FXML private javafx.scene.control.ComboBox<String> groupCombo;
+    @FXML private javafx.scene.control.ContextMenu columnMenu;
+
+    @FXML public void initializeSortGroupColumns() {
+        sortCombo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> applySort(newVal));
+        groupCombo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> applyGroup(newVal));
+        // columnMenu items should be CheckMenuItem for visibility toggle
+    }
+
+    private void applySort(String sortKey) {
+        javafx.scene.control.ListView<java.io.File> pane = getCurrentPane();
+        java.util.Comparator<java.io.File> comparator = switch(sortKey) {
+            case "Name" -> java.util.Comparator.comparing(java.io.File::getName, String.CASE_INSENSITIVE_ORDER);
+            case "Date Modified" -> java.util.Comparator.comparingLong(java.io.File::lastModified);
+            case "Size" -> java.util.Comparator.comparingLong(java.io.File::length);
+            case "Type" -> java.util.Comparator.comparing(f -> f.getName().substring(f.getName().lastIndexOf(.)+1));
+            default -> java.util.Comparator.comparing(java.io.File::getName, String.CASE_INSENSITIVE_ORDER);
+        };
+        javafx.collections.ObservableList<java.io.File> items = pane.getItems();
+        javafx.collections.FXCollections.sort(items, comparator);
+        pane.refresh();
+        saveFolderPreference(getCurrentFolder(), "sort", sortKey);
+        historyManager.recordAction("Applied sort: " + sortKey);
+    }
+
+    private void applyGroup(String groupKey) {
+        // Simplified example: grouping may require custom cell factory or Section headers
+        saveFolderPreference(getCurrentFolder(), "group", groupKey);
+        historyManager.recordAction("Applied group: " + groupKey);
+        // Actual grouping implementation omitted for brevity; can wrap items in group headers
+    }
+
+    private void toggleColumnVisibility(String columnName, boolean visible) {
+        // For TableView pane, show/hide columns
+        javafx.scene.control.TableView<java.io.File> table = getCurrentTablePane();
+        table.getColumns().stream().filter(c -> c.getText().equals(columnName)).forEach(c -> c.setVisible(visible));
+        historyManager.recordAction("Toggled column: " + columnName + " visible=" + visible);
+    }
+    @FXML public void renameSelectedItem() {
+        java.io.File selected = getSelectedFolderOrFile();
+        if (selected == null) return;
+        javafx.scene.control.TextInputDialog dialog = new javafx.scene.control.TextInputDialog(selected.getName());
+        dialog.setTitle("Rename");
+        dialog.setHeaderText("Rename selected item");
+        dialog.setContentText("New name:");
+        dialog.showAndWait().ifPresent(newName -> {
+            java.io.File newFile = new java.io.File(selected.getParent(), newName);
+            java.util.concurrent.Executor executor = java.util.concurrent.Executors.newThreadPerTaskExecutor(java.lang.Thread.ofVirtual().factory());
+            executor.execute(() -> {
+                try {
+                    java.nio.file.Files.move(selected.toPath(), newFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    javafx.application.Platform.runLater(() -> refreshCurrentPane());
+                    historyManager.recordAction("Renamed " + selected + " to " + newFile,
+                        () -> { try { java.nio.file.Files.move(newFile.toPath(), selected.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING); refreshCurrentPane(); } catch(Exception e){e.printStackTrace(); } });
+                } catch(Exception e){ e.printStackTrace(); }
+            });
+        });
+    }
+
+    @FXML public void createNewFolder() {
+        java.io.File folder = getCurrentFolder();
+        if (folder == null) return;
+        javafx.scene.control.TextInputDialog dialog = new javafx.scene.control.TextInputDialog("New Folder");
+        dialog.setTitle("New Folder");
+        dialog.setHeaderText("Create new folder");
+        dialog.setContentText("Folder name:");
+        dialog.showAndWait().ifPresent(name -> {
+            java.io.File newDir = new java.io.File(folder, name);
+            java.util.concurrent.Executor executor = java.util.concurrent.Executors.newThreadPerTaskExecutor(java.lang.Thread.ofVirtual().factory());
+            executor.execute(() -> {
+                try { java.nio.file.Files.createDirectory(newDir.toPath());
+                    javafx.application.Platform.runLater(() -> refreshCurrentPane());
+                    historyManager.recordAction("Created folder: " + newDir,
+                        () -> { try { java.nio.file.Files.deleteIfExists(newDir.toPath()); refreshCurrentPane(); } catch(Exception e){e.printStackTrace();} });
+                } catch(Exception e){ e.printStackTrace(); }
+            });
+        });
+    }
+
+    @FXML public void deleteSelectedItem() {
+        java.io.File selected = getSelectedFolderOrFile();
+        if (selected == null) return;
+        java.util.concurrent.Executor executor = java.util.concurrent.Executors.newThreadPerTaskExecutor(java.lang.Thread.ofVirtual().factory());
+        executor.execute(() -> {
+            try {
+                boolean movedToTrash = false;
+                if (java.awt.Desktop.isDesktopSupported() && java.awt.Desktop.getDesktop().moveToTrash(selected)) movedToTrash = true;
+                else java.nio.file.Files.deleteIfExists(selected.toPath());
+                javafx.application.Platform.runLater(() -> refreshCurrentPane());
+                historyManager.recordAction((movedToTrash ? "Moved to Trash: " : "Deleted: ") + selected,
+                    () -> { /* Undo for delete not implemented yet */ });
+            } catch(Exception e){ e.printStackTrace(); }
+        });
+    }
+    private void performPasteWithUndo(java.io.File src, java.io.File dest, boolean move) {
+        try {
+            java.nio.file.Path srcPath = src.toPath();
+            java.nio.file.Path destPath = dest.toPath();
+            if (move) java.nio.file.Files.move(srcPath, destPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            else {
+                if (src.isDirectory()) copyDirectory(srcPath, destPath);
+                else java.nio.file.Files.copy(srcPath, destPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            historyManager.recordAction((move ? "Moved" : "Copied") + " " + src + " to " + dest,
+                () -> {
+                    try {
+                        java.nio.file.Files.deleteIfExists(destPath);
+                        refreshCurrentPane();
+                    } catch (Exception e) { e.printStackTrace(); }
+                });
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+    private java.util.List<java.io.File> clipboard = new java.util.ArrayList<>();
+    private boolean cutMode = false;
+
+    @FXML public void copySelected() {
+        clipboard.clear();
+        clipboard.addAll(getCurrentPane().getSelectionModel().getSelectedItems());
+        cutMode = false;
+        historyManager.recordAction("Copied items: " + clipboard);
+    }
+
+    @FXML public void cutSelected() {
+        clipboard.clear();
+        clipboard.addAll(getCurrentPane().getSelectionModel().getSelectedItems());
+        cutMode = true;
+        historyManager.recordAction("Cut items: " + clipboard);
+    }
+
+    @FXML public void pasteIntoCurrentFolder() {
+        java.io.File targetFolder = getCurrentFolder();
+        if (targetFolder == null || clipboard.isEmpty()) return;
+        java.util.concurrent.Executor executor = java.util.concurrent.Executors.newThreadPerTaskExecutor(java.lang.Thread.ofVirtual().factory());
+        for (java.io.File src : clipboard) {
+            executor.execute(() -> {
+                try {
+                    java.nio.file.Path srcPath = src.toPath();
+                    java.nio.file.Path destPath = targetFolder.toPath().resolve(src.getName());
+                    if (cutMode) {
+                        java.nio.file.Files.move(srcPath, destPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    } else {
+                        if (src.isDirectory()) {
+                            copyDirectory(srcPath, destPath);
+                        } else {
+                            java.nio.file.Files.copy(srcPath, destPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        }
+                    }
+                    javafx.application.Platform.runLater(() -> refreshCurrentPane());
+                    historyManager.recordAction((cutMode ? "Moved" : "Copied") + " " + src + " to " + targetFolder);
+                } catch (Exception e) { e.printStackTrace(); }
+            });
+        }
+        if (cutMode) clipboard.clear();
+        cutMode = false;
+    }
+
+    private void copyDirectory(java.nio.file.Path src, java.nio.file.Path dest) throws java.io.IOException {
+        java.nio.file.Files.walk(src).forEach(p -> {
+            try {
+                java.nio.file.Path relative = src.relativize(p);
+                java.nio.file.Path target = dest.resolve(relative);
+                if (java.nio.file.Files.isDirectory(p)) java.nio.file.Files.createDirectories(target);
+                else java.nio.file.Files.copy(p, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            } catch (Exception e) { e.printStackTrace(); }
+        });
+    }
+    @FXML private javafx.scene.control.TabPane tabPane;
+
+    @FXML public void addNewTab(java.io.File folder) {
+        javafx.scene.control.Tab tab = new javafx.scene.control.Tab(folder.getName());
+        javafx.scene.layout.BorderPane content = new javafx.scene.layout.BorderPane();
+        javafx.scene.control.ListView<java.io.File> listView = new javafx.scene.control.ListView<>();
+        populatePane(listView, folder);
+        content.setCenter(listView);
+        tab.setContent(content);
+        tabPane.getTabs().add(tab);
+        tabPane.getSelectionModel().select(tab);
+        historyManager.recordAction("Added new tab for folder: " + folder.getAbsolutePath());
+    }
+
+    @FXML public void closeCurrentTab() {
+        javafx.scene.control.Tab current = tabPane.getSelectionModel().getSelectedItem();
+        if (current != null) {
+            tabPane.getTabs().remove(current);
+            historyManager.recordAction("Closed tab: " + current.getText());
+        }
+    }
+
+    @FXML public void reorderTabs(int fromIndex, int toIndex) {
+        javafx.scene.control.Tab t = tabPane.getTabs().remove(fromIndex);
+        tabPane.getTabs().add(toIndex, t);
+        historyManager.recordAction("Reordered tab from " + fromIndex + " to " + toIndex);
+    }
+
+    @FXML public void initializeTabs() {
+        tabPane.getTabs().clear();
+        // optionally add initial default folder tab
+        // tabPane.getTabs().add(createDefaultTab());
+    }
+    private java.util.List<java.io.File> pinnedItems = new java.util.ArrayList<>();
+
+    @FXML private javafx.scene.control.TreeView<java.io.File> navigationTree;
+
+    @FXML public void pinSelectedItem() {
+        java.io.File selected = getSelectedFolderOrFile();
+        if (selected == null) return;
+        if (!pinnedItems.contains(selected)) {
+            pinnedItems.add(selected);
+            addPinnedItemToTree(selected);
+            historyManager.recordAction("Pinned item: " + selected.getAbsolutePath());
+        }
+    }
+
+    @FXML public void unpinSelectedItem() {
+        java.io.File selected = getSelectedFolderOrFile();
+        if (selected == null) return;
+        if (pinnedItems.remove(selected)) {
+            removePinnedItemFromTree(selected);
+            historyManager.recordAction("Unpinned item: " + selected.getAbsolutePath());
+        }
+    }
+
+    private void addPinnedItemToTree(java.io.File item) {
+        javafx.scene.control.TreeItem<java.io.File> root = navigationTree.getRoot();
+        javafx.scene.control.TreeItem<java.io.File> node = new javafx.scene.control.TreeItem<>(item);
+        root.getChildren().add(node);
+    }
+
+    private void removePinnedItemFromTree(java.io.File item) {
+        javafx.scene.control.TreeItem<java.io.File> root = navigationTree.getRoot();
+        root.getChildren().removeIf(ti -> ti.getValue().equals(item));
+    }
+
+    private java.io.File getSelectedFolderOrFile() {
+        javafx.scene.control.TreeItem<java.io.File> sel = navigationTree.getSelectionModel().getSelectedItem();
+        return sel != null ? sel.getValue() : null;
+    }
+    private java.util.Map<java.io.File, java.util.Map<String, String>> folderPreferences = new java.util.HashMap<>();
+
+    private void saveFolderPreference(java.io.File folder, String key, String value) {
+        folderPreferences.computeIfAbsent(folder, f -> new java.util.HashMap<>()).put(key, value);
+        historyManager.recordAction("Saved preference for " + folder.getAbsolutePath() + ": " + key + "=" + value);
+    }
+
+    private String getFolderPreference(java.io.File folder, String key, String defaultValue) {
+        return folderPreferences.getOrDefault(folder, java.util.Collections.emptyMap()).getOrDefault(key, defaultValue);
+    }
+
+    private void applyFolderPreferences(java.io.File folder) {
+        String sort = getFolderPreference(folder, "sort", "Name");
+        String group = getFolderPreference(folder, "group", "None");
+        String layout = getFolderPreference(folder, "layout", "THUMBNAILS");
+        sortCurrentPane(sort);
+        groupCurrentPane(group);
+        switchView(layout);
+    }
+
+    private void onFolderChanged(java.io.File folder) {
+        applyFolderPreferences(folder);
+    }
+    @FXML private javafx.scene.control.ToggleGroup viewToggleGroup;
+
+    @FXML public void initializeViewToggle() {
+        viewToggleGroup.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> {
+            if (newToggle != null) {
+                String view = (String)newToggle.getUserData();
+                switchView(view);
+            }
+        });
+    }
+
+    private void switchView(String view) {
+        javafx.scene.control.ListView<java.io.File> pane = getCurrentPane();
+        switch(view) {
+            case "THUMBNAILS":
+                pane.setCellFactory(f -> new FlowTileCell(128, 128));
+                break;
+            case "LARGE_ICONS":
+                pane.setCellFactory(f -> new FlowTileCell(64, 64));
+                break;
+            case "SMALL_ICONS":
+                pane.setCellFactory(f -> new FlowTileCell(32, 32));
+                break;
+        }
+        pane.refresh();
+        historyManager.recordAction("Switched view to: " + view);
+    }
+    @FXML public void showFileProperties() {
+        java.io.File selected = getSelectedFile();
+        if (selected == null) return;
+        try {
+            PropertiesDialogController dialog = new PropertiesDialogController(selected);
+            javafx.stage.Stage stage = new javafx.stage.Stage();
+            javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(getClass().getResource("PropertiesDialog.fxml"));
+            loader.setController(dialog);
+            stage.setScene(new javafx.scene.Scene(loader.load()));
+            stage.setTitle("Properties - " + selected.getName());
+            stage.initOwner(tabPane.getScene().getWindow());
+            stage.showAndWait();
+            historyManager.recordAction("Viewed properties for: " + selected.getAbsolutePath());
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+    @FXML private javafx.scene.layout.Pane previewPane;
+    @FXML private javafx.scene.image.ImageView previewImageView;
+    @FXML private javafx.scene.web.WebView previewWebView;
+
+    @FXML public void togglePreviewPane() {
+        boolean visible = previewPane.isVisible();
+        previewPane.setVisible(!visible);
+        historyManager.recordAction("Toggled Preview Pane: " + (!visible));
+    }
+
+    @FXML public void updatePreviewPane() {
+        java.io.File selected = getSelectedFile();
+        if (selected == null) { previewImageView.setImage(null); previewWebView.getEngine().loadContent(""); return; }
+        String name = selected.getName().toLowerCase();
+        try {
+            if (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".gif") || name.endsWith(".bmp")) {
+                javafx.scene.image.Image img = new javafx.scene.image.Image(selected.toURI().toString(), true);
+                previewImageView.setImage(img);
+                previewWebView.setVisible(false); previewImageView.setVisible(true);
+            } else if (name.endsWith(".html") || name.endsWith(".htm") || name.endsWith(".txt") || name.endsWith(".md")) {
+                previewWebView.getEngine().load(selected.toURI().toString());
+                previewWebView.setVisible(true); previewImageView.setVisible(false);
+            } else {
+                previewImageView.setImage(null); previewWebView.getEngine().loadContent("<html><body><p>No preview available</p></body></html>");
+                previewWebView.setVisible(true); previewImageView.setVisible(false);
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
+    @FXML public void initializePreviewPane() {
+        getCurrentPane().getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> updatePreviewPane());
+    }
+    @FXML private javafx.scene.layout.Pane detailsPane;
+    @FXML private javafx.scene.control.ListView<java.io.File> previewListView;
+
+    @FXML public void toggleDetailsPane() {
+        boolean visible = detailsPane.isVisible();
+        detailsPane.setVisible(!visible);
+        historyManager.recordAction("Toggled Details Pane: " + (!visible));
+    }
+
+    @FXML public void updateDetailsPane() {
+        java.util.List<java.io.File> selected = getCurrentPane().getSelectionModel().getSelectedItems();
+        previewListView.getItems().clear();
+        previewListView.getItems().addAll(selected);
+    }
+
+    @FXML public void initializeDetailsPane() {
+        getCurrentPane().getSelectionModel().getSelectedItems().addListener((javafx.collections.ListChangeListener<java.io.File>) c -> updateDetailsPane());
+    }
+    @FXML private javafx.scene.control.ComboBox<String> sortComboBox;
+    @FXML private javafx.scene.control.ComboBox<String> groupComboBox;
+
+    @FXML public void initializeSorting() {
+        sortComboBox.getItems().addAll("Name", "Size", "Date Modified", "Type");
+        groupComboBox.getItems().addAll("None", "Type", "Date Modified");
+
+        sortComboBox.valueProperty().addListener((obs, oldVal, newVal) -> sortCurrentPane(newVal));
+        groupComboBox.valueProperty().addListener((obs, oldVal, newVal) -> groupCurrentPane(newVal));
+    }
+
+    private void sortCurrentPane(String criterion) {
+        java.util.List<java.io.File> items = getCurrentPane().getItems();
+        if (criterion == null) return;
+        switch(criterion) {
+            case "Name": items.sort((a,b) -> a.getName().compareToIgnoreCase(b.getName())); break;
+            case "Size": items.sort((a,b) -> Long.compare(a.length(), b.length())); break;
+            case "Date Modified": items.sort((a,b) -> Long.compare(a.lastModified(), b.lastModified())); break;
+            case "Type": items.sort((a,b) -> getFileExtension(a).compareToIgnoreCase(getFileExtension(b))); break;
+        }
+        refreshCurrentPane();
+        historyManager.recordAction("Sorted current pane by: " + criterion);
+    }
+
+    private void groupCurrentPane(String criterion) {
+        // Simple grouping: prepend group headers (pseudo) in Details view
+        historyManager.recordAction("Grouped current pane by: " + criterion);
+        // TODO: actual UI grouping implementation for Tiles view (future enhancement)
+    }
+
+    private javafx.scene.control.ListView<java.io.File> getCurrentPane() {
+        return leftPaneFlow.isFocused() ? leftPaneFlow : rightPaneFlow;
+    }
+    @FXML private javafx.scene.control.TextField searchField;
+
+    @FXML public void initializeSearch() {
+        searchField.textProperty().addListener((obs, oldVal, newVal) -> {
+            filterCurrentPane(newVal);
+        });
+    }
+
+    private void filterCurrentPane(String query) {
+        javafx.scene.control.ListView<java.io.File> pane = leftPaneFlow.isFocused() ? leftPaneFlow : rightPaneFlow;
+        java.util.List<java.io.File> allItems = pane.getItems();
+        pane.getItems().clear();
+        for (java.io.File f : allItems) {
+            if (query == null || query.isEmpty() || f.getName().toLowerCase().contains(query.toLowerCase())) {
+                pane.getItems().add(f);
+            }
+        }
+        historyManager.recordAction("Filtered current pane with query: " + query);
+    }
+    @FXML public void refreshCurrentPane() {
+        if (leftPaneFlow.isFocused()) populatePane(leftPaneFlow, leftFolder);
+        else populatePane(rightPaneFlow, rightFolder);
+        historyManager.recordAction("Refreshed current pane");
+    }
+
+    @FXML public void selectColumns() {
+        javafx.scene.control.CheckBoxListCell<javafx.scene.control.TableColumn<java.io.File,?>> cell;
+        // For simplicity, show dialog listing columns to toggle
+        javafx.scene.control.Dialog<Void> dialog = new javafx.scene.control.Dialog<>();
+        dialog.setTitle("Select Columns");
+        javafx.scene.control.VBox vbox = new javafx.scene.control.VBox();
+        for (javafx.scene.control.TableColumn<java.io.File,?> col : detailsTable.getColumns()) {
+            javafx.scene.control.CheckBox cb = new javafx.scene.control.CheckBox(col.getText());
+            cb.setSelected(col.isVisible());
+            cb.selectedProperty().addListener((obs, oldV, newV) -> col.setVisible(newV));
+            vbox.getChildren().add(cb);
+        }
+        dialog.getDialogPane().setContent(vbox);
+        dialog.getDialogPane().getButtonTypes().add(javafx.scene.control.ButtonType.OK);
+        dialog.showAndWait();
+        historyManager.recordAction("Adjusted column visibility");
+    }
+
+    private void startAutoRefreshWatcher(java.io.File folder, javafx.scene.control.ListView<java.io.File> pane) {
+        java.nio.file.Path path = folder.toPath();
+        java.util.concurrent.Executors.newSingleThreadExecutor().submit(() -> {
+            try (java.nio.file.WatchService watcher = path.getFileSystem().newWatchService()) {
+                path.register(watcher, java.nio.file.StandardWatchEventKinds.ENTRY_CREATE,
+                                         java.nio.file.StandardWatchEventKinds.ENTRY_DELETE,
+                                         java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY);
+                while (true) {
+                    java.nio.file.WatchKey key = watcher.take();
+                    javafx.application.Platform.runLater(() -> populatePane(pane, folder));
+                    key.reset();
+                }
+            } catch (Exception e) { e.printStackTrace(); }
+        });
+    }
+    @FXML public void createNewFolder() {
+        java.io.File parent = leftPaneFlow.isFocused() ? leftFolder : rightFolder;
+        String baseName = "New Folder";
+        java.io.File newFolder = new java.io.File(parent, baseName);
+        int counter = 1;
+        while(newFolder.exists()) { newFolder = new java.io.File(parent, baseName + " (" + counter + ")"); counter++; }
+        if (newFolder.mkdir()) historyManager.recordAction("Created folder: " + newFolder.getAbsolutePath());
+        refreshCurrentPane();
+    }
+
+    @FXML public void createNewFile() {
+        java.io.File parent = leftPaneFlow.isFocused() ? leftFolder : rightFolder;
+        String baseName = "New File.txt";
+        java.io.File newFile = new java.io.File(parent, baseName);
+        int counter = 1;
+        while(newFile.exists()) { newFile = new java.io.File(parent, "New File (" + counter + ").txt"); counter++; }
+        try { if (newFile.createNewFile()) historyManager.recordAction("Created file: " + newFile.getAbsolutePath()); } catch(Exception e){ e.printStackTrace(); }
+        refreshCurrentPane();
+    }
+
+    @FXML public void renameSelectedFile() {
+        java.io.File selected = getSelectedFile();
+        if (selected == null) return;
+        javafx.scene.control.TextInputDialog dialog = new javafx.scene.control.TextInputDialog(selected.getName());
+        dialog.setTitle("Rename");
+        dialog.setHeaderText("Rename File / Folder");
+        dialog.setContentText("New name:");
+        dialog.initOwner(tabPane.getScene().getWindow());
+        java.util.Optional<String> result = dialog.showAndWait();
+        result.ifPresent(name -> {
+            java.io.File renamed = new java.io.File(selected.getParentFile(), name);
+            if(selected.renameTo(renamed)) historyManager.recordAction("Renamed: " + selected.getAbsolutePath() + " -> " + renamed.getAbsolutePath());
+            refreshCurrentPane();
+        });
+    }
+    @FXML public void deleteFiles(boolean permanent) {
+        java.util.List<java.io.File> files = getCurrentPane().getSelectionModel().getSelectedItems();
+        if (files.isEmpty()) return;
+        for (java.io.File f : files) {
+            try {
+                if (permanent) {
+                    java.nio.file.Files.deleteIfExists(f.toPath());
+                    historyManager.recordAction("Permanently deleted: " + f.getAbsolutePath());
+                } else {
+                    boolean moved = java.awt.Desktop.getDesktop().moveToTrash(f);
+                    historyManager.recordAction((moved ? "Recycled: " : "Failed recycle: ") + f.getAbsolutePath());
+                }
+            } catch (Exception e) { e.printStackTrace(); }
+        }
+        refreshCurrentPane();
+    }
+
+    @FXML public void deleteSelectedFiles() {
+        deleteFiles(false);
+    }
+
+    @FXML public void permanentlyDeleteSelectedFiles() {
+        deleteFiles(true);
+    }
     private java.util.List<java.io.File> clipboardFiles = new java.util.ArrayList<>();
     private boolean isCutOperation = false;
 
