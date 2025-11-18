@@ -102,3 +102,21 @@ Updating MainController.java for file operation integration...
 MainController updated with file operation progress UI integration.
 Chunk 20 complete: File operation progress tracking, cancelation, and UI wiring added.
 Remember to call MainController.shutdown() when the application stops to clean up executors.
+
+chunk21.sh
+Backing up existing files...
+Writing new TabContentController.java with per-tab FileOperationManager...
+TabContentController updated.
+Patching MainController.java ribbon handlers to call per-tab TabContentController methods...
+MainController patched with per-tab wrappers.
+Chunk 21 complete — per-tab FileOperationManager is implemented and MainController is wired to call per-tab operations.
+
+IMPORTANT:
+- This script overwrote TabContentController.java and modified MainController.java.
+- It assumes each Tab stores its FXMLLoader in tab.getProperties().put("loader", loader) when created.
+- If your createTab implementation does not store the loader in the Tab properties, update it like so:
+    FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/fileexplorer/ui/TabContent.fxml"));
+    Parent content = loader.load();
+    Tab tab = new Tab(folder.getFileName().toString(), content);
+    tab.getProperties().put("loader", loader);
+
