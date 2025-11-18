@@ -29,6 +29,31 @@
 // import java.util.concurrent.atomic.AtomicReference;
 
 // public class MainController {
+    // RibbonBar / Toolbar support methods
+    public void toggleNavigationPane(boolean show) { System.out.println("toggleNavigationPane="+show); }
+    public void togglePreviewPane(boolean show) { System.out.println("togglePreviewPane="+show); }
+    public void toggleDetailsPane(boolean show) { System.out.println("toggleDetailsPane="+show); }
+    public void setLayout(String layout) { System.out.println("Layout set to: "+layout); }
+    public void sortBy(String criteria) { System.out.println("Sort by: "+criteria); }
+    public void groupBy(String criteria) { System.out.println("Group by: "+criteria); }
+    public void toggleShowExtensions(boolean show) { System.out.println("Show extensions: "+show); }
+    public void toggleShowHidden(boolean show) { System.out.println("Show hidden: "+show); }
+    public void onNewFolder() { System.out.println("New folder created"); }
+    public void renameSelected() { System.out.println("Rename selected files"); }
+    public void showPropertiesForSelected() { System.out.println("Show properties"); }
+    public void compressSelected() { System.out.println("Compress selected files to ZIP"); }
+    public void burnSelected() { System.out.println("Burn selected files to disc"); }
+    public void createShortcut() { System.out.println("Create shortcut"); }
+    public void shareSelected() { System.out.println("Share selected files"); }
+    public void emailSelected() { System.out.println("Email selected files"); }
+    public void zipSelected() { System.out.println("ZIP selected files"); }
+    public void mapNetworkDrive() { System.out.println("Map network drive"); }
+    public void openWithDefault() { System.out.println("Open with default"); }
+    public void openWithChooser() { System.out.println("Open with chooser"); }
+    public void onRibbonCopyWithChooser() { System.out.println("Copy with chooser"); }
+    public void onRibbonMoveWithChooser() { System.out.println("Move with chooser"); }
+    public void onRibbonDeleteWithProgress() { System.out.println("Delete with progress"); }
+    public void onRibbonCancelOperation() { System.out.println("Cancel operation"); }
 
     // @FXML private BorderPane historyPanel;
     // @FXML private ToolBar ribbonBar;
@@ -555,6 +580,31 @@
  // * resides in createTabWithLoader(Path).
  // */
 // public class MainController {
+    // RibbonBar / Toolbar support methods
+    public void toggleNavigationPane(boolean show) { System.out.println("toggleNavigationPane="+show); }
+    public void togglePreviewPane(boolean show) { System.out.println("togglePreviewPane="+show); }
+    public void toggleDetailsPane(boolean show) { System.out.println("toggleDetailsPane="+show); }
+    public void setLayout(String layout) { System.out.println("Layout set to: "+layout); }
+    public void sortBy(String criteria) { System.out.println("Sort by: "+criteria); }
+    public void groupBy(String criteria) { System.out.println("Group by: "+criteria); }
+    public void toggleShowExtensions(boolean show) { System.out.println("Show extensions: "+show); }
+    public void toggleShowHidden(boolean show) { System.out.println("Show hidden: "+show); }
+    public void onNewFolder() { System.out.println("New folder created"); }
+    public void renameSelected() { System.out.println("Rename selected files"); }
+    public void showPropertiesForSelected() { System.out.println("Show properties"); }
+    public void compressSelected() { System.out.println("Compress selected files to ZIP"); }
+    public void burnSelected() { System.out.println("Burn selected files to disc"); }
+    public void createShortcut() { System.out.println("Create shortcut"); }
+    public void shareSelected() { System.out.println("Share selected files"); }
+    public void emailSelected() { System.out.println("Email selected files"); }
+    public void zipSelected() { System.out.println("ZIP selected files"); }
+    public void mapNetworkDrive() { System.out.println("Map network drive"); }
+    public void openWithDefault() { System.out.println("Open with default"); }
+    public void openWithChooser() { System.out.println("Open with chooser"); }
+    public void onRibbonCopyWithChooser() { System.out.println("Copy with chooser"); }
+    public void onRibbonMoveWithChooser() { System.out.println("Move with chooser"); }
+    public void onRibbonDeleteWithProgress() { System.out.println("Delete with progress"); }
+    public void onRibbonCancelOperation() { System.out.println("Cancel operation"); }
 
     // @FXML private TabPane mainTabPane;
     // @FXML private StackPane previewPaneContainer;
