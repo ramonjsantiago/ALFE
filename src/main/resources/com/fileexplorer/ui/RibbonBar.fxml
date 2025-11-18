@@ -1,174 +1,46 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<AnchorPane xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1"
-            fx:controller="com.fileexplorer.ui.RibbonBarController" prefHeight="120">
-    <children>
-        <TabPane layoutX="0" layoutY="0" AnchorPane.leftAnchor="0" AnchorPane.rightAnchor="0" AnchorPane.topAnchor="0">
-            <!-- HOME TAB -->
-            <tabs>
-                <Tab text="Home" closable="false">
-                    <content>
-                        <ToolBar>
-                            <!-- Clipboard group -->
-                            <VBox spacing="4">
-                                <Label text="Clipboard"/>
-                                <HBox spacing="6">
-                                    <Button text="Paste" onAction="#onHomePaste"/>
-                                    <Button text="Cut" onAction="#onHomeCut"/>
-                                    <Button text="Copy" onAction="#onHomeCopy"/>
-                                    <MenuButton text="Paste Options">
-                                        <items>
-                                            <MenuItem text="Paste" onAction="#onHomePaste"/>
-                                            <MenuItem text="Paste shortcut" onAction="#onHomePasteShortcut"/>
-                                        </items>
-                                    </MenuButton>
-                                </HBox>
-                            </VBox>
-
-                            <!-- Organize group -->
-                            <VBox spacing="4">
-                                <Label text="Organize"/>
-                                <HBox spacing="6">
-                                    <Button text="New folder" onAction="#onHomeNewFolder"/>
-                                    <Button text="Rename" onAction="#onHomeRename"/>
-                                    <Button text="Delete" onAction="#onRibbonDeleteWithProgress"/>
-                                </HBox>
-                            </VBox>
-
-                            <!-- Open group -->
-                            <VBox spacing="4">
-                                <Label text="Open"/>
-                                <HBox spacing="6">
-                                    <Button text="Open" onAction="#onHomeOpen"/>
-                                    <MenuButton text="Open with">
-                                        <items>
-                                            <MenuItem text="Default" onAction="#onHomeOpen"/>
-                                            <MenuItem text="Choose app..." onAction="#onHomeOpenWith"/>
-                                        </items>
-                                    </MenuButton>
-                                </HBox>
-                            </VBox>
-
-                            <!-- Select group -->
-                            <VBox spacing="4">
-                                <Label text="Select"/>
-                                <HBox spacing="6">
-                                    <Button text="Select all" onAction="#onHomeSelectAll"/>
-                                    <Button text="Invert selection" onAction="#onHomeInvertSelection"/>
-                                </HBox>
-                            </VBox>
-
-                            <!-- Clipboard / quick actions - right aligned -->
-                            <Region HBox.hgrow="ALWAYS"/>
-                            <HBox spacing="6">
-                                <Button text="Properties" onAction="#onHomeProperties"/>
-                                <SplitMenuButton text="More">
-                                    <items>
-                                        <MenuItem text="Compress to ZIP" onAction="#onHomeCompressZip"/>
-                                        <MenuItem text="Burn to disc" onAction="#onHomeBurn"/>
-                                        <MenuItem text="Create shortcut" onAction="#onHomeCreateShortcut"/>
-                                    </items>
-                                </SplitMenuButton>
-                            </HBox>
-                        </ToolBar>
-                    </content>
-                </Tab>
-
-                <!-- SHARE TAB -->
-                <Tab text="Share" closable="false">
-                    <content>
-                        <ToolBar>
-                            <VBox spacing="4">
-                                <Label text="Share"/>
-                                <HBox spacing="6">
-                                    <Button text="Share" onAction="#onShareShare"/>
-                                    <Button text="Email" onAction="#onShareEmail"/>
-                                    <Button text="Zip" onAction="#onShareZip"/>
-                                    <Button text="Burn to disc" onAction="#onShareBurn"/>
-                                </HBox>
-                            </VBox>
-
-                            <Region HBox.hgrow="ALWAYS"/>
-                            <HBox spacing="6">
-                                <Button text="Map network drive" onAction="#onShareMapNetworkDrive"/>
-                            </HBox>
-                        </ToolBar>
-                    </content>
-                </Tab>
-
-                <!-- VIEW TAB -->
-                <Tab text="View" closable="false">
-                    <content>
-                        <ToolBar>
-                            <VBox spacing="4">
-                                <Label text="Panes"/>
-                                <HBox spacing="6">
-                                    <ToggleButton text="Navigation pane" onAction="#onViewToggleNavigationPane" fx:id="toggleNavPane"/>
-                                    <ToggleButton text="Preview pane" onAction="#onViewTogglePreviewPane" fx:id="togglePreview"/>
-                                    <ToggleButton text="Details pane" onAction="#onViewToggleDetails" fx:id="toggleDetails"/>
-                                </HBox>
-                            </VBox>
-
-                            <VBox spacing="4">
-                                <Label text="Layout"/>
-                                <HBox spacing="6">
-                                    <SplitMenuButton text="Layout">
-                                        <items>
-                                            <MenuItem text="Extra large icons" onAction="#onViewLayoutExtraLarge"/>
-                                            <MenuItem text="Large icons" onAction="#onViewLayoutLarge"/>
-                                            <MenuItem text="Medium icons" onAction="#onViewLayoutMedium"/>
-                                            <MenuItem text="Small icons" onAction="#onViewLayoutSmall"/>
-                                            <MenuItem text="List" onAction="#onViewLayoutList"/>
-                                            <MenuItem text="Details" onAction="#onViewLayoutDetails"/>
-                                        </items>
-                                    </SplitMenuButton>
-                                </HBox>
-                            </VBox>
-
-                            <VBox spacing="4">
-                                <Label text="Show/Hide"/>
-                                <HBox spacing="6">
-                                    <CheckBox text="File name extensions" onAction="#onViewToggleExtensions" fx:id="chkExtensions"/>
-                                    <CheckBox text="Hidden items" onAction="#onViewToggleHidden" fx:id="chkHidden"/>
-                                </HBox>
-                            </VBox>
-
-                            <Region HBox.hgrow="ALWAYS"/>
-                            <HBox spacing="6">
-                                <MenuButton text="Sort by">
-                                    <items>
-                                        <MenuItem text="Name" onAction="#onViewSortByName"/>
-                                        <MenuItem text="Date modified" onAction="#onViewSortByDate"/>
-                                        <MenuItem text="Type" onAction="#onViewSortByType"/>
-                                        <MenuItem text="Size" onAction="#onViewSortBySize"/>
-                                    </items>
-                                </MenuButton>
-                                <MenuButton text="Group by">
-                                    <items>
-                                        <MenuItem text="None" onAction="#onViewGroupByNone"/>
-                                        <MenuItem text="Date" onAction="#onViewGroupByDate"/>
-                                    </items>
-                                </MenuButton>
-                            </HBox>
-                        </ToolBar>
-                    </content>
-                </Tab>
-
-                <!-- MANAGE / CONTEXTUAL TAB (placeholder) -->
-                <Tab text="Manage" closable="false">
-                    <content>
-                        <ToolBar>
-                            <VBox spacing="4">
-                                <Label text="Drive / Picture Tools"/>
-                                <HBox spacing="6">
-                                    <Button text="Format" onAction="#onManageFormat"/>
-                                    <Button text="Optimize" onAction="#onManageOptimize"/>
-                                    <Button text="Eject" onAction="#onManageEject"/>
-                                </HBox>
-                            </VBox>
-                        </ToolBar>
-                    </content>
-                </Tab>
-            </tabs>
-        </TabPane>
-    </children>
-</AnchorPane>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<ToolBar xmlns:fx="http://javafx.com/fxml" fx:id="ribbonBar">
+    <!-- Home group -->
+    <Button text="New Folder" onAction="#onNewFolder"/>
+    <Button text="Copy" onAction="#onRibbonCopyWithChooser"/>
+    <Button text="Move" onAction="#onRibbonMoveWithChooser"/>
+    <Button text="Delete" onAction="#onRibbonDeleteWithProgress"/>
+    <Button text="Rename" onAction="#renameSelected"/>
+    <Button text="Properties" onAction="#showPropertiesForSelected"/>
+    <!-- Share group -->
+    <Button text="Share" onAction="#shareSelected"/>
+    <Button text="Email" onAction="#emailSelected"/>
+    <Button text="Zip" onAction="#zipSelected"/>
+    <!-- View group -->
+    <MenuButton text="Layout">
+        <items>
+            <MenuItem text="Extra Large Icons" onAction="#setLayoutExtraLarge"/>
+            <MenuItem text="Large Icons" onAction="#setLayoutLarge"/>
+            <MenuItem text="Medium Icons" onAction="#setLayoutMedium"/>
+            <MenuItem text="Small Icons" onAction="#setLayoutSmall"/>
+            <MenuItem text="List" onAction="#setLayoutList"/>
+            <MenuItem text="Details" onAction="#setLayoutDetails"/>
+        </items>
+    </MenuButton>
+    <MenuButton text="Sort By">
+        <items>
+            <MenuItem text="Name" onAction="#sortByName"/>
+            <MenuItem text="Date" onAction="#sortByDate"/>
+            <MenuItem text="Type" onAction="#sortByType"/>
+            <MenuItem text="Size" onAction="#sortBySize"/>
+        </items>
+    </MenuButton>
+    <MenuButton text="Group By">
+        <items>
+            <MenuItem text="None" onAction="#groupByNone"/>
+            <MenuItem text="Date" onAction="#groupByDate"/>
+        </items>
+    </MenuButton>
+    <CheckBox text="Show File Extensions" onAction="#toggleShowExtensions"/>
+    <CheckBox text="Show Hidden Items" onAction="#toggleShowHidden"/>
+    <!-- Undo/Redo -->
+    <Button text="Undo" onAction="#onRibbonUndo"/>
+    <Button text="Redo" onAction="#onRibbonRedo"/>
+</ToolBar>
