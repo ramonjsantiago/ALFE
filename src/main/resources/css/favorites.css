@@ -1,0 +1,17 @@
+.favorites-pane-root {
+    -fx-padding: 10;
+    -fx-background-color: -color-surface-1;
+    -fx-border-color: -color-border;
+    -fx-border-width: 0 1 0 0;
+}
+
+.favorites-title {
+    -fx-text-fill: -color-accent;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.favorites-list {
+    -fx-background-color: -color-surface-2;
+    -fx-text-fill: -color-fg;
+}

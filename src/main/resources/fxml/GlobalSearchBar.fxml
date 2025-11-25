@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.layout.HBox?>
+
+<HBox xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.explorer.ui.GlobalSearchBarController"
+      spacing="6"
+      styleClass="search-bar"
+      alignment="CENTER_LEFT"
+      prefHeight="32">
+
+    <ComboBox fx:id="searchComboBox" prefWidth="300"/>
+</HBox>

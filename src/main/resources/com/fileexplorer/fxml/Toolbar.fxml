@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.control.Button?>
+
+<HBox xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.explorer.ui.ToolbarController"
+      spacing="6"
+      styleClass="toolbar-root"
+      prefHeight="40">
+
+    <Button fx:id="backBtn" text="←" styleClass="toolbar-btn"/>
+    <Button fx:id="forwardBtn" text="→" styleClass="toolbar-btn"/>
+    <Button fx:id="refreshBtn" text="⟳" styleClass="toolbar-btn"/>
+    <Button fx:id="newFolderBtn" text="New Folder" styleClass="toolbar-btn"/>
+    <Button fx:id="deleteBtn" text="Delete" styleClass="toolbar-btn"/>
+</HBox>

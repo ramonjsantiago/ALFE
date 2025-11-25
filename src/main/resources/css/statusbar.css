@@ -8,3 +8,20 @@
 .status-bar-root Label {
     -fx-text-fill: -color-fg;
 }
+
+.statusbar-root {
+    -fx-padding: 2 10;
+    -fx-background-color: -color-surface-1;
+    -fx-border-color: -color-border;
+    -fx-border-width: 1 0 0 0;
+}
+
+.statusbar-label {
+    -fx-text-fill: -color-fg;
+    -fx-font-size: 12px;
+}
+
+.statusbar-progress {
+    -fx-pref-width: 150;
+    -fx-accent: -color-accent;
+}

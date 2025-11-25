@@ -1,0 +1,35 @@
+.searchbar-root {
+    -fx-padding: 6 10;
+    -fx-background-color: -color-surface-1;
+    -fx-border-color: -color-border;
+    -fx-border-width: 0 0 1 0;
+}
+
+.searchbar-field {
+    -fx-background-color: -color-surface-2;
+    -fx-text-fill: -color-fg;
+    -fx-padding: 4 8;
+    -fx-background-radius: 6;
+    -fx-font-size: 13px;
+    -fx-prompt-text-fill: -color-fg-muted;
+    -fx-pref-width: 260;
+}
+
+.searchbar-button {
+    -fx-background-color: -color-accent;
+    -fx-text-fill: white;
+    -fx-padding: 4 14;
+    -fx-background-radius: 6;
+    -fx-font-size: 13px;
+}
+
+.searchbar-clear {
+    -fx-background-color: transparent;
+    -fx-text-fill: -color-fg-muted;
+    -fx-font-size: 13px;
+    -fx-padding: 0 6;
+}
+
+.searchbar-clear:hover {
+    -fx-text-fill: -color-fg;
+}

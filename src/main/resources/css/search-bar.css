@@ -1,0 +1,11 @@
+.search-bar {
+    -fx-background-color: -color-surface-1;
+    -fx-padding: 4 10;
+    -fx-border-color: -color-border;
+    -fx-border-width: 0 0 1 0;
+}
+.search-bar .combo-box {
+    -fx-background-color: -color-input-bg;
+    -fx-text-fill: -color-fg;
+}
+

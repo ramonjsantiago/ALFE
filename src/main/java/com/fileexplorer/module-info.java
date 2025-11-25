@@ -1,6 +1,7 @@
 module com.fileexplorer.desktop {
     requires java.base;
     requires java.desktop;
+
     requires javafx.base;
     requires javafx.controls;
     requires javafx.fxml;

@@ -1,0 +1,29 @@
+<!-- <xml version="1.0" encoding="UTF-8"?> -->
+
+<!-- <import javafx.scene.layout.VBox?> -->
+<!-- <import javafx.scene.control.ListView?> -->
+<!-- <import javafx.scene.control.Label?> -->
+
+<!-- <VBox xmlns:fx="http://javafx.com/fxml" -->
+      <!-- fx:controller="com.explorer.ui.FavoritesPaneController" -->
+      <!-- spacing="6" -->
+      <!-- styleClass="favorites-pane-root" -->
+      <!-- prefWidth="200"> -->
+
+    <!-- <Label text="Favorites" styleClass="favorites-title"/> -->
+    <!-- <ListView fx:id="favoritesList" styleClass="favorites-list"/> -->
+<!-- </VBox> -->
+
+<xml version="1.0" encoding="UTF-8">
+
+<import javafx.scene.control.ListView>
+<import javafx.scene.layout.VBox>
+
+<VBox xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.explorer.ui.FavoritesPaneController"
+      spacing="4"
+      styleClass="favorites-pane"
+      prefWidth="200">
+
+    <ListView fx:id="favoritesListView"/>
+</VBox>
