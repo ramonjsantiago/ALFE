@@ -1,0 +1,287 @@
+/* =========================================================
+ *  Explorer Base Styles
+ *  Shared by light/dark Windows-11-like themes
+ *  Accent: #0078d4 (Win11 default blue)
+ * ======================================================= */
+
+/* ---------------------------------------------------------
+ * Global
+ * ------------------------------------------------------ */
+
+.root {
+    -fx-font-family: "Segoe UI", system-ui, sans-serif;
+    -fx-font-size: 14px;      /* base; looks like ~16px at normal scaling */
+}
+
+/* Generic text colors; overridden by light/dark theme CSS if needed */
+.root {
+    -fx-text-fill: -color-fg;
+}
+
+/* ---------------------------------------------------------
+ * Toolbars – command bar & status bar
+ * ------------------------------------------------------ */
+
+.fluent-toolbar {
+    -fx-padding: 4 8 4 8;
+    -fx-spacing: 4;
+    -fx-background-color: -color-bg-alt;
+    -fx-border-color: -color-border-subtle;
+    -fx-border-width: 0 0 1 0;
+}
+
+/* Buttons on toolbars: flat, compact, Win11-ish */
+
+.fluent-toolbar .button,
+.fluent-toolbar .toggle-button,
+.fluent-toolbar .fluent-command-button {
+    -fx-background-radius: 6;
+    -fx-background-color: transparent;
+    -fx-padding: 4 10 4 10;
+    -fx-alignment: CENTER;
+    -fx-content-display: LEFT;
+    -fx-graphic-text-gap: 6;
+    -fx-text-fill: -color-fg-primary;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-cursor: hand;
+    -fx-min-height: 28;
+    -fx-pref-height: 28;
+}
+
+/* Hover / pressed / focused states */
+
+.fluent-toolbar .button:hover,
+.fluent-toolbar .toggle-button:hover,
+.fluent-toolbar .fluent-command-button:hover {
+    -fx-background-color: -color-subtle-hover;
+}
+
+.fluent-toolbar .button:armed,
+.fluent-toolbar .toggle-button:armed,
+.fluent-toolbar .fluent-command-button:armed,
+.fluent-toolbar .toggle-button:selected {
+    -fx-background-color: -color-accent-soft;
+    -fx-text-fill: -color-fg-on-accent;
+}
+
+.fluent-toolbar .button:focused,
+.fluent-toolbar .toggle-button:focused,
+.fluent-toolbar .fluent-command-button:focused {
+    -fx-effect: dropshadow(gaussian, -color-accent-soft, 6, 0.2, 0, 0);
+}
+
+/* Small separator between logical button groups */
+.fluent-toolbar .separator {
+    -fx-padding: 0 4 0 4;
+}
+
+.fluent-toolbar .separator .line {
+    -fx-border-color: -color-border-subtle;
+    -fx-border-width: 0 1 0 0;
+}
+
+/* Toolbar search field */
+.fluent-toolbar .text-field {
+    -fx-background-radius: 6;
+    -fx-background-color: -color-bg-elevated;
+    -fx-border-color: -color-border-subtle;
+    -fx-border-radius: 6;
+    -fx-padding: 3 8 3 8;
+    -fx-min-height: 28;
+    -fx-pref-height: 28;
+}
+
+/* ---------------------------------------------------------
+ * Breadcrumb bar
+ *  (HBox with style class "breadcrumb-bar")
+ * ------------------------------------------------------ */
+
+.breadcrumb-bar {
+    -fx-padding: 4 8 4 8;
+    -fx-spacing: 2;
+    -fx-background-color: -color-bg-alt;
+}
+
+/* Each breadcrumb segment button */
+.breadcrumb-bar .button {
+    -fx-background-radius: 6;
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-border-radius: 6;
+    -fx-padding: 2 10 2 10;   /* fairly tight like Win11 */
+    -fx-alignment: CENTER_LEFT;
+    -fx-content-display: LEFT;
+    -fx-graphic-text-gap: 4;
+    -fx-text-fill: -color-fg-primary;
+    -fx-min-height: 26;
+    -fx-pref-height: 26;
+    -fx-cursor: hand;
+}
+
+.breadcrumb-bar .button:hover {
+    -fx-background-color: -color-subtle-hover;
+}
+
+.breadcrumb-bar .button:armed {
+    -fx-background-color: -color-accent-soft;
+    -fx-text-fill: -color-fg-on-accent;
+}
+
+/* The little ">" drop-down segment */
+.breadcrumb-bar .segment-separator-button {
+    -fx-padding: 2 6 2 6;
+}
+
+/* Breadcrumb text field when editing path (if you add one later) */
+.breadcrumb-bar .text-field {
+    -fx-background-radius: 6;
+    -fx-background-color: -color-bg-elevated;
+    -fx-border-color: -color-border-subtle;
+    -fx-border-radius: 6;
+    -fx-padding: 3 8 3 8;
+}
+
+/* ---------------------------------------------------------
+ * TreeView + TableView
+ * ------------------------------------------------------ */
+
+.tree-view {
+    -fx-background-color: -color-bg;
+    -fx-control-inner-background: -color-bg;
+    -fx-cell-size: 24;
+    -fx-padding: 4 0 4 4;
+}
+
+.tree-cell {
+    -fx-text-fill: -color-fg-primary;
+    -fx-padding: 2 4 2 4;
+}
+
+.tree-cell:selected {
+    -fx-background-color: -color-selection;
+    -fx-text-fill: -color-fg-on-selection;
+}
+
+/* TableView base */
+
+.table-view {
+    -fx-background-color: -color-bg;
+    -fx-control-inner-background: -color-bg;
+    -fx-padding: 2 0 0 0;
+}
+
+/* Column headers: flat strip, no gradient */
+
+.table-view .column-header-background {
+    -fx-background-color: -color-bg-alt;
+    -fx-border-color: -color-border-subtle;
+    -fx-border-width: 0 0 1 0;
+}
+
+.table-view .column-header,
+.table-view .filler {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 4 6 4 6;
+}
+
+.table-view .column-header .label {
+    -fx-alignment: CENTER_LEFT;
+    -fx-text-fill: -color-fg-secondary;
+    -fx-font-weight: normal;
+}
+
+/* Rows */
+
+.table-row-cell {
+    -fx-cell-size: 24;
+    -fx-padding: 0 4 0 4;
+}
+
+.table-row-cell:filled:selected,
+.table-row-cell:focused:selected {
+    -fx-background-color: -color-selection;
+    -fx-text-fill: -color-fg-on-selection;
+}
+
+/* ---------------------------------------------------------
+ * Preview pane
+ * ------------------------------------------------------ */
+
+.preview-pane {
+    -fx-background-color: -color-bg-elevated;
+    -fx-border-color: -color-border-subtle;
+    -fx-border-width: 0 0 0 1;
+    -fx-padding: 8;
+}
+
+.preview-pane .label,
+.preview-pane .text-area {
+    -fx-text-fill: -color-fg-primary;
+}
+
+/* ---------------------------------------------------------
+ * Status bar
+ * ------------------------------------------------------ */
+
+.status-bar {
+    -fx-padding: 4 8 4 8;
+    -fx-background-color: -color-bg-alt;
+    -fx-border-color: -color-border-subtle;
+    -fx-border-width: 1 0 0 0;
+    -fx-spacing: 8;
+}
+
+.status-bar .label {
+    -fx-text-fill: -color-fg-secondary;
+}
+
+/* ---------------------------------------------------------
+ * Scrollbars
+ * ------------------------------------------------------ */
+
+.scroll-bar:horizontal,
+.scroll-bar:vertical {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar .thumb {
+    -fx-background-radius: 8;
+    -fx-background-color: -color-scroll-thumb;
+}
+
+.scroll-bar .thumb:hover {
+    -fx-background-color: -color-scroll-thumb-hover;
+}
+
+.scroll-bar .track {
+    -fx-background-color: transparent;
+}
+
+/* ---------------------------------------------------------
+ * Generic colors (fallbacks, overridden by light/dark CSS)
+ * ------------------------------------------------------ */
+
+.root {
+    -color-bg:           #ffffff;
+    -color-bg-alt:       #f3f3f3;
+    -color-bg-elevated:  #ffffff;
+    -color-fg-primary:   #111111;
+    -color-fg-secondary: #555555;
+    -color-fg-on-accent: #ffffff;
+
+    -color-border-subtle: #d0d0d0;
+
+    /* Accent = Win11 blue */
+    -color-accent:       #0078d4;
+    -color-accent-soft:  rgba(0, 120, 212, 0.18);
+
+    -color-subtle-hover: rgba(0, 0, 0, 0.04);
+
+    -color-selection:    rgba(0, 120, 212, 0.28);
+    -color-fg-on-selection: #000000;
+
+    -color-scroll-thumb:       rgba(0, 0, 0, 0.25);
+    -color-scroll-thumb-hover: rgba(0, 0, 0, 0.40);
+}

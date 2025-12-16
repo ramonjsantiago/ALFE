@@ -1,0 +1,120 @@
+/* fluent-base.css
+ *
+ * Fluent-style command bar, buttons, toggles.
+ * Strictly flat colors: no gradients.
+ */
+
+/* Command bar / toolbar */
+
+.fluent-toolbar {
+    -fx-background-color: -color-bg-alt;
+    -fx-padding: 2 8 2 8;
+    -fx-spacing: 4;
+    -fx-border-color: -color-border;
+    -fx-border-width: 0 0 1 0;
+}
+
+/* Back/Forward group spacing */
+
+.fluent-toolbar .nav-group {
+    -fx-spacing: 2;
+    -fx-padding: 0 6 0 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0 6 0 0;
+}
+
+/* Command buttons (normal buttons in toolbar) */
+
+.fluent-toolbar .button,
+.fluent-toolbar .toggle-button,
+.fluent-command-button {
+    -fx-background-color: transparent;
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-border-color: transparent;
+    -fx-padding: 2 10 2 10;
+    -fx-alignment: CENTER_LEFT;
+    -fx-text-fill: -color-fg;
+    -fx-font-size: 13px;
+}
+
+/* Hover state: flat subtle background */
+
+.fluent-toolbar .button:hover,
+.fluent-toolbar .toggle-button:hover,
+.fluent-command-button:hover {
+    -fx-background-color: -color-subtle-hover;
+}
+
+/* Pressed */
+
+.fluent-toolbar .button:armed,
+.fluent-toolbar .toggle-button:armed,
+.fluent-command-button:armed {
+    -fx-background-color: -color-selection;
+}
+
+/* Toggle selected */
+
+.fluent-toolbar .toggle-button:selected,
+.fluent-command-button:selected {
+    -fx-background-color: -color-accent;
+    -fx-text-fill: -color-accent-fg;
+}
+
+/* Icon-only buttons */
+
+.fluent-toolbar .icon-only,
+.fluent-command-icon {
+    -fx-padding: 2 6 2 6;
+    -fx-alignment: CENTER;
+}
+
+/* Search field in command bar */
+
+.command-search-field {
+    -fx-background-color: -color-bg;
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-border-color: -color-border;
+    -fx-border-width: 1px;
+    -fx-padding: 2 6 2 6;
+    -fx-text-fill: -color-fg;
+    -fx-prompt-text-fill: -color-fg-muted;
+}
+
+/* Breadcrumb host row */
+
+.breadcrumb-host {
+    -fx-background-color: transparent;
+    -fx-padding: 2 4 2 4;
+    -fx-spacing: 2;
+}
+
+/* Breadcrumb segments */
+
+.breadcrumb-segment {
+    -fx-background-color: transparent;
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-border-color: transparent;
+    -fx-padding: 2 6 2 6;
+    -fx-text-fill: -color-fg;
+    -fx-alignment: CENTER_LEFT;
+}
+
+.breadcrumb-segment:hover {
+    -fx-background-color: -color-subtle-hover;
+}
+
+.breadcrumb-segment:selected {
+    -fx-background-color: -color-selection;
+}
+
+/* Breadcrumb separator ">" button */
+
+.breadcrumb-separator {
+    -fx-background-color: transparent;
+    -fx-padding: 0 2 0 2;
+    -fx-alignment: CENTER;
+}

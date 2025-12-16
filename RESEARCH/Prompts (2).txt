@@ -1,0 +1,85 @@
+Prompts
+
+Full files only. no patch diffing.
+Dark-mode CSS for TreeView / table headers / preview pane / scrollbars.
+Even tighter spacing/paddings to match my screenshots pixel-for-pixel.
+
+Ah! Now I fully understand: you want a complete, all-in-one Bash script that 
+generates the entire FileExplorer project, including every source file, FXML, 
+CSS, unit tests, Maven configuration, and all features/enhancements
+
+Ah! I finally understand the scope fully. You’re asking for a truly complete, 
+all-in-one setup script that includes every single Java source file, FXML file, 
+CSS, XML configs, unit tests, CI profiles, thumbnail caching, folder tree, 
+icon loading, multiple thumbnail sizes, UI styling, settings export/import, and 
+all helpers, basically everything needed to reproduce the FileExplorer project. 
+That’s why your previous scripts were much shorter—they were minimal or partial 
+skeletons.
+
+https://wasdcsr.miamidade.gov/wasdservice/index.html#!/wasd
+
+=====
+update angular project version-after-version, e.g. yours is version 4, you must 
+update to 5, then 6, and so on.
+ng update @angular/cli@15 @angular/core@15
+=====
+
+The Table view should have a first column which contains a checkbox which when checked
+adds the item to a selectedItems list. The second column should be an icon 
+representing the file, then continue with the rest of the items.
+The Table view should be able to display; Extra large Icons, Large icons, 
+Medium icons, Small icons, List, Details, Tiles, and a Content view for all
+items just like Windows Explorer. The view that the Table view displays 
+is controlled by what is selected in the View menu. The Ribbon should contain 
+a "Sort" menu with a check box and an icon to its left. The Sort menu should 
+contain menu items whith a check, an icon and a label. The Sort menu should 
+contain the following menu items; "Name", "Date modified", "Type", "More",
+"Ascending", "Descending", and "Group by". The "More" button opens a submenu
+that contains the following menu items; "Size", "Date created", "Authors", "Tags",
+and "Title". The "Group by" button opens s submenu that contains; "Name", 
+"Date modified", "Type", "Size", "Date created", "Authors", "Tags", and "Title".
+
+The Ribbon should contain a Menu called "View", to the left of the Sort menu,
+with a check box and an icon to its left. The View menu should contain an icon next to the following
+menu items; Extra large icons, Large icons, Medium icons, Small icons, List, Details, 
+Tiles, and Content, Details Pane. Preview Pane. The last menu item should be labelled
+"Show" which when selected opens a submenu that contains the following menu items; 
+"Navigatipon pane", "Compact view", "Item Check boxes", "File name extensions", and 
+"Hidden items", with a check box and an icon to its left, Selecting one of these menu items
+will change the UI to the corresponding Table view.
+
+The Table View columns should contain a Popup Menu that diplays when the right 
+mouse button is clicked within the column header. The Popup menu should contain 
+the following menu entries; "Size Column to Fit", "Size All Columns to Fit", a separator,
+"Name", "Date modified", "Type", Size" "Date created" "Authors", "Tags", "Title", and a 
+menu item, labelled as "More..." which opens up a submenu which when clicked pops 
+up a Choose Details dialog. Each menu entry should have a checkbox to the left 
+of the menu items label.
+
+Use the Java Preferences API to store all settings.
+=====
+Once you confirm this version runs, we can safely re-layer:
+
+ThemeService integration (real dark/light switching across Tree/Table/Preview).
+
+Real breadcrumb segments + right-click menus + “Open in new window”.
+
+Tabbed browsing behavior.
+
+
+=====
+The first item in the Status bar should be the number of items in the Table,
+the second item should be the number of selected items in the Table followed 
+by the sum of all the selected items size. This should be at the left most 
+of the Status bar, The rightmost part to the Status bar should contain two 
+icon buttons, button 1 causes the Details view to be displayed.
+button 2 causes the Extra large icons view to be displayed. 
+The buttons are mutually exclusive.
+=====
+
+
+No gradients on any UI components.
+Always print full files, no patches/diffs.
+No patch diffing
+
+No cursor is visible when hovering over separator in Table view.

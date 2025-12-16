@@ -1,0 +1,14 @@
+/* explorer-theme.css
+   Not currently referenced by ThemeService, but kept as a safe extension point.
+   Font family normalized to Segoe UI Variable.
+*/
+
+.root {
+    -fx-font-family: "Segoe UI Variable", "Segoe UI", "System";
+}
+
+/* Example: emphasise the window title label, if you use one */
+.window-title-label {
+    -fx-font-size: 1em;
+    -fx-font-weight: bold;
+}

@@ -1,0 +1,16 @@
+/* explorer-light-win.css
+   Tokens only (no transparency overrides).
+*/
+
+.root {
+    -fx-font-family: "Segoe UI Variable", "Segoe UI";
+
+    -fx-background: #f6f7f9;
+    -fx-control-inner-background: #ffffff;
+    -fx-box-border: #d0d3d8;
+    -fx-text-base-color: #1f2328;
+
+    -fx-accent: #2f6fed;
+    -fx-selection-bar: #cfe3ff;
+    -fx-selection-bar-non-focused: #dbe8f9;
+}

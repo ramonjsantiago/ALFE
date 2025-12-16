@@ -1,0 +1,42 @@
+/* TableView: flat header, no gradients, left aligned header text */
+
+.table-view {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.table-view .column-header-background {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-background-insets: 0;
+}
+
+.table-view .column-header {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-background-insets: 0;
+    -fx-border-color: -fx-box-border;
+    -fx-border-width: 0 0 1 0;
+}
+
+.table-view .column-header .label {
+    -fx-alignment: CENTER-LEFT;
+    -fx-padding: 0 0 0 10;
+    -fx-font-weight: normal;
+}
+
+.table-view .filler {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-background-insets: 0;
+}
+
+.table-row-cell {
+    -fx-background-color: transparent;
+}
+
+.table-row-cell:filled:selected,
+.table-row-cell:filled:selected:focused {
+    -fx-background-color: -fx-selection-bar;
+}
+
+.table-cell {
+    -fx-padding: 0 8 0 8;
+}

@@ -1,0 +1,301 @@
+/*************************************************************
+ * Ultra File Explorer - Fluent Light/Dark combined theme
+ * - Base font: 16px
+ * - Stronger contrast for tree, table, preview
+ * - Dark mode uses white text on dark slate backgrounds
+ *************************************************************/
+
+/* Base typography and background for the whole app */
+.explorer-root {
+    -fx-font-family: "Segoe UI", system-ui, sans-serif;
+    -fx-font-size: 16px;
+}
+
+/* ---------------------------------------------------------
+ * LIGHT THEME
+ * ------------------------------------------------------ */
+.theme-light {
+    -fx-base: #f3f3f3;
+    -fx-background-color: #f3f3f3;
+    -fx-control-inner-background: #ffffff;
+    -fx-text-fill: #111111;
+}
+
+/* Toolbar / command bar */
+.theme-light .fluent-toolbar {
+    -fx-background-color: linear-gradient(to bottom, #fdfdfd, #e5e5e5);
+    -fx-padding: 4 8 4 8;
+    -fx-spacing: 6;
+    -fx-border-color: #cccccc;
+    -fx-border-width: 0 0 1 0;
+}
+
+.theme-light .fluent-command-button {
+    -fx-background-radius: 6;
+    -fx-background-color: transparent;
+    -fx-text-fill: #111111;
+    -fx-padding: 4 10;
+}
+
+.theme-light .fluent-command-button:hover {
+    -fx-background-color: #e5f1fb;
+}
+
+.theme-light .fluent-command-button:pressed {
+    -fx-background-color: #cce4ff;
+}
+
+/* TreeView */
+.theme-light .tree-view {
+    -fx-background-color: #ffffff;
+    -fx-control-inner-background: #ffffff;
+    -fx-cell-size: 24px;
+}
+
+.theme-light .tree-cell {
+    -fx-text-fill: #111111;
+    -fx-padding: 2 6 2 6;
+}
+
+.theme-light .tree-cell:selected {
+    -fx-background-color: #cce4ff;
+    -fx-text-fill: #111111;
+}
+
+/* TabPane */
+.theme-light .tab-pane {
+    -fx-background-color: #f3f3f3;
+}
+
+.theme-light .tab-header-area {
+    -fx-background-color: #e8e8e8;
+}
+
+.theme-light .tab {
+    -fx-padding: 4 10;
+}
+
+.theme-light .tab:selected {
+    -fx-background-color: #ffffff;
+}
+
+/* TableView */
+.theme-light .table-view {
+    -fx-background-color: #ffffff;
+    -fx-table-cell-border-color: #e0e0e0;
+    -fx-padding: 0;
+}
+
+.theme-light .column-header-background {
+    -fx-background-color: #f1f1f1;
+}
+
+.theme-light .column-header {
+    -fx-border-color: #d0d0d0;
+    -fx-border-width: 0 1 1 0;
+    -fx-alignment: CENTER_LEFT;
+}
+
+.theme-light .table-column {
+    -fx-alignment: CENTER_LEFT;
+}
+
+.theme-light .table-row-cell {
+    -fx-cell-size: 24px;
+    -fx-text-fill: #111111;
+}
+
+.theme-light .table-row-cell:odd {
+    -fx-background-color: #fafafa;
+}
+
+.theme-light .table-row-cell:selected {
+    -fx-background-color: #cce4ff;
+    -fx-text-fill: #111111;
+}
+
+/* Preview / right pane */
+.theme-light .preview-pane {
+    -fx-background-color: #f7f7f7;
+    -fx-border-color: #d0d0d0;
+    -fx-border-width: 0 0 0 1;
+    -fx-padding: 8;
+}
+
+.theme-light .preview-title {
+    -fx-font-weight: bold;
+    -fx-text-fill: #111111;
+}
+
+/* Status bar */
+.theme-light .status-bar-root {
+    -fx-background-color: #f1f1f1;
+    -fx-border-color: #c0c0c0;
+    -fx-border-width: 1 0 0 0;
+    -fx-padding: 4 10;
+}
+
+/* Toast notifications */
+.theme-light .fluent-toast {
+    -fx-background-color: rgba(0, 0, 0, 0.82);
+    -fx-text-fill: white;
+    -fx-padding: 6 12;
+    -fx-background-radius: 8;
+}
+
+/* ---------------------------------------------------------
+ * DARK THEME
+ * ------------------------------------------------------ */
+.theme-dark {
+    -fx-base: #111827;               /* dark slate */
+    -fx-background-color: #111827;
+    -fx-control-inner-background: #111827;
+    -fx-text-fill: #ffffff;
+}
+
+/* Toolbar / command bar */
+.theme-dark .fluent-toolbar {
+    -fx-background-color: linear-gradient(to bottom, #1f2933, #111827);
+    -fx-padding: 4 8 4 8;
+    -fx-spacing: 6;
+    -fx-border-color: #374151;
+    -fx-border-width: 0 0 1 0;
+}
+
+.theme-dark .fluent-command-button {
+    -fx-background-radius: 6;
+    -fx-background-color: transparent;
+    -fx-text-fill: #f9fafb;
+    -fx-padding: 4 10;
+}
+
+.theme-dark .fluent-command-button:hover {
+    -fx-background-color: #374151;
+}
+
+.theme-dark .fluent-command-button:pressed {
+    -fx-background-color: #2563eb;
+}
+
+/* TreeView */
+.theme-dark .tree-view {
+    -fx-background-color: #111827;
+    -fx-control-inner-background: #111827;
+    -fx-cell-size: 24px;
+}
+
+.theme-dark .tree-cell {
+    -fx-text-fill: #e5e7eb;
+    -fx-padding: 2 6 2 6;
+}
+
+.theme-dark .tree-cell:filled:hover {
+    -fx-background-color: #1f2937;
+}
+
+.theme-dark .tree-cell:selected {
+    -fx-background-color: #2563eb;
+    -fx-text-fill: white;
+}
+
+/* TabPane */
+.theme-dark .tab-pane {
+    -fx-background-color: #111827;
+}
+
+.theme-dark .tab-header-area {
+    -fx-background-color: #111827;
+    -fx-border-color: #374151;
+    -fx-border-width: 0 0 1 0;
+}
+
+.theme-dark .tab {
+    -fx-background-color: #111827;
+    -fx-text-fill: #e5e7eb;
+    -fx-padding: 4 10;
+}
+
+.theme-dark .tab:selected {
+    -fx-background-color: #1f2937;
+    -fx-text-fill: #ffffff;
+}
+
+/* TableView */
+.theme-dark .table-view {
+    -fx-background-color: #111827;
+    -fx-table-cell-border-color: #1f2937;
+    -fx-padding: 0;
+}
+
+.theme-dark .column-header-background {
+    -fx-background-color: #1f2937;
+}
+
+.theme-dark .column-header {
+    -fx-border-color: #374151;
+    -fx-border-width: 0 1 1 0;
+    -fx-alignment: CENTER_LEFT;
+    -fx-text-fill: #e5e7eb;
+}
+
+.theme-dark .table-row-cell {
+    -fx-cell-size: 24px;
+    -fx-text-fill: #e5e7eb;
+    -fx-background-color: #111827;
+}
+
+.theme-dark .table-row-cell:odd {
+    -fx-background-color: #0f172a;
+}
+
+.theme-dark .table-row-cell:selected {
+    -fx-background-color: #2563eb;
+    -fx-text-fill: white;
+}
+
+/* Preview / right pane */
+.theme-dark .preview-pane {
+    -fx-background-color: #111827;
+    -fx-border-color: #374151;
+    -fx-border-width: 0 0 0 1;
+    -fx-padding: 8;
+}
+
+.theme-dark .preview-title {
+    -fx-font-weight: bold;
+    -fx-text-fill: #f9fafb;
+}
+
+/* Status bar */
+.theme-dark .status-bar-root {
+    -fx-background-color: #0b1120;
+    -fx-border-color: #374151;
+    -fx-border-width: 1 0 0 0;
+    -fx-padding: 4 10;
+    -fx-text-fill: #e5e7eb;
+}
+
+/* Toast notifications */
+.theme-dark .fluent-toast {
+    -fx-background-color: rgba(255, 255, 255, 0.14);
+    -fx-text-fill: #f9fafb;
+    -fx-padding: 6 12;
+    -fx-background-radius: 8;
+}
+
+/* Generic inputs */
+.theme-dark .text-field,
+.theme-dark .text-area {
+    -fx-background-color: #0f172a;
+    -fx-text-fill: #e5e7eb;
+    -fx-prompt-text-fill: #6b7280;
+    -fx-border-color: #4b5563;
+}
+
+.theme-light .text-field,
+.theme-light .text-area {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #111111;
+    -fx-prompt-text-fill: #767676;
+    -fx-border-color: #d0d0d0;
+}

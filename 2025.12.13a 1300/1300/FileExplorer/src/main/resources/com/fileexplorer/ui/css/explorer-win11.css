@@ -1,0 +1,70 @@
+/* ---------------------------------------------------------------------
+ * Windows 11 layout / density (no colours here)
+ * ------------------------------------------------------------------- */
+
+/* Root padding & overall density */
+
+.explorer-root {
+    -fx-padding: 0;
+}
+
+/* Toolbars height */
+
+.fluent-toolbar {
+    -fx-min-height: 32;
+    -fx-pref-height: 32;
+    -fx-max-height: 40;
+}
+
+.secondary-toolbar {
+    -fx-min-height: 26;
+    -fx-pref-height: 26;
+}
+
+/* Status bar height */
+
+.status-bar {
+    -fx-min-height: 22;
+    -fx-pref-height: 22;
+}
+
+/* Tree width */
+
+.tree-view {
+    -fx-fixed-cell-size: 22;
+}
+
+/* Table header height */
+
+.table-view .column-header-background {
+    -fx-min-height: 26;
+    -fx-pref-height: 26;
+}
+
+/* Icon tiles layout */
+
+.icon-flow {
+    -fx-hgap: 12;
+    -fx-vgap: 12;
+}
+
+.icon-tile {
+    -fx-pref-width: 120;
+    -fx-max-width: 160;
+}
+
+/* Breadcrumb layout */
+
+.breadcrumb-bar {
+    -fx-padding: 4 8 4 8;
+}
+
+.breadcrumb-button {
+    -fx-min-height: 22;
+}
+
+/* Preview panel */
+
+#previewText {
+    -fx-pref-row-count: 8;
+}

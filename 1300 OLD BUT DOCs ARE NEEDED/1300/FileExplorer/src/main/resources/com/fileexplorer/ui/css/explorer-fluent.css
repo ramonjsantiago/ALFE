@@ -1,0 +1,26 @@
+/* explorer-fluent.css
+   Optional Fluent-inspired tweaks. No gradients.
+   Font family normalized to Segoe UI Variable.
+*/
+
+.root {
+    -fx-font-family: "Segoe UI Variable", "Segoe UI", "System";
+}
+
+/* Fluent-style primary button (if you choose to apply this style class) */
+.fluent-primary-button {
+    -fx-background-color: #0078d4;
+    -fx-border-color: #0078d4;
+    -fx-text-fill: #ffffff;
+}
+
+.fluent-primary-button:hover {
+    -fx-background-color: #106ebe;
+    -fx-border-color: #106ebe;
+}
+
+.fluent-primary-button:disabled {
+    -fx-background-color: #5a9bd5;
+    -fx-border-color: #5a9bd5;
+    -fx-opacity: 0.6;
+}

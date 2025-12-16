@@ -1,0 +1,84 @@
+name: Tagged Release
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest ]
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+
+    steps:
+    - name: Prepare | Checkout
+      uses: actions/checkout@v2
+
+    - name: Prepare | Java
+      uses: ./.github/actions/prepare-java
+
+    - name: Extract release notes
+      id: extract-release-notes
+      uses: ffurrer2/extract-release-notes@v1
+      with:
+        release_notes_file: RELEASE_NOTES.md
+
+    - name: Build | Package styles
+      run: mvn clean install -B --file styles/pom.xml
+
+    - name: Build | Package other modules (Unix)
+      # some tests won't start without X11
+      run: xvfb-run mvn clean install -B -pl '!styles' --file pom.xml
+      if: matrix.os == 'ubuntu-latest'
+
+    - name: Build | Package other modules (Windows)
+      run: mvn clean install -B -pl '!styles' --file pom.xml
+      if: matrix.os == 'windows-latest'
+
+    - name: Build | List artifacts (Unix)
+      shell: sh
+      run: ls -l ./sampler/target/release
+      if: matrix.os == 'ubuntu-latest'
+
+    - name: Build | List artifacts (Windows)
+      shell: pwsh
+      run: ls sampler\target\release
+      if: matrix.os == 'windows-latest'
+
+    - name: Build | Upload binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist-${{ matrix.os }}
+        path: ./sampler/target/release/*
+        retention-days: 1
+
+    - name: Build | Upload resources
+      uses: actions/upload-artifact@v4
+      with:
+        name: resources-${{ matrix.os }}
+        path: |
+          ./styles/**/*-themes.zip
+          RELEASE_NOTES.md
+        retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Release | Download files
+      uses: actions/download-artifact@v4
+
+    - name: Release | List content
+      run: ls -R
+
+    - name: Release | Publish to Github
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          dist-ubuntu-latest/*
+          dist-windows-latest/*
+          resources-ubuntu-latest/**/*-themes.zip
+        body_path: resources-ubuntu-latest/RELEASE_NOTES.md

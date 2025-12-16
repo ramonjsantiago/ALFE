@@ -1,0 +1,9 @@
+/* explorer-win.css
+ * Legacy placeholder; kept flat and minimal.
+ * You can extend or remove this file without affecting current behavior
+ * as long as ThemeService does not load it explicitly.
+ */
+
+.explorer-root {
+    /* No additional styling here; everything is in the other css files. */
+}

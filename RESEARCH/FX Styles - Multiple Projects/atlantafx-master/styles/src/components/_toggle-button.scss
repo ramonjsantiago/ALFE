@@ -1,0 +1,69 @@
+// SPDX-License-Identifier: MIT
+
+@use "../settings/config" as cfg;
+@use "button";
+
+$color-bg-selected:     -color-accent-emphasis  !default;
+$color-fg-selected:     -color-fg-emphasis      !default;
+$color-border-selected: -color-accent-emphasis  !default;
+
+.toggle-button {
+  @include button.base();
+
+  -color-button-bg-selected: $color-bg-selected;
+  -color-button-fg-selected: $color-fg-selected;
+
+  -fx-padding: cfg.$padding-y cfg.$padding-x cfg.$padding-y cfg.$padding-x;
+
+  &:selected,
+  &:selected:focused {
+    -fx-background-color: $color-border-selected, -color-button-bg-selected;
+    -fx-text-fill: -color-button-fg-selected;
+    -fx-background-insets: 0;
+
+    #{cfg.$font-icon-selector} {
+      -fx-fill: -color-button-fg-selected;
+      -fx-icon-color: -color-button-fg-selected;
+    }
+  }
+
+  &:show-mnemonics:selected {
+    >.mnemonic-underline {
+      -fx-stroke: -color-button-fg-selected;
+    }
+  }
+
+  &.left-pill,
+  &.center-pill,
+  &.right-pill {
+    @if button.$use-shadow {
+      -fx-effect: dropshadow(gaussian, -color-button-shadow, 3px, -2, 0, 1);
+    }
+  }
+
+  &.flat {
+    @include button.flat();
+
+    &:hover {
+      -fx-background-color: -color-button-border-hover, -color-button-bg-hover;
+      -fx-underline: true;
+    }
+
+    &:selected,
+    &:selected:focused {
+      -fx-background-color: $color-border-selected, -color-button-bg-selected;
+    }
+  }
+
+  &:selected.left-pill:focused {
+    -fx-background-insets: 0, cfg.$border-width;
+  }
+
+  &:selected.center-pill:focused {
+    -fx-background-insets: 0, cfg.$border-width;
+  }
+
+  &:selected.right-pill:focused {
+    -fx-background-insets: 0, cfg.$border-width;
+  }
+}

@@ -1,1 +1,31 @@
 /bin/
+1300 OLD BUT DOCs ARE NEEDED.7z
+WORKING 2025.12.13a 1300.7z
+# Maven / Java build output
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.log
+
+# JVM / OS
+hs_err_pid*
+replay_pid*
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# JavaFX / generated resources
+*.jfr
+
+# Optional: local toolchain files
+toolchains.xml
+

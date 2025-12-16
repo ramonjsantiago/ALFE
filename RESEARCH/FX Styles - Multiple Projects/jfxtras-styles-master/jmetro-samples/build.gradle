@@ -1,0 +1,66 @@
+plugins {
+    id 'application'
+    id 'org.openjfx.javafxplugin' version '0.0.13'
+}
+
+javafx {
+    version = "11.0.2"
+    modules = [ 'javafx.controls', 'javafx.fxml', 'javafx.swing', 'javafx.web', 'javafx.graphics' ]
+}
+
+application {
+    mainModule = 'org.jfxtras.styles.samples.jmetro'
+
+    /* Controls that have cells */
+//    mainClass.set('jfxtras.styles.samples.jmetro.TableViewSample')
+//    mainClassName = 'jfxtras.styles.samples.jmetro.TreeTableViewSample'
+//    mainClassName = 'jfxtras.styles.samples.jmetro.TreeViewSample'
+    //mainClass.set('jfxtras.styles.samples.jmetro.TreeTableViewWithSubheaders')
+    //mainClass.set('jfxtras.styles.samples.jmetro.TableViewWithSubheadersSample')
+
+//    mainClass.set('jfxtras.styles.samples.jmetro.PanesWithBackgroundStyleClassSample')
+
+    //mainClass.set('jfxtras.styles.samples.jmetro.TabPaneWithUnderlineStyleSample')
+    //mainClass.set('jfxtras.styles.samples.jmetro.TextNodesSample')
+    //mainClass.set('jfxtras.styles.samples.jmetro.StatusBarSample')
+    //mainClass.set('jfxtras.styles.samples.jmetro.ToolbarWithControlsSample')
+    //mainClass.set('jfxtras.styles.samples.jmetro.SplitPaneSample')
+    //mainClass.set('jfxtras.styles.samples.jmetro.SplitPaneSimpleSample')
+    //mainClass.set('jfxtras.styles.samples.jmetro.SegmentedButtonInsideToolBarSample')
+    //mainClass.set('jfxtras.styles.samples.jmetro.TextFieldTextSample')
+
+    mainClassName = 'jfxtras.styles.samples.jmetro.DialogSample'
+
+    //mainClass.set('jfxtras.styles.samples.jmetro.MDL2IconFontSample')
+
+//    mainClassName = 'jfxtras.styles.samples.jmetro.ControlsSample'
+//    mainClassName = 'jfxtras.styles.samples.jmetro.themetester.ThemeTester'
+
+//    mainClassName = 'jfxtras.styles.samples.jmetro.DatePickerAlignmentTestSample'
+
+
+    //mainClass.set('jfxtras.styles.samples.jmetro.ColorPickerThrowsRuntimeException')
+//    mainClass.set('jfxtras.styles.samples.jmetro.TextFieldAndPasswordFieldShrinkGlitch')
+    //mainClass.set('jfxtras.styles.samples.jmetro.ToggleSwitchThumbDisplacementBug')
+    //mainClass.set('jfxtras.styles.samples.jmetro.TextFieldDarkStyleIssue')
+    //mainClass.set('jfxtras.styles.samples.jmetro.JMetroAppliedToParent')
+//    mainClass.set('jfxtras.styles.samples.jmetro.JMetroDirectoryChooserTest')
+
+//    mainClassName = 'jfxtras.styles.samples.jmetro.DialogWithTextFieldSample'
+
+//    mainClassName = 'jfxtras.styles.samples.jmetro.OverridingStylesheetSample'
+
+    /* Testing for errors */
+//    mainClassName = 'jfxtras.styles.samples.jmetro.OverridingStylesheetsMethodException'
+}
+
+dependencies {
+    implementation project(':jmetro')
+    implementation 'org.controlsfx:controlsfx:11.1.0'
+
+    implementation files('lib/scenicview.jar')
+}
+
+repositories {
+    mavenCentral()
+}

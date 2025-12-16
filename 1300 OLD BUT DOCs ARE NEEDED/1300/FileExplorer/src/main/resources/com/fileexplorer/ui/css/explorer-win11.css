@@ -1,0 +1,65 @@
+/* explorer-win11.css
+   Windows 11 density rules sized for a 24px baseline.
+*/
+
+.explorer-root {
+    -fx-padding: 0;
+}
+
+/* All toolbars (covers cases where fluent-toolbar styleclass isn't set) */
+.tool-bar {
+    -fx-min-height: 52;
+    -fx-pref-height: 52;
+}
+
+/* If you do use these classes, they match the generic toolbar sizing */
+.fluent-toolbar {
+    -fx-min-height: 52;
+    -fx-pref-height: 52;
+}
+
+.secondary-toolbar {
+    -fx-min-height: 44;
+    -fx-pref-height: 44;
+}
+
+/* Status bar height (prevents clipping) */
+.status-bar {
+    -fx-min-height: 44;
+    -fx-pref-height: 44;
+}
+
+/* Tree rows: fixed size must exceed font size + padding */
+.tree-view {
+    -fx-fixed-cell-size: 44;
+}
+
+/* Table header height */
+.table-view .column-header-background {
+    -fx-min-height: 44;
+    -fx-pref-height: 44;
+}
+
+/* Breadcrumb layout */
+.breadcrumb-bar {
+    -fx-padding: 4 8 4 8;
+}
+
+.breadcrumb-button {
+    -fx-min-height: 36;
+}
+
+/* Icon tiles layout */
+.icon-flow {
+    -fx-hgap: 12;
+    -fx-vgap: 12;
+}
+
+.icon-tile {
+    -fx-pref-width: 120;
+    -fx-max-width: 160;
+}
+
+#previewText {
+    -fx-pref-row-count: 8;
+}

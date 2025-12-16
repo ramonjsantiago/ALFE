@@ -1,0 +1,10 @@
+/* explorer-theme.css
+ * Not currently referenced by ThemeService, but kept as a safe extension
+ * point. All styles here are flat.
+ */
+
+/* Example: emphasise the window title label, if you use one */
+.window-title-label {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+}

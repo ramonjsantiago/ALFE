@@ -1,0 +1,38 @@
+=====
+In your controller or ribbon action, use it like this:
+
+FileOperationService fileService = new FileOperationService();
+
+// Suppose user selected a file and a target directory:
+Path source = Paths.get("C:/Users/ramon/Documents/report.docx");
+Path targetDir = Paths.get("C:/Users/ramon/Desktop/Backup");
+
+fileService.copyFile(source, targetDir);
+
+FileOperationProgressDialog dialog = new FileOperationProgressDialog(fileService);
+dialog.show();
+=====
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.cell.PropertyValueFactory;
+import com.example.explorerfx.service.FileOperationService.FileOperation;
+import java.time.LocalDateTime;
+
+// Assume you have a TableView<File> named fileTableView
+
+TableColumn<File, LocalDateTime> modifiedCol = new TableColumn<>("Modified");
+modifiedCol.setCellValueFactory(param -> {
+    File file = param.getValue();
+    try {
+        Instant instant = Files.getLastModifiedTime(file.toPath()).toInstant();
+        return new javafx.beans.property.SimpleObjectProperty<>(
+                LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
+        );
+    } catch (Exception e) {
+        return new javafx.beans.property.SimpleObjectProperty<>(null);
+    }
+});
+
+modifiedCol.setPrefWidth(180);
+fileTableView.getColumns().add(modifiedCol);
+
+

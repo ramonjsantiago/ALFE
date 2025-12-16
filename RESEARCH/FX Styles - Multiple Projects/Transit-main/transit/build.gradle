@@ -1,0 +1,135 @@
+plugins {
+    id 'signing'
+    id "java-library"
+    id "maven-publish"
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+}
+
+sourceCompatibility = JavaVersion.VERSION_17
+
+version = '2.0.0'
+
+ext {
+    projectDescription = "A new theme for Java's UI framework: JavaFX"
+
+    licenseName = 'GNU General Public License, version 2, with the Classpath Exception'
+    licenseURL = 'https://openjdk.java.net/legal/gplv2+ce.html'
+
+    versionControlOriginURL = 'https://github.com/dukke/Transit.git'
+    issueTrackerURL = 'https://github.com/dukke/Transit/issues'
+
+    projectURL = 'https://pixelduke.com/java-javafx-theme-jmetro/'
+}
+
+/* ------- */
+
+javafx {
+    version = "22"
+    modules = [ 'javafx.controls' ]
+}
+
+[compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
+
+dependencies {
+    compileOnly 'org.controlsfx:controlsfx:11.0.0'
+    implementation 'com.pixelduke:FXSkins:1.0.0'
+    implementation 'com.pixelduke:fxthemes:1.6.0'
+}
+
+repositories {
+    mavenCentral()
+}
+
+jar {
+    manifest {
+        attributes( 'Implementation-Title':     project.name,
+                    'Implementation-Version':   project.version)
+    }
+}
+
+javadoc {
+    options.addStringOption('javafx', '-quiet')
+}
+
+task javadocJar(type: Jar) {
+    getArchiveClassifier().set('javadoc')
+    from javadoc
+}
+
+task sourceJar(type: Jar) {
+    from sourceSets.main.allJava
+    archiveClassifier.set("sources")
+}
+
+artifacts {
+    archives sourceJar
+    archives javadocJar
+}
+
+/* Publishing */
+/* - for publishing to maven central need to define MAVEN_USERNAME and MAVEN_PASSWORD as environment variables */
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            customizePom(pom)
+            from components.java
+            artifact sourceJar
+            artifact javadocJar
+        }
+    }
+    repositories {
+        maven {
+            def releasesRepoUrl = "https://oss.sonatype.org/service/local/staging/deploy/maven2"
+            def snapshotsRepoUrl = "https://oss.sonatype.org/content/repositories/snapshots"
+            url = version.toString().endsWith("SNAPSHOT")? snapshotsRepoUrl : releasesRepoUrl
+            credentials (PasswordCredentials) {
+                username = System.getenv('OSSRH_TOKEN_USERNAME')
+                password = System.getenv('OSSRH_TOKEN_PASSWORD')
+            }
+        }
+    }
+}
+
+signing {
+    sign publishing.publications.mavenJava
+}
+
+def customizePom(pom) {
+    pom.withXml {
+        def root = asNode()
+
+        // eliminate test-scoped dependencies (no need in maven central POMs)
+        root.dependencies.removeAll { dep ->
+            dep.scope == "test"
+        }
+
+        // add all items necessary for maven central publication
+        root.children().last() + {
+            resolveStrategy = Closure.DELEGATE_FIRST
+
+            description projectDescription
+
+            name project.name
+            url projectURL
+            issueManagement {
+                system 'GitHub'
+                url issueTrackerURL
+            }
+            licenses {
+                license {
+                    name licenseName
+                    url licenseURL
+                    distribution 'repo'
+                }
+            }
+            scm {
+                url versionControlOriginURL
+            }
+            developers {
+                developer {
+                    name 'Pedro Duque Vieira'
+                }
+            }
+        }
+    }
+}

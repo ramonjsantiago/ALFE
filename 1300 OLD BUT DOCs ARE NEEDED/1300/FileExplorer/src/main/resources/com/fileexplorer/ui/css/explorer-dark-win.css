@@ -1,0 +1,16 @@
+/* explorer-dark-win.css
+   Tokens only (no transparency overrides).
+*/
+
+.root {
+    -fx-font-family: "Segoe UI Variable", "Segoe UI";
+
+    -fx-background: #15181d;
+    -fx-control-inner-background: #1c2027;
+    -fx-box-border: #2a303a;
+    -fx-text-base-color: #e6e8eb;
+
+    -fx-accent: #7aa2ff;
+    -fx-selection-bar: #2a4a7a;
+    -fx-selection-bar-non-focused: #233a59;
+}

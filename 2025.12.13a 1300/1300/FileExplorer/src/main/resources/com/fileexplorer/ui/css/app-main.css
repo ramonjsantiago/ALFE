@@ -1,0 +1,456 @@
+/************************************************************
+ * GLOBAL BASE
+ ************************************************************/
+
+.root {
+    -fx-font-family: "Segoe UI", "Segoe UI Variable", system-ui, sans-serif;
+    -fx-font-size: 16px;
+}
+
+/* Accent color (Win11 blue) */
+.theme-light,
+.theme-dark {
+    -fx-accent: #0078d4;
+    -fx-focus-color: #0078d4;
+    -fx-faint-focus-color: rgba(0, 120, 212, 0.25);
+}
+
+/************************************************************
+ * LIGHT / DARK THEMES
+ ************************************************************/
+
+/* Light theme root */
+.theme-light {
+    -fx-background-color: #f3f3f3;
+    -fx-text-fill: #202020;
+}
+
+/* Dark theme root */
+.theme-dark {
+    -fx-background-color: #202020;
+    -fx-text-fill: #ffffff;
+}
+
+/* Text color for common controls */
+.theme-light .label,
+.theme-light .button,
+.theme-light .toggle-button,
+.theme-light .text-field,
+.theme-light .text-area,
+.theme-light .tree-view,
+.theme-light .table-view {
+    -fx-text-fill: #202020;
+}
+
+.theme-dark .label,
+.theme-dark .button,
+.theme-dark .toggle-button,
+.theme-dark .text-field,
+.theme-dark .text-area,
+.theme-dark .tree-view,
+.theme-dark .table-view {
+    -fx-text-fill: #ffffff;
+}
+
+/************************************************************
+ * WINDOW / ROOT BACKGROUND
+ ************************************************************/
+
+.explorer-background {
+    -fx-background-radius: 8;
+    -fx-padding: 6;
+}
+
+.theme-light .explorer-background {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d0d0d0;
+    -fx-border-radius: 8;
+}
+
+.theme-dark .explorer-background {
+    -fx-background-color: #202020;
+    -fx-border-color: #3a3a3a;
+    -fx-border-radius: 8;
+}
+
+/************************************************************
+ * TOOLBAR (Ribbon-ish command bar)
+ ************************************************************/
+
+.fluent-toolbar {
+    -fx-padding: 4 6 4 6;
+    -fx-spacing: 4;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
+}
+
+.theme-light .fluent-toolbar {
+    -fx-background-color: #f3f3f3;
+    -fx-border-color: #d0d0d0;
+    -fx-border-width: 0 0 1 0;
+}
+
+.theme-dark .fluent-toolbar {
+    -fx-background-color: #252525;
+    -fx-border-color: #3a3a3a;
+    -fx-border-width: 0 0 1 0;
+}
+
+/************************************************************
+ * COMMAND BUTTONS (Back/Forward/Up, Details, Large icons, etc.)
+ ************************************************************/
+
+.fluent-command-button,
+.fluent-toolbar .button,
+.fluent-toolbar .toggle-button {
+    -fx-background-radius: 6;
+    -fx-padding: 4 10;
+    -fx-background-insets: 0;
+    -fx-border-radius: 6;
+    -fx-border-width: 0;
+}
+
+/* Light */
+.theme-light .fluent-command-button,
+.theme-light .fluent-toolbar .button,
+.theme-light .fluent-toolbar .toggle-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #202020;
+}
+
+.theme-light .fluent-command-button:hover,
+.theme-light .fluent-toolbar .button:hover,
+.theme-light .fluent-toolbar .toggle-button:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.04);
+}
+
+.theme-light .fluent-command-button:armed,
+.theme-light .fluent-toolbar .toggle-button:selected {
+    -fx-background-color: rgba(0, 120, 212, 0.16);
+    -fx-text-fill: #202020;
+}
+
+/* Dark */
+.theme-dark .fluent-command-button,
+.theme-dark .fluent-toolbar .button,
+.theme-dark .fluent-toolbar .toggle-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #ffffff;
+}
+
+.theme-dark .fluent-command-button:hover,
+.theme-dark .fluent-toolbar .button:hover,
+.theme-dark .fluent-toolbar .toggle-button:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.07);
+}
+
+.theme-dark .fluent-command-button:armed,
+.theme-dark .fluent-toolbar .toggle-button:selected {
+    -fx-background-color: rgba(0, 120, 212, 0.4);
+    -fx-text-fill: #ffffff;
+}
+
+/************************************************************
+ * BREADCRUMB BAR
+ ************************************************************/
+
+.breadcrumb-bar {
+    -fx-spacing: 4;
+    -fx-padding: 2 8 2 8;
+}
+
+.breadcrumb-button {
+    -fx-background-radius: 6;
+    -fx-padding: 2 8;
+    -fx-background-insets: 0;
+    -fx-border-width: 0;
+}
+
+/* Light */
+.theme-light .breadcrumb-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #202020;
+}
+
+.theme-light .breadcrumb-button:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.04);
+}
+
+/* Dark */
+.theme-dark .breadcrumb-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #ffffff;
+}
+
+.theme-dark .breadcrumb-button:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Separator ">" */
+.breadcrumb-separator {
+    -fx-padding: 0 4;
+    -fx-text-fill: #808080;
+}
+
+/************************************************************
+ * TREE VIEW
+ ************************************************************/
+
+.tree-view {
+    -fx-padding: 4 0 4 0;
+}
+
+/* Backgrounds */
+.theme-light .tree-view {
+    -fx-background-color: #ffffff;
+    -fx-control-inner-background: #ffffff;
+    -fx-border-color: #e0e0e0;
+}
+
+.theme-dark .tree-view {
+    -fx-background-color: #202020;
+    -fx-control-inner-background: #202020;
+    -fx-border-color: #3a3a3a;
+}
+
+/* Tree cells */
+.tree-cell {
+    -fx-padding: 2 4 2 4;
+}
+
+/* Selected state (accent) */
+.theme-light .tree-cell:filled:selected,
+.theme-light .tree-cell:filled:selected:focused {
+    -fx-background-color: #0078d4;
+    -fx-text-fill: #ffffff;
+}
+
+.theme-dark .tree-cell:filled:selected,
+.theme-dark .tree-cell:filled:selected:focused {
+    -fx-background-color: #0078d4;
+    -fx-text-fill: #ffffff;
+}
+
+/************************************************************
+ * TABLE VIEW
+ ************************************************************/
+
+.table-view {
+    -fx-padding: 0;
+}
+
+/* Backgrounds */
+.theme-light .table-view {
+    -fx-background-color: #ffffff;
+    -fx-control-inner-background: #ffffff;
+    -fx-border-color: #e0e0e0;
+}
+
+.theme-dark .table-view {
+    -fx-background-color: #202020;
+    -fx-control-inner-background: #202020;
+    -fx-border-color: #3a3a3a;
+}
+
+/* Row padding / height */
+.table-row-cell {
+    -fx-padding: 2 4 2 4;
+}
+
+/* Alternate row striping (optional subtle) */
+.theme-light .table-row-cell:odd {
+    -fx-background-color: #fafafa;
+}
+
+.theme-dark .table-row-cell:odd {
+    -fx-background-color: #252525;
+}
+
+/* Selection */
+.theme-light .table-row-cell:filled:selected,
+.theme-light .table-row-cell:filled:selected:focused {
+    -fx-background-color: #0078d4;
+    -fx-text-fill: #ffffff;
+}
+
+.theme-dark .table-row-cell:filled:selected,
+.theme-dark .table-row-cell:filled:selected:focused {
+    -fx-background-color: #0078d4;
+    -fx-text-fill: #ffffff;
+}
+
+/* Column header background – NO gradient */
+.table-view .column-header-background {
+    -fx-background-insets: 0;
+    -fx-padding: 0 0 0 0;
+}
+
+.theme-light .table-view .column-header-background {
+    -fx-background-color: #f3f3f3;
+    -fx-border-color: #e0e0e0;
+    -fx-border-width: 0 0 1 0;
+}
+
+.theme-dark .table-view .column-header-background {
+    -fx-background-color: #252525;
+    -fx-border-color: #3a3a3a;
+    -fx-border-width: 0 0 1 0;
+}
+
+/* Individual headers */
+.table-view .column-header {
+    -fx-padding: 4 8;
+    -fx-background-insets: 0;
+    -fx-border-width: 0;
+    -fx-alignment: CENTER_LEFT;
+}
+
+/* Header label text color */
+.theme-light .table-view .column-header .label {
+    -fx-text-fill: #404040;
+    -fx-font-weight: normal;
+}
+
+.theme-dark .table-view .column-header .label {
+    -fx-text-fill: #e0e0e0;
+    -fx-font-weight: normal;
+}
+
+/* No sort arrow background highlight */
+.table-view .column-header .arrow {
+    -fx-background-color: #0078d4;
+}
+
+/************************************************************
+ * PREVIEW PANE
+ ************************************************************/
+
+.fluent-preview-box {
+    -fx-padding: 6 8;
+    -fx-spacing: 8;
+    -fx-background-radius: 8;
+    -fx-background-insets: 0;
+}
+
+.theme-light .fluent-preview-box {
+    -fx-background-color: #f9f9f9;
+    -fx-border-color: #e0e0e0;
+    -fx-border-radius: 8;
+}
+
+.theme-dark .fluent-preview-box {
+    -fx-background-color: #252525;
+    -fx-border-color: #3a3a3a;
+    -fx-border-radius: 8;
+}
+
+/* Preview title */
+.fluent-preview-title {
+    -fx-font-weight: bold;
+}
+
+/* Preview text area */
+.theme-light .text-area {
+    -fx-control-inner-background: #ffffff;
+    -fx-text-fill: #202020;
+}
+
+.theme-dark .text-area {
+    -fx-control-inner-background: #1c1c1c;
+    -fx-text-fill: #ffffff;
+}
+
+/************************************************************
+ * STATUS BAR
+ ************************************************************/
+
+.status-bar-root {
+    -fx-padding: 2 8 2 8;
+    -fx-spacing: 12;
+    -fx-alignment: CENTER_LEFT;
+}
+
+.theme-light .status-bar-root {
+    -fx-background-color: #f3f3f3;
+    -fx-border-color: #d0d0d0;
+    -fx-border-width: 1 0 0 0;
+}
+
+.theme-dark .status-bar-root {
+    -fx-background-color: #252525;
+    -fx-border-color: #3a3a3a;
+    -fx-border-width: 1 0 0 0;
+}
+
+/************************************************************
+ * SCROLLBARS
+ ************************************************************/
+
+.scroll-bar {
+    -fx-padding: 0;
+}
+
+/* Track transparent-ish */
+.scroll-bar .track {
+    -fx-background-color: transparent;
+}
+
+/* Thumb */
+.theme-light .scroll-bar .thumb {
+    -fx-background-color: #c8c8c8;
+    -fx-background-radius: 8;
+}
+
+.theme-dark .scroll-bar .thumb {
+    -fx-background-color: #505050;
+    -fx-background-radius: 8;
+}
+
+.scroll-bar .thumb:hover {
+    -fx-background-color: #0078d4;
+}
+
+/************************************************************
+ * TEXT FIELD / SEARCH BOX
+ ************************************************************/
+
+.text-field {
+    -fx-background-radius: 6;
+    -fx-background-insets: 0;
+    -fx-padding: 3 8;
+    -fx-border-radius: 6;
+    -fx-border-width: 1;
+}
+
+.theme-light .text-field {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d0d0d0;
+    -fx-text-fill: #202020;
+}
+
+.theme-dark .text-field {
+    -fx-background-color: #1f1f1f;
+    -fx-border-color: #3a3a3a;
+    -fx-text-fill: #ffffff;
+}
+
+.text-field:focused {
+    -fx-border-color: #0078d4;
+}
+
+/************************************************************
+ * MISC
+ ************************************************************/
+
+/* Make separators subtle */
+.separator .line {
+    -fx-background-insets: 0;
+}
+
+.theme-light .separator .line {
+    -fx-background-color: #d0d0d0;
+}
+
+.theme-dark .separator .line {
+    -fx-background-color: #3a3a3a;
+}

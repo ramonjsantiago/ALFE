@@ -1,0 +1,255 @@
+/* =========================================================
+ * Base + Theme tokens
+ * ======================================================= */
+
+.explorer-root {
+    -fx-font-size: 16px;
+
+    /* tokens */
+    -color-accent:            #0078d4;
+    -color-light-bg:          #f3f3f3;
+    -color-light-bg-alt:      #ffffff;
+    -color-light-border:      #d0d0d0;
+    -color-light-text:        #202020;
+
+    -color-dark-bg:           #202020;
+    -color-dark-bg-alt:       #2a2a2a;
+    -color-dark-surface:      #262626;
+    -color-dark-border:       #3a3a3a;
+    -color-dark-text:         #ffffff;
+
+    -color-selection-bg:      #e5f1fb;
+    -color-selection-bg-dark: #094771;
+    -color-selection-border:  transparent;
+}
+
+/* LIGHT THEME ROOT */
+.explorer-root.theme-light {
+    -fx-background-color: -color-light-bg;
+    -fx-text-fill: -color-light-text;
+}
+
+/* DARK THEME ROOT */
+.explorer-root.theme-dark {
+    -fx-background-color: -color-dark-bg;
+    -fx-text-fill: -color-dark-text;
+}
+
+/* =========================================================
+ * ToolBar / Command bar / Breadcrumb
+ * ======================================================= */
+
+.theme-light .fluent-toolbar {
+    -fx-background-color: -color-light-bg-alt;
+    -fx-border-color: -color-light-border;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 4 8 4 8;
+}
+
+.theme-dark .fluent-toolbar {
+    -fx-background-color: -color-dark-surface;
+    -fx-border-color: -color-dark-border;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 4 8 4 8;
+}
+
+.fluent-toolbar .button,
+.fluent-toolbar .toggle-button {
+    -fx-background-color: transparent;
+    -fx-padding: 4 8;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+}
+
+/* Hover / pressed states, no gradients */
+.theme-light .fluent-toolbar .button:hover,
+.theme-light .fluent-toolbar .toggle-button:hover {
+    -fx-background-color: rgba(0,0,0,0.04);
+}
+
+.theme-dark .fluent-toolbar .button:hover,
+.theme-dark .fluent-toolbar .toggle-button:hover {
+    -fx-background-color: rgba(255,255,255,0.06);
+}
+
+.theme-light .fluent-toolbar .button:armed,
+.theme-light .fluent-toolbar .toggle-button:selected {
+    -fx-background-color: -color-accent;
+    -fx-text-fill: white;
+}
+
+.theme-dark .fluent-toolbar .button:armed,
+.theme-dark .fluent-toolbar .toggle-button:selected {
+    -fx-background-color: -color-accent;
+    -fx-text-fill: white;
+}
+
+/* Breadcrumb bar (assuming BreadcrumbBar root has styleClass "breadcrumb-bar") */
+.theme-light .breadcrumb-bar {
+    -fx-background-color: -color-light-bg-alt;
+    -fx-border-color: -color-light-border;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 2 8 4 8;
+}
+
+.theme-dark .breadcrumb-bar {
+    -fx-background-color: -color-dark-surface;
+    -fx-border-color: -color-dark-border;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 2 8 4 8;
+}
+
+/* =========================================================
+ * TreeView
+ * ======================================================= */
+
+.theme-light .tree-view {
+    -fx-background-color: -color-light-bg-alt;
+    -fx-control-inner-background: -color-light-bg-alt;
+    -fx-text-fill: -color-light-text;
+    -fx-border-color: -color-light-border;
+}
+
+.theme-dark .tree-view {
+    -fx-background-color: -color-dark-bg;
+    -fx-control-inner-background: -color-dark-bg;
+    -fx-text-fill: -color-dark-text;
+    -fx-border-color: -color-dark-border;
+}
+
+.theme-light .tree-view .tree-cell {
+    -fx-text-fill: -color-light-text;
+}
+
+.theme-dark .tree-view .tree-cell {
+    -fx-text-fill: -color-dark-text;
+}
+
+.theme-light .tree-view .tree-cell:selected {
+    -fx-background-color: -color-selection-bg;
+    -fx-text-fill: -color-light-text;
+}
+
+.theme-dark .tree-view .tree-cell:selected {
+    -fx-background-color: -color-selection-bg-dark;
+    -fx-text-fill: -color-dark-text;
+}
+
+/* =========================================================
+ * TableView + headers
+ * ======================================================= */
+
+.theme-light .table-view {
+    -fx-background-color: -color-light-bg-alt;
+    -fx-control-inner-background: -color-light-bg-alt;
+    -fx-border-color: -color-light-border;
+    -fx-table-cell-border-color: -color-light-border;
+    -fx-text-fill: -color-light-text;
+}
+
+.theme-dark .table-view {
+    -fx-background-color: -color-dark-bg;
+    -fx-control-inner-background: -color-dark-bg;
+    -fx-border-color: -color-dark-border;
+    -fx-table-cell-border-color: -color-dark-border;
+    -fx-text-fill: -color-dark-text;
+}
+
+/* Column header: no gradient, flat background */
+.theme-light .table-view .column-header-background {
+    -fx-background-color: -color-light-bg;
+    -fx-border-color: -color-light-border;
+    -fx-border-width: 0 0 1 0;
+}
+
+.theme-dark .table-view .column-header-background {
+    -fx-background-color: -color-dark-surface;
+    -fx-border-color: -color-dark-border;
+    -fx-border-width: 0 0 1 0;
+}
+
+.table-view .column-header,
+.table-view .column-header .label {
+    -fx-alignment: CENTER_LEFT;
+}
+
+/* Row selection */
+.theme-light .table-view:focused .table-row-cell:selected {
+    -fx-background-color: -color-selection-bg;
+}
+
+.theme-dark .table-view:focused .table-row-cell:selected {
+    -fx-background-color: -color-selection-bg-dark;
+}
+
+/* =========================================================
+ * Preview pane / text areas / labels
+ * ======================================================= */
+
+.theme-light .text-area,
+.theme-light .text-field {
+    -fx-background-color: -color-light-bg-alt;
+    -fx-text-fill: -color-light-text;
+    -fx-border-color: -color-light-border;
+}
+
+.theme-dark .text-area,
+.theme-dark .text-field {
+    -fx-background-color: -color-dark-surface;
+    -fx-text-fill: -color-dark-text;
+    -fx-border-color: -color-dark-border;
+}
+
+.theme-dark .label {
+    -fx-text-fill: -color-dark-text;
+}
+
+/* Preview VBox */
+.theme-light #previewBox {
+    -fx-background-color: -color-light-bg-alt;
+    -fx-border-color: -color-light-border;
+    -fx-border-width: 0 0 0 1;
+}
+
+.theme-dark #previewBox {
+    -fx-background-color: -color-dark-surface;
+    -fx-border-color: -color-dark-border;
+    -fx-border-width: 0 0 0 1;
+}
+
+/* =========================================================
+ * Scroll bars (subtle flat style)
+ * ======================================================= */
+
+.theme-light .scroll-bar:vertical,
+.theme-light .scroll-bar:horizontal {
+    -fx-background-color: transparent;
+}
+
+.theme-light .scroll-bar .thumb {
+    -fx-background-color: rgba(0,0,0,0.24);
+    -fx-background-radius: 4;
+}
+
+.theme-dark .scroll-bar:vertical,
+.theme-dark .scroll-bar:horizontal {
+    -fx-background-color: transparent;
+}
+
+.theme-dark .scroll-bar .thumb {
+    -fx-background-color: rgba(255,255,255,0.30);
+    -fx-background-radius: 4;
+}
+
+/* Accent on focus rings for inputs */
+.theme-light .text-field:focused,
+.theme-light .text-area:focused {
+    -fx-border-color: -color-accent;
+    -fx-border-width: 1;
+}
+
+.theme-dark .text-field:focused,
+.theme-dark .text-area:focused {
+    -fx-border-color: -color-accent;
+    -fx-border-width: 1;
+}

@@ -1,0 +1,18 @@
+/* fluent-light.css
+ *
+ * Light adjustments to fluent controls if needed.
+ */
+
+.theme-light.explorer-root .fluent-toolbar,
+.theme-system.explorer-root .fluent-toolbar {
+    -fx-background-color: -color-bg-alt;
+}
+
+.theme-light.explorer-root .fluent-toolbar .button,
+.theme-light.explorer-root .fluent-toolbar .toggle-button,
+.theme-light.explorer-root .fluent-command-button,
+.theme-system.explorer-root .fluent-toolbar .button,
+.theme-system.explorer-root .fluent-toolbar .toggle-button,
+.theme-system.explorer-root .fluent-command-button {
+    -fx-text-fill: -color-fg;
+}

@@ -1,0 +1,12 @@
+Prompts
+
+No gradients on any UI components.
+
+Always print full files, no patches/diffs.
+No patch diffing
+
+
+https://wasdcsr.miamidade.gov/wasdservice/index.html#!/wasd
+
+ng update @angular/cli@15 @angular/core@15
+

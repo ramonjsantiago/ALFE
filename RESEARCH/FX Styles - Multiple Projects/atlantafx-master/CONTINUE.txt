@@ -1,0 +1,53 @@
+1. Sanity-check the current build (quick verification)
+
+Just to confirm we are on solid ground:
+
+Start the app with the updated MainLayout.fxml.
+
+Verify:
+
+No FXML / CSS warnings or exceptions during startup. Yes.
+Folder tree navigation works (clicking folders reloads the right pane). 
+No. The folder tree is now full of garbage entries. (see image)
+Breadcrumb segments are clickable and navigate correctly. Appears that is correct.
+“Details” and “Large icons” toggles swap between table and tile views. Yes.
+Dark/light theme look flat with no gradients. No. Gradients are back on buttons. Why so many repeatedly incorrect answers with gradients? We've looped over this problem obver 50 times?
+
+If anything in that list breaks, we fix that first.
+
+2. Unify selection + status bar between Details and Large icons ← recommended next
+Right now:
+The table selection drives the status bar and most of the logic.
+The tile view (Large icons) shows content and opens files, but:
+Tile clicks do not update a central “selection” model.
+Status bar counts only table selection.
+Switching between views does not carry selection across.
+
+Recommended next step:
+Introduce a small, shared selection model in MainController so that:
+Clicking a tile selects that FileItem (and can support multi-select later).
+The status bar always reflects selection from the active view.
+When you switch from Large icons → Details, the table selection mirrors the tile selection (and vice versa).
+Once that is done, both layouts will “feel” like two faces of the same view rather than separate widgets.
+If you want, I can implement this next and provide full updated versions of:
+
+MainController.java
+CSS tweaks (if needed for selection styling in tiles)
+
+3. Add a true “Content” layout variant (second tile style)
+After selection is unified, the next clean cut of work is to split the large-icon layout into two presets:
+Tiles: 48–64 px icon + name + a single line of metadata.
+Content: 48–64 px icon + name plus 2–3 lines of rich details (type, size, modified).
+
+This would involve:
+Adding another toggle or menu choice (e.g., in the View menu).
+Styling a second tile template (maybe via another CSS class like icon-tile-content).
+Using the same FlowPane, but choosing which tile template to instantiate based on the active layout.
+
+4. After that: per-folder view/sort preferences
+Once both Tiles and Content behave well, a natural follow-up is:
+Remember per-folder:
+Layout (Details / Tiles / Content).
+Sort column and sort direction.
+Apply remembered layout when you navigate back to a folder.
+-----

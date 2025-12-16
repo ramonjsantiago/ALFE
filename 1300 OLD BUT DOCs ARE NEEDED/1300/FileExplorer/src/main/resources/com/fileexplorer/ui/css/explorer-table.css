@@ -1,0 +1,66 @@
+/* explorer-table.css
+   TableView: flat header, left aligned header text.
+   Splitter/resize line has no color (transparent).
+   Slightly increased row vertical separation.
+*/
+
+.table-view {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-padding: 0;
+
+    /* Remove visible grid/split lines between columns/cells */
+    -fx-table-cell-border-color: transparent;
+}
+
+/* Header background: flat */
+.table-view .column-header-background {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-background-insets: 0;
+
+    /* Bottom border only */
+    -fx-border-width: 0 0 1 0;
+    -fx-border-color: transparent transparent -fx-box-border transparent;
+}
+
+/* Individual headers */
+.table-view .column-header {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-background-insets: 0;
+
+    /* No vertical separator lines */
+    -fx-border-width: 0 0 1 0;
+    -fx-border-color: transparent transparent -fx-box-border transparent;
+}
+
+/* Header label */
+.table-view .column-header .label {
+    -fx-alignment: CENTER-LEFT;
+    -fx-text-alignment: LEFT;
+    -fx-padding: 0 0 0 10;
+    -fx-text-fill: -fx-text-base-color;
+}
+
+/* Internal separator node between headers */
+.table-view .column-header .separator {
+    -fx-background-color: transparent;
+}
+
+/* Resize feedback line while dragging column width */
+.table-view .column-resize-line {
+    -fx-background-color: transparent;
+}
+
+/* Rows + cells */
+.table-row-cell {
+    -fx-background-color: transparent;
+}
+
+.table-row-cell:filled:selected,
+.table-row-cell:filled:selected:focused {
+    -fx-background-color: -fx-selection-bar;
+}
+
+.table-cell {
+    -fx-padding: 6 8 6 8;
+    -fx-text-fill: -fx-text-base-color;
+}

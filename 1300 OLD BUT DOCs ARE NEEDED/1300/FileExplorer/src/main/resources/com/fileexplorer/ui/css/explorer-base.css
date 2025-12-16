@@ -1,0 +1,102 @@
+/* Base: flat UI primitives, no gradients anywhere */
+
+.root {
+    -fx-font-family: "Segoe UI Variable";
+    -fx-font-size: 24px;
+    -fx-background-color: -fx-background;
+}
+
+/* Basic cursor intent (programmatic cursors will override on supported nodes) */
+.button,
+.toggle-button,
+.hyperlink {
+    -fx-cursor: hand;
+}
+
+.text-field,
+.text-area,
+.text-input {
+    -fx-cursor: text;
+}
+
+/* Toolbar */
+.tool-bar {
+    -fx-background-color: -fx-background;
+    -fx-background-insets: 0;
+    -fx-border-color: -fx-box-border;
+    -fx-border-width: 0 0 1 0;
+}
+
+/* Buttons (flat) */
+.button,
+.toggle-button {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-background-insets: 0;
+    -fx-border-color: -fx-box-border;
+    -fx-border-width: 1;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-padding: 8 14 8 14;
+}
+
+.button:pressed,
+.toggle-button:pressed {
+    -fx-background-color: derive(-fx-control-inner-background, -8%);
+}
+
+/* SplitPane divider cursor + invisible splitter color */
+.split-pane:horizontal .split-pane-divider {
+    -fx-cursor: h-resize;
+    -fx-background-color: transparent;
+}
+.split-pane:vertical .split-pane-divider {
+    -fx-cursor: v-resize;
+    -fx-background-color: transparent;
+}
+
+/* Breadcrumb */
+.breadcrumb-bar {
+    -fx-background-color: transparent;
+}
+
+.breadcrumb-scroll {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+    -fx-padding: 0;
+}
+
+.breadcrumb-crumbs {
+    -fx-padding: 6 0 6 0;
+}
+
+.breadcrumb-button {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-border-color: -fx-box-border;
+    -fx-border-width: 1;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-padding: 6 12 6 12;
+}
+
+.breadcrumb-sep {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 0 2 0 2;
+}
+
+/* Status bar */
+#statusBar {
+    -fx-background-color: -fx-background;
+    -fx-border-color: -fx-box-border;
+    -fx-border-width: 1 0 0 0;
+}
+
+/* Resize grip (drawn in code; this just guarantees sizing) */
+.resize-grip {
+    -fx-min-width: 24px;
+    -fx-min-height: 24px;
+    -fx-pref-width: 24px;
+    -fx-pref-height: 24px;
+    -fx-max-width: 24px;
+    -fx-max-height: 24px;
+}
