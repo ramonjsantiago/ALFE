@@ -1,6 +1,7 @@
 package com.fileexplorer.ui;
 
 import com.fileexplorer.MainApp;
+import com.fileexplorer.ui.service.ThemeService;
 import javafx.fxml.FXML;
 import javafx.geometry.Side;
 import javafx.scene.Node;
