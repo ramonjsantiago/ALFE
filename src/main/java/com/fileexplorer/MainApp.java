@@ -1,62 +1,50 @@
 package com.fileexplorer;
 
-import com.fileexplorer.service.ThemeService;
 import com.fileexplorer.ui.MainController;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.Objects;
+import com.fileexplorer.ui.service.ThemeService;
+import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
 
-public final class MainApp extends javafx.application.Application {
+import java.io.IOException;
+import java.nio.file.Path;
 
-    private static final double MIN_W = 256.0;
-    private static final double MIN_H = 256.0;
+public final class MainApp extends Application {
 
     @Override
-    public void start(Stage stage) throws Exception {
+    public void start(Stage stage) throws IOException {
         configureExplorerStage(stage);
+        stage.show();
     }
 
-    public static void configureExplorerStage(Stage stage) throws IOException {
-        Path home = Path.of(System.getProperty("user.home"));
-        configureExplorerStage(stage, home, new ThemeService().getTheme());
+    public void configureExplorerStage(Stage stage) throws IOException {
+        ThemeService themeService = new ThemeService();
+        configureExplorerStage(stage, null, themeService);
     }
 
-    public static void configureExplorerStage(Stage stage, Path initialFolder, ThemeService.Theme theme) throws IOException {
-        Objects.requireNonNull(stage, "stage");
-
+    public void configureExplorerStage(Stage stage, Path initialFolder, ThemeService themeService) throws IOException {
         FXMLLoader loader = new FXMLLoader(MainApp.class.getResource("/com/fileexplorer/ui/MainLayout.fxml"));
         Parent root = loader.load();
 
         Scene scene = new Scene(root);
 
-        stage.setTitle("FileExplorer");
-        stage.setScene(scene);
-
-        stage.setMinWidth(MIN_W);
-        stage.setMinHeight(MIN_H);
-
-        stage.setWidth(1400);
-        stage.setHeight(900);
-        stage.setResizable(true);
+        themeService.apply(scene);
+        themeService.installCtrlZoom(scene);
 
         MainController controller = loader.getController();
-        if (controller != null) {
-            controller.setStage(stage);
-            controller.setScene(scene);
+        controller.postConstruct(stage, themeService, initialFolder);
 
-            // Ensure theme is applied before showing
-            ThemeService ts = new ThemeService();
-            ts.setTheme(theme);
-            ts.apply(scene);
+        stage.setTitle("ALFE");
+        stage.setMinWidth(256);
+        stage.setMinHeight(256);
 
-            controller.openInitialFolder(initialFolder);
-        }
+        // Reasonable default for 4K; you can tune.
+        stage.setWidth(1500);
+        stage.setHeight(950);
 
-        stage.show();
+        stage.setScene(scene);
     }
 
     public static void main(String[] args) {

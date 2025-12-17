@@ -1,8 +1,8 @@
 package com.fileexplorer.ui;
 
-import com.fileexplorer.service.FileMetadataService;
-import com.fileexplorer.service.ThemeService;
-import com.fileexplorer.service.TreeBuildService;
+import com.fileexplorer.ui.service.FileMetadataService;
+import com.fileexplorer.ui.service.ThemeService;
+import com.fileexplorer.ui.service.TreeBuildService;
 import java.net.URL;
 import java.nio.file.Path;
 import java.util.ArrayList;
