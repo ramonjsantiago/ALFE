@@ -1,0 +1,25 @@
+.breadcrumb-root {
+    -fx-padding: 4 8;
+    -fx-background-color: -color-surface-1;
+    -fx-border-color: -color-border;
+    -fx-border-width: 0 0 1 0;
+}
+
+.breadcrumb-btn {
+    -fx-background-color: -color-surface-2;
+    -fx-text-fill: -color-fg;
+    -fx-padding: 4 10;
+    -fx-background-radius: 6;
+    -fx-font-size: 12px;
+}
+
+.breadcrumb-btn:hover {
+    -fx-background-color: -color-surface-hover;
+}
+
+.breadcrumb-separator {
+    -fx-background-color: transparent;
+    -fx-text-fill: -color-fg-muted;
+    -fx-font-size: 12px;
+    -fx-padding: 0 4;
+}

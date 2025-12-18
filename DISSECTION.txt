@@ -1,0 +1,44 @@
+Windows 11 File Explorer is a powerful file management tool featuring a modernized interface with tabbed browsing, a simplified Command Bar (replacing the old ribbon), a familiar Navigation Pane, and customizable views for organizing files and folders, offering quick access to Quick Access, cloud storage (OneDrive), and your local PC, with enhanced Search and Details Pane for metadata. 
+Key Components of Windows 11 File Explorer
+This video provides a beginner's guide to the File Explorer in Windows 11:
+Related video thumbnail
+1m
+Windows 11 File Explorer | Tutorial for Beginners (Full Guide)
+
+
+Online Training for Everyone
+YouTube • Aug 31, 2025
+Tab Bar: Like a web browser, it allows multiple folders to be open in one window, with options to add new tabs (Ctrl+T) and switch between them.
+Command Bar (Simplified Ribbon): A context-sensitive toolbar at the top showing actions (Cut, Copy, Paste, Rename, Share, Delete, etc.) relevant to the selected item, replacing the extensive ribbon of older versions.
+Navigation Pane (Left Side): Shows your folder hierarchy, starting with Quick Access (pinned items, recent files, favorites), followed by OneDrive, and then your PC's folders (Desktop, Documents, etc.).
+Address Bar: Displays the current folder path and allows direct navigation by typing or clicking.
+Search Box: Integrated into the Command Bar for searching files and folders within the current location and connected cloud services.
+Main View (Center): The largest area, showing the contents (files and subfolders) of the currently selected folder, with customizable views (Icons, List, Details) and sorting options.
+Details Pane & Preview Pane (Optional Right Side):
+Details Pane: Shows metadata (date modified, size, author, tags) for selected files.
+Preview Pane: Allows viewing contents of files (like images or documents) without opening them. 
+Common Actions & Customization
+You can watch this video to learn some useful tricks and tips for using File Explorer:
+Related video thumbnail
+52s
+Windows 11 File Explorer: 15 Tricks in 3 MINUTES!
+
+
+Anson Explores Windows
+YouTube • Mar 7, 2024
+Pinning: Right-click folders/files and select "Pin to Quick access" or drag them to Favorites.
+Sharing: Select a file/folder and use the "Share" button on the Command Bar.
+View Options: Use the "View" menu on the Command Bar to switch between List, Details, Tiles, or adjust icon sizes; select "Compact view" to reduce spacing.
+Adding Details: In "Details" view, right-click column headers (Name, Date Modified, Type, Size) to add more info like "Date Created" or "Tags".
+Opening in New Tab: Right-click a folder and choose "Open in new tab," or use Ctrl+T. 
+Quick Access & Home View
+This video demonstrates how to organize your files and folders using the new features in File Explorer:
+Related video thumbnail
+56s
+Windows 11 File Explorer for Beginners
+
+
+The Tech Gremlin Warrior
+YouTube • Apr 12, 2025
+Home: The default landing page (unless changed in Options) offering recent files, shared files, and quick access to your PC and cloud.
+Quick Access: A personal space for frequently used folders and files, accessible from the Navigation Pane. 

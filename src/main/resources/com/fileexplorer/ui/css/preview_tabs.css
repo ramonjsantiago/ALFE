@@ -1,0 +1,20 @@
+/* Preview and Tab visuals */
+
+.preview-pane {
+    -fx-background-color: linear-gradient(to bottom, #ffffff, #fbfbfb);
+    -fx-padding: 8;
+    -fx-border-color: #e0e0e0;
+    -fx-border-width: 1;
+    -fx-background-radius: 6;
+}
+
+.tab-pane .tab {
+    -fx-background-radius: 6;
+    -fx-padding: 6 10;
+}
+
+.tab-pane .tab:selected {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #cccccc;
+    -fx-border-width: 1;
+}

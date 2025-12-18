@@ -1,0 +1,27 @@
+/* fluent-dark.css
+ *
+ * Dark adjustments to fluent controls.
+ */
+
+.theme-dark.explorer-root .fluent-toolbar {
+    -fx-background-color: -color-bg-alt;
+    -fx-border-color: -color-border;
+}
+
+.theme-dark.explorer-root .fluent-toolbar .button,
+.theme-dark.explorer-root .fluent-toolbar .toggle-button,
+.theme-dark.explorer-root .fluent-command-button {
+    -fx-text-fill: -color-fg;
+}
+
+.theme-dark.explorer-root .fluent-toolbar .button:hover,
+.theme-dark.explorer-root .fluent-toolbar .toggle-button:hover,
+.theme-dark.explorer-root .fluent-command-button:hover {
+    -fx-background-color: -color-subtle-hover;
+}
+
+.theme-dark.explorer-root .fluent-toolbar .toggle-button:selected,
+.theme-dark.explorer-root .fluent-command-button:selected {
+    -fx-background-color: -color-accent;
+    -fx-text-fill: -color-accent-fg;
+}

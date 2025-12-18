@@ -1,123 +1,97 @@
-package com.fileexplorer.ui.service;
+package com.fileexplorer.service;
 
-import java.net.URL;
 import java.util.Objects;
 import java.util.prefs.Preferences;
-
-import javafx.scene.Parent;
+import javafx.css.PseudoClass;
 import javafx.scene.Scene;
 
-/**
- * Central theme coordinator for the UI.
- *
- * Expected CSS resources on classpath:
- *   /com/fileexplorer/ui/css/explorer-base.css
- *   /com/fileexplorer/ui/css/explorer-win11.css
- *   /com/fileexplorer/ui/css/explorer-light-win.css
- *   /com/fileexplorer/ui/css/explorer-dark-win.css
- */
 public final class ThemeService {
 
-    public enum Theme {
-        LIGHT,
-        DARK;
+    private static final String PREF_NODE = "com.fileexplorer";
+    private static final String KEY_DARK = "theme.dark";
 
-        public Theme toggle() {
-            return this == DARK ? LIGHT : DARK;
-        }
+    // Required layers
+    private static final String CSS_BASE = "/com/fileexplorer/ui/css/explorer-base.css";
+    private static final String CSS_TABLE = "/com/fileexplorer/ui/css/explorer-table.css";
+    private static final String CSS_DARK = "/com/fileexplorer/ui/css/explorer-dark-win.css";
+    private static final String CSS_LIGHT = "/com/fileexplorer/ui/css/explorer-light-win.css";
 
-        public static Theme parseOrDefault(String value, Theme fallback) {
-            if (value == null || value.isBlank()) {
-                return fallback;
-            }
-            try {
-                return Theme.valueOf(value.trim().toUpperCase());
-            } catch (IllegalArgumentException ex) {
-                return fallback;
-            }
-        }
-    }
+    // Optional layers (loaded if present; do not break startup if absent)
+    private static final String CSS_WIN11 = "/com/fileexplorer/ui/css/explorer-win11.css";
+    private static final String CSS_FLUENT = "/com/fileexplorer/ui/css/explorer-fluent.css";
+    private static final String CSS_WIN = "/com/fileexplorer/ui/css/explorer-win.css";
 
-    private static final String PREF_KEY_THEME = "fileexplorer.theme";
-    private static final Theme DEFAULT_THEME = Theme.LIGHT;
+    private static final PseudoClass DARK = PseudoClass.getPseudoClass("dark");
 
     private final Preferences prefs;
-    private Theme theme;
 
     public ThemeService() {
-        this(Preferences.userNodeForPackage(ThemeService.class));
+        this.prefs = Preferences.userRoot().node(PREF_NODE);
     }
 
-    public ThemeService(Preferences prefs) {
-        this.prefs = Objects.requireNonNull(prefs, "prefs");
-        this.theme = Theme.parseOrDefault(prefs.get(PREF_KEY_THEME, DEFAULT_THEME.name()), DEFAULT_THEME);
+    public boolean isDarkPreferred() {
+        return prefs.getBoolean(KEY_DARK, false);
     }
 
-    public Theme getTheme() {
-        return theme;
+    public void setDarkPreferred(boolean dark) {
+        prefs.putBoolean(KEY_DARK, dark);
     }
 
-    public boolean isDark() {
-        return theme == Theme.DARK;
-    }
-
-    public void setTheme(Theme theme) {
-        this.theme = Objects.requireNonNull(theme, "theme");
-        prefs.put(PREF_KEY_THEME, this.theme.name());
-    }
-
-    public Theme toggleTheme() {
-        setTheme(getTheme().toggle());
-        return getTheme();
-    }
-
-    /**
-     * Apply the currently selected theme to the provided scene:
-     * - clears stylesheets
-     * - re-adds base + win11 + light/dark
-     * - updates root style classes
-     */
     public void apply(Scene scene) {
-        if (scene == null) {
-            return;
+        Objects.requireNonNull(scene, "scene");
+
+        String base = toExternalFormRequired(CSS_BASE);
+        String table = toExternalFormRequired(CSS_TABLE);
+        String dark = toExternalFormRequired(CSS_DARK);
+        String light = toExternalFormRequired(CSS_LIGHT);
+
+        String win11 = toExternalFormOptional(CSS_WIN11);
+        String fluent = toExternalFormOptional(CSS_FLUENT);
+        String win = toExternalFormOptional(CSS_WIN);
+
+        // Remove all managed layers first (prevents duplicates and makes toggling deterministic)
+        scene.getStylesheets().removeIf(s ->
+            s.equals(base)
+                || s.equals(table)
+                || s.equals(dark)
+                || s.equals(light)
+                || (win11 != null && s.equals(win11))
+                || (fluent != null && s.equals(fluent))
+                || (win != null && s.equals(win))
+        );
+
+        // Add shared layers first (lowest precedence)
+        scene.getStylesheets().add(base);
+        scene.getStylesheets().add(table);
+        if (win11 != null) {
+            scene.getStylesheets().add(win11);
+        }
+        if (fluent != null) {
+            scene.getStylesheets().add(fluent);
+        }
+        if (win != null) {
+            scene.getStylesheets().add(win);
         }
 
-        scene.getStylesheets().clear();
+        // Add theme layer last (highest precedence)
+        scene.getStylesheets().add(isDarkPreferred() ? dark : light);
 
-        // Base + target OS styling first:
-        addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-base.css");
-        addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-win11.css");
-
-        // Theme-specific:
-        if (isDark()) {
-            addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-dark-win.css");
-        } else {
-            addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-light-win.css");
-        }
-
-        // Normalize a single root class for theme-dependent selectors.
-        Parent root = scene.getRoot();
-        if (root != null) {
-            root.getStyleClass().removeAll("theme-light", "theme-dark");
-            root.getStyleClass().add(isDark() ? "theme-dark" : "theme-light");
-        }
+        scene.getRoot().pseudoClassStateChanged(DARK, isDarkPreferred());
     }
 
-    /**
-     * Convenience: set + apply.
-     */
-    public void apply(Scene scene, Theme theme) {
-        setTheme(theme);
-        apply(scene);
-    }
-
-    private static void addStylesheet(Scene scene, String classpathResource) {
-        URL url = ThemeService.class.getResource(classpathResource);
+    private static String toExternalFormRequired(String resourcePath) {
+        var url = ThemeService.class.getResource(resourcePath);
         if (url == null) {
-            // Fail-soft: app still runs; you will see missing styling.
-            System.err.println("[ThemeService] Missing stylesheet: " + classpathResource);
-            return;
+            throw new IllegalStateException("Missing required stylesheet resource: " + resourcePath);
         }
-        scene.getStylesheets().add(url.toExternalForm());
+        return url.toExternalForm();
+    }
+
+    private static String toExternalFormOptional(String resourcePath) {
+        var url = ThemeService.class.getResource(resourcePath);
+        if (url == null) {
+            return null;
+        }
+        return url.toExternalForm();
     }
 }

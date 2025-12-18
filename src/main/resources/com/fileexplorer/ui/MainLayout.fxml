@@ -1,87 +1,192 @@
 <?xml version="1.0" encoding="UTF-8"?>
-    <top>
-        <fx:include source="RibbonBar.fxml"/>
-        <center>
-            <SplitPane orientation="HORIZONTAL" dividerPositions="0.5">
-    <items>
-        <VBox fx:id="navigationPane" prefWidth="200">
-            <fx:include fx:id="navTree" source="NavigationTree.fxml"/>
-        </VBox>
-                <TabPane fx:id="leftTabPane" prefWidth="400" />
-                <TabPane fx:id="rightTabPane" prefWidth="400" />
-            </SplitPane>
-        </center>
-        <right>
-            <VBox fx:id="previewPane" prefWidth="300">
-                <!-- Preview pane content will be dynamically added here -->
-            </VBox>
-        </right>
-    </top>
-<BorderPane xmlns="http://javafx.com/javafx/25"
+
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.image.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane fx:id="root"
+            xmlns="http://javafx.com/javafx/25"
             xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="com.fileexplorer.ui.MainController">
+
+    <!-- Top: command bar, breadcrumb bar, secondary bar -->
     <top>
-        <ToolBar fx:id="ribbonBar">
-            <Button text="New Folder" onAction="#onNewFolder"/>
-            <Button text="Refresh" onAction="#onRefresh"/>
-            <Button text="Delete" onAction="#onDelete"/>
-            <Button text="Undo" onAction="#onUndo"/>
-            <ChoiceBox fx:id="themeSelector" onAction="#onThemeChange">
-                <items>
-                    <FXCollections fx:factory="observableArrayList">
-                        <String fx:value="Light"/>
-                        <String fx:value="Dark"/>
-                        <String fx:value="Glassy"/>
-                    </FXCollections>
-                </items>
-            </ChoiceBox>
-        </ToolBar>
-            <Button fx:id="btnCopy" text="Copy" onAction="#onRibbonCopyWithChooser"/>
-            <Button fx:id="btnMove" text="Move" onAction="#onRibbonMoveWithChooser"/>
-            <Button fx:id="btnDelete" text="Delete" onAction="#onRibbonDeleteWithProgress"/>
-            <Button fx:id="btnCancelOp" text="Cancel" onAction="#onRibbonCancelOperation"/>
-    </top>
-    <center>
-        <fx:include fx:id="historyPanel" source="HistoryPanel.fxml"/>
-    </center>
-    <bottom>
-        <HBox fx:id="statusBar" spacing="10" style="-fx-padding: 4;">
-            <Label fx:id="statusLabel" text="Ready"/>
-        </HBox>
-            <ProgressBar fx:id="progressBar" prefWidth="200" progress="0.0" />
-            <Button fx:id="cancelOpButton" text="Cancel" onAction="#onCancelOperation" />
-    </bottom>
-    <bottom>
-        <HBox fx:id="statusBar" spacing="10" style="-fx-padding:5;-fx-background-color:#EEE;">
-            <Label fx:id="lblCurrentPath" text="Path: /"/>
-            <Label fx:id="lblSelectionCount" text="Selected: 0"/>
-            <Label fx:id="lblTotalSize" text="Size: 0 KB"/>
-            <ProgressBar fx:id="operationProgress" progress="0" prefWidth="150"/>
-        </HBox>
-    </bottom>
-</BorderPane>
-<!-- Left-hand navigation tree -->
-<TreeView fx:id="folderTree" prefWidth="200" onMouseClicked="#onTreeItemClicked"/>
+        <VBox spacing="0">
+            <children>
 
-<!-- Dual-pane layout: two FlowPanes or TableViews -->
-<SplitPane orientation="HORIZONTAL">
-    <items>
-        <VBox fx:id="navigationPane" prefWidth="200">
-            <fx:include fx:id="navTree" source="NavigationTree.fxml"/>
+                <ToolBar fx:id="commandBar" styleClass="fluent-toolbar">
+                    <items>
+                        <!-- Back -->
+                        <Button fx:id="backButton" text="◄" focusTraversable="false">
+                            <tooltip><Tooltip text="Back"/></tooltip>
+                        </Button>
+
+                        <!-- Forward -->
+                        <Button fx:id="forwardButton" text="►" focusTraversable="false">
+                            <tooltip><Tooltip text="Forward"/></tooltip>
+                        </Button>
+
+                        <!-- Up -->
+                        <Button fx:id="upButton" text="Up" focusTraversable="false">
+                            <tooltip><Tooltip text="Up one level"/></tooltip>
+                        </Button>
+
+                        <Separator orientation="VERTICAL"/>
+
+                        <Button fx:id="refreshButton" text="Refresh" focusTraversable="false">
+                            <tooltip><Tooltip text="Refresh current folder"/></tooltip>
+                        </Button>
+                        <Button fx:id="newFolderButton" text="New folder" focusTraversable="false">
+                            <tooltip><Tooltip text="Create new folder"/></tooltip>
+                        </Button>
+                        <Button fx:id="deleteButton" text="Delete" focusTraversable="false">
+                            <tooltip><Tooltip text="Delete selected items"/></tooltip>
+                        </Button>
+                        <Button fx:id="openButton" text="Open" focusTraversable="false">
+                            <tooltip><Tooltip text="Open selected item"/></tooltip>
+                        </Button>
+
+                        <Separator orientation="VERTICAL"/>
+
+                        <ToggleButton fx:id="detailsToggle" text="Details" selected="true" focusTraversable="false">
+                            <tooltip><Tooltip text="Details view"/></tooltip>
+                        </ToggleButton>
+                        <ToggleButton fx:id="largeIconsToggle" text="Large icons" focusTraversable="false">
+                            <tooltip><Tooltip text="Large icons view"/></tooltip>
+                        </ToggleButton>
+
+                        <Separator orientation="VERTICAL"/>
+
+                        <Region HBox.hgrow="ALWAYS"/>
+
+                        <TextField fx:id="searchField" promptText="Search">
+                            <tooltip><Tooltip text="Search in current folder"/></tooltip>
+                        </TextField>
+
+                        <MenuButton fx:id="viewMenuButton" text="View"/>
+                        <MenuButton fx:id="sortMenuButton" text="Sort"/>
+                        <MenuButton fx:id="moreMenuButton" text="More"/>
+
+                        <!-- REQUIRED by MainController -->
+                        <Separator orientation="VERTICAL"/>
+                        <ToggleButton fx:id="themeToggle" text="Light" focusTraversable="false"/>
+                    </items>
+                </ToolBar>
+
+                <!-- Breadcrumb bar include (kept as-is) -->
+                <fx:include source="BreadcrumbBar.fxml" fx:id="breadcrumbBar"/>
+
+                <!-- Secondary bar under breadcrumb -->
+                <ToolBar fx:id="secondaryCommandBar" styleClass="fluent-toolbar, secondary-toolbar">
+                    <items>
+                        <Label text="Location:"/>
+                        <Label fx:id="locationLabel"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                    </items>
+                </ToolBar>
+
+            </children>
         </VBox>
-    <!-- Left pane: folder contents -->
-    <TableView fx:id="leftDetailsTable" prefWidth="400">
-        <columns>
-            <TableColumn text="Name" fx:id="colName"/>
-            <TableColumn text="Type" fx:id="colType"/>
-            <TableColumn text="Size" fx:id="colSize"/>
-            <TableColumn text="Modified" fx:id="colModified"/>
-        </columns>
-    </TableView>
+    </top>
 
-    <!-- Right pane: preview / thumbnails -->
-    <VBox>
-        <ImageView fx:id="previewImage" fitWidth="300" fitHeight="300" preserveRatio="true"/>
-        <FlowPane fx:id="rightFlowPane" hgap="5" vgap="5"/>
-    </VBox>
-</SplitPane>
+    <!-- Center: left tree + right content / preview -->
+    <center>
+        <SplitPane fx:id="mainSplitPane" dividerPositions="0.25">
+
+            <items>
+                <!-- Left: folder tree (REQUIRED by MainController) -->
+                <TreeView fx:id="folderTree">
+                    <contextMenu>
+                        <ContextMenu>
+                            <items>
+                                <MenuItem text="Expand all"/>
+                                <MenuItem text="Collapse all"/>
+                            </items>
+                        </ContextMenu>
+                    </contextMenu>
+                </TreeView>
+
+                <!-- Right: content and preview -->
+                <BorderPane>
+
+                    <center>
+                        <StackPane>
+
+                            <!-- Details (table) view (REQUIRED by MainController) -->
+                            <TableView fx:id="fileTable">
+                                <columns>
+                                    <!-- Keep icon column for your UI, but MainController binds these 4 by fx:id -->
+                                    <TableColumn fx:id="iconColumn" prefWidth="32" text=""/>
+
+                                    <TableColumn fx:id="colName" prefWidth="220" text="Name"/>
+                                    <TableColumn fx:id="colType" prefWidth="140" text="Type"/>
+                                    <TableColumn fx:id="colSize" prefWidth="80" text="Size"/>
+                                    <TableColumn fx:id="colModified" prefWidth="140" text="Date modified"/>
+                                </columns>
+                            </TableView>
+
+                            <!-- Large icons / content view -->
+                            <ScrollPane fx:id="iconScroll"
+                                        fitToWidth="true"
+                                        hbarPolicy="NEVER"
+                                        vbarPolicy="AS_NEEDED"
+                                        visible="false"
+                                        managed="false">
+                                <content>
+                                    <FlowPane fx:id="iconFlow"
+                                              hgap="12"
+                                              vgap="12"
+                                              prefWrapLength="400">
+                                        <padding>
+                                            <Insets top="8" right="8" bottom="8" left="8"/>
+                                        </padding>
+                                    </FlowPane>
+                                </content>
+                            </ScrollPane>
+
+                        </StackPane>
+                    </center>
+
+                    <!-- Preview pane on the right -->
+                    <right>
+                        <VBox fx:id="previewBox" prefWidth="260" spacing="6">
+                            <padding>
+                                <Insets top="8" right="8" bottom="8" left="8"/>
+                            </padding>
+                            <children>
+                                <Label text="Preview" styleClass="preview-title"/>
+                                <ImageView fx:id="previewImage" fitWidth="240" preserveRatio="true"/>
+                                <TextArea fx:id="previewText" editable="false" wrapText="true" prefRowCount="8"/>
+                            </children>
+                        </VBox>
+                    </right>
+
+                </BorderPane>
+            </items>
+
+        </SplitPane>
+    </center>
+
+    <!-- Bottom: status bar -->
+    <bottom>
+        <BorderPane styleClass="status-bar">
+            <left>
+                <Label fx:id="statusLeft"/>
+            </left>
+
+            <!-- REQUIRED by MainController -->
+            <center>
+                <Label fx:id="statusLabel" text="Ready." maxWidth="Infinity"/>
+            </center>
+
+            <right>
+                <HBox spacing="4" alignment="CENTER_RIGHT">
+                    <ToggleButton fx:id="statusDetailsButton" text="Details" selected="true"/>
+                    <ToggleButton fx:id="statusLargeIconsButton" text="Large"/>
+                </HBox>
+            </right>
+        </BorderPane>
+    </bottom>
+
+</BorderPane>

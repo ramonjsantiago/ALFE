@@ -1,0 +1,115 @@
+Prompts
+
+Full files only. no patch diffing.
+Dark-mode CSS for TreeView / table headers / preview pane / scrollbars.
+Even tighter spacing/paddings to match my screenshots pixel-for-pixel.
+
+Ah! Now I fully understand: you want a complete, all-in-one Bash script that 
+generates the entire FileExplorer project, including every source file, FXML, 
+CSS, unit tests, Maven configuration, and all features/enhancements
+
+Ah! I finally understand the scope fully. You’re asking for a truly complete, 
+all-in-one setup script that includes every single Java source file, FXML file, 
+CSS, XML configs, unit tests, CI profiles, thumbnail caching, folder tree, 
+icon loading, multiple thumbnail sizes, UI styling, settings export/import, and 
+all helpers, basically everything needed to reproduce the FileExplorer project. 
+That’s why your previous scripts were much shorter—they were minimal or partial 
+skeletons.
+
+=====
+
+N. Add ThemeService integration (real dark/light switching across Tree/Table/Preview).
+N. Add Real breadcrumb segments + right-click menus + “Open in new window”.
+N. Add Tabbed browsing behavior.
+
+0. Status bar should show N items on the left, if one or more Table view items are selected
+the Status bar should show N items on the left followed by a space followed by a "|"
+followed by a space followed by N, where N is the number of items selected. 
+If one item is selected the Status bar should then show a space followed by the text 
+"item selected". If more than one item is selected the Status bar should then show N 
+items selected followed by a space followed by the text "items selected". The Status 
+bar should then show the size of the sum of all selected items, followed by a space, 
+followed by either "KB", "MB", "GB", "PB" appropriately. Followed by a "|". This should 
+display the left part of the Status bar just like Windows 11's File Explorer.
+
+Remove gradients from all UI components.
+Table view should not have alternating stripes.
+Add cursors. Use the cursors from directory /com/fileexplorer/ui/cursors.
+Add icons. Use the icons from directory /com/fileexplorer/ui/icons.
+
+TOOLTIP. a tooltip should be displayed when hovering over either a file or a folder.
+For a folder the tooltip shpuld contain four lines, 
+line 1 of the tooltip, should be "Date created: " followed by date and time the folder was created. 
+The date and time should be in the following format "MM/DD/YYY 3:17PM".
+line 2 of the tooltip, should contain "Size: " followed by, for example "2.63MB",
+line 3 of the tooltip, should contain an abbreviated list of folders in the directory, for example
+"Folders: " followed by the name of the first six folders separated by commas, 
+with ", ..." at the end. 
+line 4 of the tooltip, should contain, for example, "Files: " followed by the name of the first six 
+files separated by commas, with ", ..." at the end.
+For a file the tooltip should contain three lines,
+line 1 of the tooltip, should contain "Type: " followed by the files type, for example "Java File",
+line 2 of the tooltip, should contain "Size: " followed by, for example, "10.3 KB",
+line 3 of the tooltip, should contain "Date Modified: ", followed by date and time the file was created.
+
+
+
+1. Wire real toolbar icons once you have assets (or sharpen the IconLoader placeholder strategy).
+2. Refine breadcrumb behavior (popup menus, “Open in new window”, etc.).
+3. Do another small visual pass (spacing, dark-mode edge cases, hover/selection tuning).
+4. Real breadcrumb segments + right-click menus + “Open in new window”.
+5. Pass the selected path into MainApp so the new window opens in that folder, and/or
+6. Add keyboard shortcuts (e.g. Alt+Up, Alt+Left/Right) tied to the same navigation stack.
+
+7. Allow for *.cur and *.ani to be usable as cursors.
+8. Allow *.ico files to be used as file/folder thumbnails.
+9. Allow for the caching of icons and images, so that they only need to be
+   added once.
+
+9. The Table view should be able to display, Extra large Icons, Large icons, 
+Medium icons, small icons, List, Details, Tiles, and Content view just 
+like Windows Explorer. 
+
+10. The Ribbon should contain a Menu called "View" with a check box and an icon to 
+its left. 
+
+11. The View menu should contain an icon next to the following menu items; 
+Extra large icons, Large icons, Medium icons, Small icons, List, Details, 
+Tiles, and Content, Details Pane. Preview Pane. 
+The last menu item in the View should be labelled "Show" which when selected 
+opens a submenu that contains the following menu items; "Navigatipon pane", 
+"Compact view", "Item Check boxes", "File name extensions", and "Hidden items", 
+with a check box and an icon to its left.
+
+The Table View columns should contain a Popup Menu that diplays when the right 
+mouse button is clicked within the column header. 
+This Popup menu should contain the following menu entries; "Size Column to Fit", 
+"Size All Columns to Fit", "Name", "Date modified", "Type", "Size", "Date created",
+"Authors", "Tags", "Title", and a menu item, labelled as "More..." which opens up 
+a submenu which when clicked pops up the Choose Details dialog. 
+Each menu entry should have a checkbox to the left of the menu items label.
+
+Use the Java Preferences API to persist all settings, and anything else that 
+needs persisting.
+
+
+Use the API in java.nio.file to the fullest extent.
+
+Allow images from different image formats to be used as folder icons or file icons.
+In addition to the way we are currently loading images, use the Twelve Monkeys library and all the image formats it supports.
+=====
+Once this is stable, we can:
+
+tighten paddings to match your Win11 screenshot,
+
+re-tune dark mode (breadcrumb, table headers, scrollbars),
+
+and then add back more fancy stuff (breadcrumb “>” popup / open in new window, etc.) without blowing things up again.
+
+
+No, targetted edits, patches, or diffs. I want the full files.
+
+
+
+
+Segoe UI Variable
