@@ -1,4 +1,4 @@
-package com.fileexplorer.service;
+package com.fileexplorer.ui.service;
 
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileStore;

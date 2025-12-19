@@ -1,4 +1,4 @@
-package com.fileexplorer.service;
+package com.fileexplorer.ui.service;
 
 import java.io.IOException;
 import java.nio.file.Files;

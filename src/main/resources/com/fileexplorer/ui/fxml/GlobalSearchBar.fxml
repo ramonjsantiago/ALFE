@@ -1,28 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.layout.HBox?>
-<?import javafx.scene.control.TextField?>
-<?import javafx.scene.control.Button?>
 
 <HBox xmlns:fx="http://javafx.com/fxml"
       fx:controller="com.explorer.ui.GlobalSearchBarController"
       spacing="6"
-      styleClass="searchbar-root"
-      prefHeight="36"
-      alignment="CENTER_LEFT">
+      styleClass="search-bar"
+      alignment="CENTER_LEFT"
+      prefHeight="32">
 
-    <TextField fx:id="searchField"
-               promptText="Search files..."
-               styleClass="searchbar-field"/>
-
-    <Button fx:id="clearBtn"
-            text="✕"
-            onAction="#onClearClick"
-            styleClass="searchbar-clear"/>
-
-    <Button fx:id="searchBtn"
-            text="Search"
-            onAction="#onSearchClick"
-            styleClass="searchbar-button"/>
-
+    <ComboBox fx:id="searchComboBox" prefWidth="300"/>
 </HBox>

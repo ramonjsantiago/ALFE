@@ -2,13 +2,16 @@
 
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressBar?>
 
-<HBox fx:id="statusBar"
-      xmlns:fx="http://javafx.com/fxml"
+<HBox xmlns:fx="http://javafx.com/fxml"
       fx:controller="com.explorer.ui.StatusBarController"
-      spacing="12"
-      styleClass="status-bar-root">
+      spacing="6"
+      styleClass="statusbar-root"
+      prefHeight="24"
+      alignment="CENTER_LEFT"
+      >
 
-    <Label fx:id="leftStatus" text="Ready"/>
-    <Label fx:id="rightStatus" text=""/>
+    <Label fx:id="infoLabel" text="" styleClass="statusbar-label"/>
+    <ProgressBar fx:id="progressBar" progress="0" styleClass="statusbar-progress"/>
 </HBox>

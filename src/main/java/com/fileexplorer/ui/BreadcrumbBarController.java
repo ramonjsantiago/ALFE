@@ -1,8 +1,14 @@
 package com.fileexplorer.ui;
 
 import com.fileexplorer.MainApp;
-import com.fileexplorer.ui.Theme;
-
+import com.fileexplorer.ui.service.ThemeService;
+import java.io.IOException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
 import javafx.fxml.FXML;
 import javafx.geometry.Side;
 import javafx.scene.Scene;
@@ -16,113 +22,107 @@ import javafx.scene.input.MouseButton;
 import javafx.scene.layout.HBox;
 import javafx.stage.Stage;
 
-import java.io.IOException;
-import java.nio.file.DirectoryStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
-
 /**
  * Win11-style breadcrumb bar with chevrons that show popup menus.
+ *
+ * Note: This controller is currently not used by BreadcrumbBar.fxml (that include uses BreadcrumbController),
+ * but it must compile cleanly as part of the project sources.
  */
 public class BreadcrumbBarController {
 
-    @FXML
-    private HBox root;
-
-    private Consumer<Path> onNavigate;
-    private Consumer<Path> onOpenInNewTab;
+    @FXML private HBox root;
 
     private Path currentPath;
 
+    private Consumer<Path> onNavigate;
+    private Consumer<Path> onOpenInNewTab;
+    private Runnable onBrowseNetwork;
+
     @FXML
     private void initialize() {
-        root.getStyleClass().add("breadcrumb-bar");
+        // no-op
     }
 
-    // ---------------------------------------------------------------------
-    // Callbacks wired from MainController
-    // ---------------------------------------------------------------------
-
-    public void setOnNavigate(Consumer<Path> handler) {
-        this.onNavigate = handler;
+    public void setOnNavigate(Consumer<Path> onNavigate) {
+        this.onNavigate = onNavigate;
     }
 
-    public void setOnOpenInNewTab(Consumer<Path> handler) {
-        this.onOpenInNewTab = handler;
+    public void setOnOpenInNewTab(Consumer<Path> onOpenInNewTab) {
+        this.onOpenInNewTab = onOpenInNewTab;
     }
 
-    // ---------------------------------------------------------------------
-    // Public API: update the bar to represent a path
-    // ---------------------------------------------------------------------
+    public void setOnBrowseNetwork(Runnable onBrowseNetwork) {
+        this.onBrowseNetwork = onBrowseNetwork;
+    }
 
     public void setPath(Path path) {
-        currentPath = path;
+        this.currentPath = path;
+        render();
+    }
+
+    private void render() {
+        if (root == null) {
+            return;
+        }
         root.getChildren().clear();
-        if (path == null) {
+
+        if (currentPath == null) {
             return;
         }
 
-        List<Path> segments = new ArrayList<>();
-        Path cur = path;
-        while (cur != null) {
-            segments.add(0, cur);
-            cur = cur.getParent();
-        }
+        List<Path> parts = splitPath(currentPath);
+        for (int i = 0; i < parts.size(); i++) {
+            Path part = parts.get(i);
 
-        for (int i = 0; i < segments.size(); i++) {
-            Path seg = segments.get(i);
+            Button crumb = new Button(labelFor(part));
+            crumb.getStyleClass().add("breadcrumb-item");
+            crumb.setFocusTraversable(false);
 
-            // Crumb button
-            Button crumb = new Button(labelFor(seg));
-            crumb.getStyleClass().add("breadcrumb-button");
-            crumb.setOnAction(e -> navigateTo(seg));
+            final Path target = part;
+            crumb.setOnAction(e -> {
+                if (onNavigate != null) onNavigate.accept(target);
+            });
+
+            crumb.setOnMouseClicked(e -> {
+                if (e.getButton() == MouseButton.SECONDARY) {
+                    ContextMenu menu = buildContextMenu(target);
+                    menu.show(crumb, Side.BOTTOM, 0, 0);
+                    e.consume();
+                }
+            });
+
             root.getChildren().add(crumb);
 
-            // Chevron button (">") with Win11-style popup menu
-            if (i < segments.size() - 1) {
+            if (i < parts.size() - 1) {
                 Button chevron = new Button(">");
-                chevron.getStyleClass().add("breadcrumb-separator-button");
+                chevron.getStyleClass().add("breadcrumb-chevron");
+                chevron.setFocusTraversable(false);
+
+                final Path menuBase = part;
                 chevron.setOnMouseClicked(e -> {
                     if (e.getButton() == MouseButton.PRIMARY) {
-                        ContextMenu menu = buildSegmentMenu(seg);
+                        ContextMenu menu = buildChildrenMenu(menuBase);
                         menu.show(chevron, Side.BOTTOM, 0, 0);
+                        e.consume();
                     }
                 });
+
                 root.getChildren().add(chevron);
             }
         }
     }
 
-    private String labelFor(Path p) {
-        Path name = p.getFileName();
-        return (name != null) ? name.toString() : p.toString();
-    }
-
-    private void navigateTo(Path target) {
-        if (onNavigate != null) {
-            onNavigate.accept(target);
-        }
-    }
-
-    // ---------------------------------------------------------------------
-    // Popup menu for a crumb chevron
-    // ---------------------------------------------------------------------
-
-    private ContextMenu buildSegmentMenu(Path base) {
+    private ContextMenu buildContextMenu(Path base) {
         ContextMenu menu = new ContextMenu();
-        menu.getStyleClass().add("fluent-context-menu");
 
         MenuItem open = new MenuItem("Open");
-        open.setOnAction(e -> navigateTo(base));
+        open.setOnAction(e -> {
+            if (onNavigate != null) onNavigate.accept(base);
+        });
 
         MenuItem openNewTab = new MenuItem("Open in new tab");
         openNewTab.setOnAction(e -> {
-            if (onOpenInNewTab != null) {
-                onOpenInNewTab.accept(base);
-            }
+            if (onOpenInNewTab != null) onOpenInNewTab.accept(base);
         });
 
         MenuItem openNewWindow = new MenuItem("Open in new window");
@@ -132,34 +132,59 @@ public class BreadcrumbBarController {
         copyAddress.setOnAction(e -> copyAddressToClipboard(base));
 
         menu.getItems().addAll(
-                open,
-                openNewTab,
-                openNewWindow,
-                new SeparatorMenuItem(),
-                copyAddress
+            open,
+            openNewTab,
+            openNewWindow,
+            new SeparatorMenuItem(),
+            copyAddress
         );
 
-        // Extra: list immediate child folders of this segment, like Explorer
-        try {
-            if (Files.isDirectory(base)) {
-                List<MenuItem> children = new ArrayList<>();
-                try (DirectoryStream<Path> stream =
-                             Files.newDirectoryStream(base, entry -> Files.isDirectory(entry))) {
-                    for (Path child : stream) {
-                        MenuItem mi = new MenuItem(labelFor(child));
-                        mi.setOnAction(e -> navigateTo(child));
-                        children.add(mi);
-                    }
-                }
-                if (!children.isEmpty()) {
-                    menu.getItems().add(new SeparatorMenuItem());
-                    menu.getItems().addAll(children);
-                }
-            }
-        } catch (IOException ignored) {
+        if (onBrowseNetwork != null) {
+            menu.getItems().add(new SeparatorMenuItem());
+            MenuItem browseNetwork = new MenuItem("Browse network");
+            browseNetwork.setOnAction(e -> onBrowseNetwork.run());
+            menu.getItems().add(browseNetwork);
         }
 
         return menu;
+    }
+
+    private ContextMenu buildChildrenMenu(Path base) {
+        ContextMenu menu = new ContextMenu();
+
+        List<Path> children = listChildren(base);
+        if (children.isEmpty()) {
+            MenuItem empty = new MenuItem("(empty)");
+            empty.setDisable(true);
+            menu.getItems().add(empty);
+            return menu;
+        }
+
+        for (Path child : children) {
+            MenuItem mi = new MenuItem(labelFor(child));
+            mi.setOnAction(e -> {
+                if (onNavigate != null) onNavigate.accept(child);
+            });
+            menu.getItems().add(mi);
+        }
+
+        return menu;
+    }
+
+    private List<Path> listChildren(Path base) {
+        List<Path> out = new ArrayList<>();
+        if (base == null) return out;
+
+        try (DirectoryStream<Path> ds = Files.newDirectoryStream(base)) {
+            for (Path p : ds) {
+                out.add(p);
+            }
+        } catch (IOException ignored) {
+            // best-effort
+        }
+
+        out.sort((a, b) -> labelFor(a).compareToIgnoreCase(labelFor(b)));
+        return out;
     }
 
     private void copyAddressToClipboard(Path p) {
@@ -171,26 +196,41 @@ public class BreadcrumbBarController {
         Clipboard.getSystemClipboard().setContent(content);
     }
 
-    // ---------------------------------------------------------------------
-    // Open in new window using the current theme
-    // ---------------------------------------------------------------------
-
     private void openInNewWindow(Path folder) {
         if (folder == null) {
             return;
         }
 
-        Scene ownerScene = root.getScene();
-        ThemeService.Theme theme = ThemeService.Theme.SYSTEM;
-        if (ownerScene != null) {
-            theme = ThemeService.getCurrentTheme(ownerScene);
-        }
+        Scene ownerScene = root == null ? null : root.getScene();
+        Boolean darkOverride = ownerScene == null ? null : ThemeService.isDarkApplied(ownerScene);
 
         try {
             Stage stage = new Stage();
-            MainApp.configureExplorerStage(stage, folder, theme);
+            MainApp.configureExplorerStage(stage, folder, darkOverride);
         } catch (IOException ex) {
             ex.printStackTrace();
         }
+    }
+
+    private static List<Path> splitPath(Path p) {
+        List<Path> parts = new ArrayList<>();
+        if (p == null) return parts;
+
+        Path cur = p;
+        while (cur != null) {
+            parts.add(0, cur);
+            cur = cur.getParent();
+        }
+        return parts;
+    }
+
+    private static String labelFor(Path p) {
+        if (p == null) return "";
+        Path fileName = p.getFileName();
+        if (fileName == null) {
+            return p.toString();
+        }
+        String s = fileName.toString();
+        return s.isBlank() ? p.toString() : s;
     }
 }

@@ -1,0 +1,33 @@
+/* =============================
+   Windows Explorer — Light Theme
+   ============================= */
+
+.root {
+    -fx-font-family: "Segoe UI Variable", "Segoe UI";
+
+    /* Override the token set used by explorer-base.css */
+    -fx-bg-0: #ffffff;
+    -fx-bg-1: #f6f7f9;
+    -fx-bg-2: #ececec;
+    -fx-bg-3: #e1e1e1;
+
+    -fx-border-color-1: #d0d3d8;
+    -fx-border-color-2: #b9b9b9;
+
+    /* JavaFX control tokens */
+    -fx-control-inner-background: #ffffff;
+    -fx-box-border: #d0d3d8;
+    -fx-text-base-color: #1f2328;
+
+    -fx-accent: #2f6fed;
+    -fx-selection-bar: #cfe3ff;
+    -fx-selection-bar-non-focused: #dbe8f9;
+
+    -fx-background-color:
+        linear-gradient(to bottom, -fx-bg-1, -fx-bg-0),
+        -fx-bg-0;
+}
+
+.label {
+    -fx-text-fill: -fx-text-base-color;
+}

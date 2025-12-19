@@ -1,110 +1,38 @@
-/* explorer-base.css
-   Base: flat UI primitives, no gradients.
-   Also defines fallback theme tokens and default font size (16px).
-*/
+/* ============================
+   Windows Explorer — Base Layer
+   ============================ */
+
+:root {
+    -fx-accent: #3175f0;
+    -fx-focus-color: -fx-accent;
+    -fx-faint-focus-color: rgba(49,117,240,0.25);
+
+    -fx-bg-0: #ffffff;
+    -fx-bg-1: #f7f7f7;
+    -fx-bg-2: #ececec;
+    -fx-bg-3: #e1e1e1;
+
+    -fx-border-color-1: #d0d0d0;
+    -fx-border-color-2: #b9b9b9;
+
+    -fx-explorer-shadow: dropshadow(gaussian, rgba(0,0,0,0.20), 10, 0, 0, 3);
+}
 
 .root {
-    /* Fallback tokens (LIGHT) */
-    -fx-background: #f6f7f9;
-    -fx-control-inner-background: #ffffff;
-    -fx-box-border: #d0d3d8;
-    -fx-text-base-color: #1f2328;
-    -fx-selection-bar: #cfe3ff;
-    -fx-selection-bar-non-focused: #dbe8f9;
-
-    /* Requirement: start at 16px */
-    -fx-font-size: 16px;
-
-    -fx-background-color: -fx-background;
+    -fx-background-color:
+        linear-gradient(to bottom, -fx-bg-1, -fx-bg-0),
+        -fx-bg-0;
 }
 
-/* Ensure containers actually paint a background (avoid “black window fill” look) */
-.border-pane,
-.split-pane,
-.stack-pane,
-.vbox,
-.hbox,
-.anchor-pane,
-.grid-pane,
-.tool-bar,
-.table-view,
-.tree-view,
-.list-view,
-.scroll-pane,
-.tab-pane {
-    -fx-background-color: -fx-background;
+.separator {
+    -fx-background-color: -fx-border-color-1;
 }
 
-/* Text colors */
-.label,
-.text,
-.text-area,
-.text-field,
-.button,
-.toggle-button,
-.menu-button,
-.menu-item,
-.check-box,
-.radio-button {
-    -fx-text-fill: -fx-text-base-color;
-}
-
-/* Toolbars (flat) */
-.tool-bar {
-    -fx-background-insets: 0;
-    -fx-border-color: -fx-box-border;
-    -fx-border-width: 0 0 1 0;
-}
-
-/* Buttons (flat) */
-.button,
-.toggle-button,
-.menu-button {
-    -fx-background-color: -fx-control-inner-background;
-    -fx-background-insets: 0;
-    -fx-border-color: -fx-box-border;
+.explorer-card {
+    -fx-background-color: -fx-bg-0;
+    -fx-border-color: -fx-border-color-1;
     -fx-border-width: 1;
-    -fx-background-radius: 8;
-    -fx-border-radius: 8;
-    -fx-padding: 6 10 6 10;
-}
-
-.button:pressed,
-.toggle-button:pressed,
-.menu-button:pressed {
-    -fx-background-color: derive(-fx-control-inner-background, -8%);
-}
-
-/* SplitPane divider (flat) */
-.split-pane-divider {
-    -fx-background-color: -fx-box-border;
-    -fx-padding: 0 1 0 1;
-}
-
-/* ScrollBars (flat) */
-.scroll-bar:horizontal,
-.scroll-bar:vertical {
-    -fx-background-color: transparent;
-}
-
-.scroll-bar .track {
-    -fx-background-color: transparent;
-    -fx-background-insets: 0;
-}
-
-.scroll-bar .thumb {
-    -fx-background-color: derive(-fx-control-inner-background, -15%);
-    -fx-background-insets: 0;
-    -fx-background-radius: 10;
-}
-
-.scroll-bar .increment-button,
-.scroll-bar .decrement-button {
-    -fx-background-color: transparent;
-    -fx-padding: 0;
-}
-
-.scroll-bar .increment-arrow,
-.scroll-bar .decrement-arrow {
-    -fx-background-color: derive(-fx-text-base-color, -20%);
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-effect: -fx-explorer-shadow;
 }
