@@ -1,24 +1,40 @@
-/* explorer-base.css
-   Base: flat UI primitives, no gradients.
-   Also defines fallback theme tokens and default font size (16px).
+/* explorer-base.css (DARK LITERAL)
+   Stable JavaFX CSS: no custom variable chaining, no nonstandard -fx-* tokens.
+   Goal: avoid CSS lookup ClassCastException and keep theme deterministic.
 */
 
 .root {
-    /* Fallback tokens (LIGHT) */
-    -fx-background: #f6f7f9;
-    -fx-control-inner-background: #ffffff;
-    -fx-box-border: #d0d3d8;
-    -fx-text-base-color: #1f2328;
-    -fx-selection-bar: #cfe3ff;
-    -fx-selection-bar-non-focused: #dbe8f9;
+    /* Core Modena-friendly tokens (literal paints) */
+    -fx-base: #1c2027;
+    -fx-background-color: #15181d;
+    -fx-control-inner-background: #1c2027;
+    -fx-box-border: #2a303a;
 
-    /* Requirement: start at 16px */
+    -fx-text-base-color: #e6e8eb;
+    -fx-text-inner-color: #e6e8eb;
+
+    -fx-selection-bar: #2a4a7a;
+    -fx-selection-bar-non-focused: #233a59;
+
+    /* UI font sizing baseline (your project expects 16px default) */
     -fx-font-size: 16px;
 
-    -fx-background-color: -fx-background;
+/* Additional Modena compatibility tokens (avoid lookup-to-String issues) */
+-fx-accent: #3a8dde;
+-fx-focus-color: #3a8dde8c;
+-fx-faint-focus-color: #3a8dde40;
+
+-fx-inner-border: #2f3641;
+-fx-outer-border: #20252d;
+-fx-body-color: #1c2027;
+-fx-color: #1c2027;
+
+-fx-shadow-highlight-color: #ffffff1a;
+-fx-shadow-color: #000000a6;
+-fx-default-button: #2a4a7a;
 }
 
-/* Ensure containers actually paint a background (avoid “black window fill” look) */
+/* Containers */
 .border-pane,
 .split-pane,
 .stack-pane,
@@ -32,7 +48,7 @@
 .list-view,
 .scroll-pane,
 .tab-pane {
-    -fx-background-color: -fx-background;
+    -fx-background-color: #15181d;
 }
 
 /* Text colors */
@@ -46,13 +62,13 @@
 .menu-item,
 .check-box,
 .radio-button {
-    -fx-text-fill: -fx-text-base-color;
+    -fx-text-fill: #e6e8eb;
 }
 
 /* Toolbars (flat) */
 .tool-bar {
     -fx-background-insets: 0;
-    -fx-border-color: -fx-box-border;
+    -fx-border-color: #2a303a;
     -fx-border-width: 0 0 1 0;
 }
 
@@ -60,9 +76,9 @@
 .button,
 .toggle-button,
 .menu-button {
-    -fx-background-color: -fx-control-inner-background;
+    -fx-background-color: #1c2027;
     -fx-background-insets: 0;
-    -fx-border-color: -fx-box-border;
+    -fx-border-color: #2a303a;
     -fx-border-width: 1;
     -fx-background-radius: 8;
     -fx-border-radius: 8;
@@ -72,16 +88,16 @@
 .button:pressed,
 .toggle-button:pressed,
 .menu-button:pressed {
-    -fx-background-color: derive(-fx-control-inner-background, -8%);
+    -fx-background-color: derive(#1c2027, -6%);
 }
 
-/* SplitPane divider (flat) */
+/* SplitPane divider */
 .split-pane-divider {
-    -fx-background-color: -fx-box-border;
+    -fx-background-color: #2a303a;
     -fx-padding: 0 1 0 1;
 }
 
-/* ScrollBars (flat) */
+/* ScrollBars (flat, safe literals) */
 .scroll-bar:horizontal,
 .scroll-bar:vertical {
     -fx-background-color: transparent;
@@ -89,22 +105,39 @@
 
 .scroll-bar .track {
     -fx-background-color: transparent;
-    -fx-background-insets: 0;
 }
 
 .scroll-bar .thumb {
-    -fx-background-color: derive(-fx-control-inner-background, -15%);
-    -fx-background-insets: 0;
-    -fx-background-radius: 10;
+    -fx-background-color: derive(#2a303a, 10%);
+    -fx-background-radius: 8;
 }
 
 .scroll-bar .increment-button,
 .scroll-bar .decrement-button {
     -fx-background-color: transparent;
-    -fx-padding: 0;
+    -fx-padding: 4;
 }
 
 .scroll-bar .increment-arrow,
 .scroll-bar .decrement-arrow {
-    -fx-background-color: derive(-fx-text-base-color, -20%);
+    -fx-background-color: transparent;
+}
+
+/* Text inputs */
+.text-field,
+.text-area {
+    -fx-background-color: #1c2027;
+    -fx-background-insets: 0;
+    -fx-border-color: #2a303a;
+    -fx-border-width: 1;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+}
+
+/* Selection */
+.list-cell:selected,
+.tree-cell:selected,
+.table-row-cell:filled:selected,
+.table-row-cell:filled:selected:focused {
+    -fx-background-color: -fx-selection-bar;
 }

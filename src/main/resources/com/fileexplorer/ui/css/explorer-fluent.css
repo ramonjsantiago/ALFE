@@ -1,21 +1,24 @@
-/* explorer-fluent.css
- * Optional Fluent-inspired tweaks. No gradients.
- */
+/* explorer-fluent.css (DARK LITERAL)
+   Fluent-inspired tweaks without custom variable chaining.
+*/
 
-/* Fluent-style primary button (if you choose to apply this style class) */
+.fluent-icon {
+    -fx-font-family: "Segoe Fluent Icons";
+}
+
+.fluent-toolbar {
+    -fx-background-color: #15181d;
+    -fx-padding: 2 8 2 8;
+    -fx-spacing: 4;
+}
+
+.breadcrumb-bar .scroll-pane,
+.breadcrumb-bar .viewport {
+    -fx-background-color: transparent;
+}
+
 .fluent-primary-button {
     -fx-background-color: #0078d4;
     -fx-border-color: #0078d4;
-    -fx-text-fill: #ffffff;
-}
-
-.fluent-primary-button:hover {
-    -fx-background-color: #106ebe;
-    -fx-border-color: #106ebe;
-}
-
-.fluent-primary-button:disabled {
-    -fx-background-color: #5a9bd5;
-    -fx-border-color: #5a9bd5;
-    -fx-opacity: 0.6;
+    -fx-text-fill: white;
 }

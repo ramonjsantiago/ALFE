@@ -1,9 +1,0 @@
-.favorites-pane {
-    -fx-background-color: -color-surface-2;
-    -fx-padding: 4;
-    -fx-border-color: -color-border;
-    -fx-border-width: 0 1 0 0;
-}
-.favorites-pane .list-view {
-    -fx-background-color: transparent;
-}

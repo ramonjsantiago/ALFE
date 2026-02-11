@@ -1,0 +1,44 @@
+/* ui_fixes.css (DARK LITERAL SAFE) */
+
+.tree-view-fixed .tree-cell {
+    -fx-padding: 0 8 0 8;
+}
+
+/* Ensure TreeCell text is readable */
+.tree-view-fixed .tree-cell .text {
+    -fx-fill: #e6e8eb;
+}
+
+/* Status bar */
+.status-bar {
+    -fx-min-height: 52px;
+    -fx-pref-height: 52px;
+    -fx-padding: 8px 12px 8px 12px;
+    -fx-background-color: #15181d;
+}
+
+.status-bar .label {
+    -fx-text-fill: #e6e8eb;
+}
+
+.status-bar .status-view-toggle {
+    -fx-background-color: #1c2027;
+    -fx-border-color: #2a303a;
+    -fx-border-width: 1;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+}
+
+.status-bar .status-view-toggle:hover {
+    -fx-background-color: derive(#1c2027, 8%);
+}
+
+.status-bar .status-view-toggle:selected {
+    -fx-background-color: derive(#1c2027, 14%);
+}
+
+/* Table header hover */
+.table-view .column-header:hover,
+.table-view .column-header-background .filler:hover {
+    -fx-background-color: derive(#1c2027, 10%);
+}

@@ -1,0 +1,32 @@
+/* explorer_tree.css (DARK LITERAL)
+   Literal paints only (no lookups) to avoid CSS lookup casting issues.
+*/
+
+.explorer-tree {
+    -fx-background-color: #15181d;
+    -fx-control-inner-background: #15181d;
+    -fx-indent: 16px;
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 12px;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.explorer-tree .tree-cell {
+    -fx-text-fill: #e6e8eb;
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-background-radius: 6;
+}
+
+.explorer-tree .tree-cell:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.06);
+}
+
+.explorer-tree .tree-cell:selected {
+    -fx-background-color: rgba(42, 74, 122, 0.85);
+}
+
+.explorer-tree:focused {
+    -fx-effect: dropshadow(gaussian, rgba(96, 165, 250, 0.35), 12, 0.35, 0, 0);
+}

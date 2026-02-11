@@ -3,10 +3,17 @@
  ************************************************************/
 
 .root {
-    -fx-font-family: "Segoe UI", "Segoe UI Variable", system-ui, sans-serif;
+    -fx-font-family: "Segoe UI Variable";
     -fx-font-size: 16px;
 }
 
+
+/* Icon glyphs (Fluent UI) */
+.fluent-icon,
+.glyph-icon,
+.icon-glyph {
+    -fx-font-family: "Segoe Fluent Icons";
+}
 /* Accent color (Win11 blue) */
 .theme-light,
 .theme-dark {
@@ -102,7 +109,8 @@
 
 .fluent-command-button,
 .fluent-toolbar .button,
-.fluent-toolbar .toggle-button {
+.fluent-toolbar .toggle-button,
+.fluent-toolbar .menu-button {
     -fx-background-radius: 6;
     -fx-padding: 4 10;
     -fx-background-insets: 0;
@@ -113,18 +121,21 @@
 /* Light */
 .theme-light .fluent-command-button,
 .theme-light .fluent-toolbar .button,
-.theme-light .fluent-toolbar .toggle-button {
+.theme-light .fluent-toolbar .toggle-button,
+.theme-light .fluent-toolbar .menu-button {
     -fx-background-color: transparent;
     -fx-text-fill: #202020;
 }
 
 .theme-light .fluent-command-button:hover,
 .theme-light .fluent-toolbar .button:hover,
-.theme-light .fluent-toolbar .toggle-button:hover {
+.theme-light .fluent-toolbar .toggle-button:hover,
+.theme-light .fluent-toolbar .menu-button:hover {
     -fx-background-color: rgba(0, 0, 0, 0.04);
 }
 
 .theme-light .fluent-command-button:armed,
+.theme-light .fluent-toolbar .menu-button:armed,
 .theme-light .fluent-toolbar .toggle-button:selected {
     -fx-background-color: rgba(0, 120, 212, 0.16);
     -fx-text-fill: #202020;
@@ -133,21 +144,33 @@
 /* Dark */
 .theme-dark .fluent-command-button,
 .theme-dark .fluent-toolbar .button,
-.theme-dark .fluent-toolbar .toggle-button {
+.theme-dark .fluent-toolbar .toggle-button,
+.theme-dark .fluent-toolbar .menu-button {
     -fx-background-color: transparent;
     -fx-text-fill: #ffffff;
 }
 
 .theme-dark .fluent-command-button:hover,
 .theme-dark .fluent-toolbar .button:hover,
-.theme-dark .fluent-toolbar .toggle-button:hover {
+.theme-dark .fluent-toolbar .toggle-button:hover,
+.theme-dark .fluent-toolbar .menu-button:hover {
     -fx-background-color: rgba(255, 255, 255, 0.07);
 }
 
 .theme-dark .fluent-command-button:armed,
+.theme-dark .fluent-toolbar .menu-button:armed,
 .theme-dark .fluent-toolbar .toggle-button:selected {
     -fx-background-color: rgba(0, 120, 212, 0.4);
     -fx-text-fill: #ffffff;
+}
+
+
+.breadcrumb-row {
+    -fx-spacing: 8;
+}
+
+.breadcrumb-row .text-field {
+    -fx-background-radius: 10;
 }
 
 /************************************************************

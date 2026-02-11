@@ -1,0 +1,16 @@
+com.fileexplorer.MainApp
+com.fileexplorer.ui.BreadcrumbBar
+com.fileexplorer.ui.BreadcrumbBarController
+com.fileexplorer.ui.BreadcrumbController
+com.fileexplorer.ui.ClipboardUtil
+com.fileexplorer.ui.FileSizeFormatter
+com.fileexplorer.ui.IconLoader
+com.fileexplorer.ui.LayoutGrowUtil
+com.fileexplorer.ui.MainController
+com.fileexplorer.ui.UiZoomManager
+com.fileexplorer.ui.ZoomRoot
+com.fileexplorer.ui.service.FileMetadataService
+com.fileexplorer.ui.service.IconCacheService
+com.fileexplorer.ui.service.ThemeService
+com.fileexplorer.ui.service.TreeBuildService
+com.fileexplorer.util.ResourceAudit

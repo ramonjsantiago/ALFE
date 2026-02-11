@@ -27,18 +27,22 @@ Windows 11 File Explorer: 15 Tricks in 3 MINUTES!
 Anson Explores Windows
 YouTube • Mar 7, 2024
 Pinning: Right-click folders/files and select "Pin to Quick access" or drag them to Favorites.
+
 Sharing: Select a file/folder and use the "Share" button on the Command Bar.
+
 View Options: Use the "View" menu on the Command Bar to switch between List, Details, Tiles, or adjust icon sizes; select "Compact view" to reduce spacing.
+
 Adding Details: In "Details" view, right-click column headers (Name, Date Modified, Type, Size) to add more info like "Date Created" or "Tags".
+
 Opening in New Tab: Right-click a folder and choose "Open in new tab," or use Ctrl+T. 
+
 Quick Access & Home View
+
 This video demonstrates how to organize your files and folders using the new features in File Explorer:
-Related video thumbnail
-56s
-Windows 11 File Explorer for Beginners
 
 
-The Tech Gremlin Warrior
-YouTube • Apr 12, 2025
-Home: The default landing page (unless changed in Options) offering recent files, shared files, and quick access to your PC and cloud.
-Quick Access: A personal space for frequently used folders and files, accessible from the Navigation Pane. 
+Home: The default landing page (unless changed in Options) offering recent files, 
+shared files, and quick access to your PC and cloud.
+
+Quick Access: A personal space for frequently used folders and files, accessible 
+from the Navigation Pane. 

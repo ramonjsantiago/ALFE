@@ -1,5 +1,56 @@
 CHANGELOG.md
 
+## 2026-01-26 (Fix22)
+
+### Fixed
+- Fixed `MainController` compilation error by initializing the `displayService` field (used by TreeCells) to the controller's `TreeBuildService` instance.
+
+## 2026-01-26 (Fix21)
+
+### Fixed
+- Fixed compilation errors introduced during Fix20 iteration:
+  - Added missing `java.util.logging.Level` import.
+  - Added `syspropBoolean(String, boolean)` helper for system-property wiring.
+  - Tree cell renderers now use an injected `TreeBuildService` instance for display names (no static method calls).
+
+## 2026-01-26 (Fix20)
+
+### Fixed
+- Restored TreeView root display: the Computer root now renders even when its backing `TreeItem` value is `null`.
+- Added Fluent disclosure chevrons for the TreeView:
+  - Collapsed: ChevronRight (U+E974)
+  - Expanded: ChevronDown (U+E972)
+- Updated the "See more" menu button to use the Fluent glyph (U+E712).
+
+### Changed
+- The Computer root now expands on startup to show drive roots; child folders remain lazy and only populate on expansion (activation).
+
+## 2026-01-26 (Fix19)
+
+### Fixed
+- Restored compilation for Fix18 by adding an overload of `enforceVirtualizedPrefSize(...)` that accepts per-control system-property keys for pref height/width.
+- Added a defensive system-property double parser for the pref-size guard wiring (invalid values fall back to defaults).
+- Reintroduced the `RESOURCE_AUDIT` flag in `MainController` (driven by `-Dfileexplorer.resourceAudit`).
+
+## 2026-01-26 (Fix18)
+
+### Fixed
+- Strengthened startup virtualization guards by clamping both pref *and* max dimensions during the first CSS/layout pass. This is intended to prevent VirtualFlow runaway cell allocation during Stage.show().
+- Automatically release the temporary max-size clamps after the first successful Stage.show()/pulse so SplitPane resizing behaves normally (can be held with `-Dfileexplorer.ui.guard.keepMaxClamps=true`).
+
+### Changed
+- Safe mode still disables initial directory load by default, but now supports an explicit override via `-Dfileexplorer.safeMode.allowInitialDirectoryLoad=true`.
+
+## 2026-01-25 (Fix17)
+
+### Fixed
+- Restored compilation after the "prefHeight guards always" iteration by:
+  - Replacing the removed `loadDirectory(Path)` call with `loadDirectoryIntoTableAsync(Path)`.
+  - Updating TreeView activation handlers to use `navigateToFolder(Path, boolean)`.
+  - Adding conservative TreeView drag/drop handlers (`onTreeDragOver`, `onTreeDragDropped`) to satisfy wiring.
+  - Removing the stale `IconLoader.IconSize` usage and switching TreeCell icon assignment to `IconLoader.load(IconType, dark, size)`.
+- Updated this changelog (requested for every produced zip).
+
 ## 2025-12-10
 
 ### Added
@@ -97,6 +148,15 @@ FileExplorer/
    └─ (other Maven build output)
 
 # Changelog
+
+## Fix20 - Restore Tree root display, Fluent chevrons, and More-menu glyph (2026-01-26)
+
+- Restored proper TreeView root labeling: the Computer root now renders (even when its backing `TreeItem` value is `null`).
+- Added Fluent-style disclosure chevrons for tree expansion state:
+  - Collapsed: ChevronRight (U+E974)
+  - Expanded: ChevronDown (U+E972)
+- Updated the command bar “See more” menu button to use the Fluent glyph U+E712.
+- Kept “activation-only” navigation semantics: Safe Mode still does not navigate on selection/double-click, but tree expansion remains lazy and safe.
 
 All notable changes to this project are documented in this file.
 
@@ -313,3 +373,46 @@ Planned work:
 
 - Build numbers (e.g., 1147, 1247, 1300) correspond to internal project milestones.
 - Semantic version (`1.x.y`) reflects feature-level changes and backwards compatibility at the UI/API level.
+
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [Unreleased] — 2025-12-29
+
+### Added
+- **HiDPI-aware startup UI scaling**: initial UI font size is computed from the primary screen DPI and applied to the scene root before the first layout pass.
+- **TreeView label fallback**: when the platform display name resolver returns blank, Tree nodes fall back to `Path.getFileName()` (or `Path.toString()` as a last resort) to ensure node labels always render.
+
+### Changed
+- **Minimum UI font size increased to 24px** and default zoom baseline raised to improve readability on high-resolution displays.
+- **Ctrl++ / Ctrl-- zoom behavior**: zoom updates are applied by updating `-fx-font-size` on the scene root so the UI scales consistently across controls.
+- **Startup window sizing**: default window bounds are now constrained to a sensible workstation size (instead of near full-screen on 4K) while still respecting minimum dimensions.
+
+### Fixed
+- **Table “Size” column empty**: size now renders using a local `Files.size(path)`-based formatter with Explorer-like behavior (folders show blank).
+- **Breadcrumb clipping risk reduced**: breadcrumb layout/CSS rules were tightened to avoid fixed-height constraints and to allow toolbar/breadcrumb rows to compute their height from content.
+- **New window creation compilation error**: removed invalid `configureExplorerStage(Stage)` call and routed all new-window creation through the existing `configureExplorerStage(Stage, Path, boolean)` overload.
+
+### Notes
+- The project previously exhibited a “large shell + small content” symptom on 4K due to competing startup sizing behaviors. The current approach establishes a **single source of truth** for initial UI scaling (MainApp computes startup font; controller adopts it for subsequent zoom operations).
+
+# Changelog
+
+All notable changes to the FileExplorer UI/zoom work are documented here.
+
+## Unreleased
+
+### Fixed
+- **Invalid CSS**: removed stray non-CSS text (`...`) from `zoom_overrides.css` that was preventing later rules from loading (leading to clipped toolbars and inconsistent scaling).
+- **TreeView labels disappearing**: hardened the `TreeCell` rendering so a blank/empty display name falls back to `Path#getFileName()` (or `Path#toString()` as last resort), and ensured text color is set explicitly for light/dark themes.
+- **HiDPI first-frame sizing**: `MainController` now adopts the startup UI font value provided by `MainApp` via the root property `main.uiFontPx`, so the initial render matches the intended scale.
+
+### Improved
+- **Tree readability**: the navigation tree now scales larger than the rest of the UI (`~1.55x`) and uses a fixed cell size derived from the font size to avoid clipped glyphs.
+- **View modes**: implemented real `Tiles` and `Content` layouts using the existing icon panel:
+  - `Tiles`: vertical rows with icon + name + type/size summary.
+  - `Content`: vertical rows with icon + name + type/size summary + modified time.
+
+### Notes
+- These changes avoid window/scene scale transforms and instead rely on font-driven sizing plus control metric overrides, which is substantially more stable across platforms and DPI settings.

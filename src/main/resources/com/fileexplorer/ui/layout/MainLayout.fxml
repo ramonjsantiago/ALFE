@@ -1,0 +1,576 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.geometry.Pos?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ContextMenu?>
+<?import javafx.scene.control.CustomMenuItem?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.MenuButton?>
+<?import javafx.scene.control.MenuItem?>
+<?import javafx.scene.control.CheckMenuItem?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.Menu?>
+<?import javafx.scene.control.RadioMenuItem?>
+<?import javafx.scene.control.RadioButton?>
+<?import javafx.scene.control.ToggleGroup?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.SeparatorMenuItem?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.ToggleButton?>
+<?import javafx.scene.control.ToolBar?>
+<?import javafx.scene.control.Tooltip?>
+<?import javafx.scene.control.TreeView?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane fx:id="root"
+            xmlns="http://javafx.com/javafx/25"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.fileexplorer.controller.MainController">
+
+    <!-- Top: breadcrumb bar, command bar, secondary bar -->
+    <top>
+        <VBox spacing="6">
+            <padding>
+                <Insets top="6" right="0" bottom="6" left="0"/>
+            </padding>
+            <children>
+
+                <!-- Breadcrumb bar (left aligned) + search box (rightmost) -->
+                <BorderPane fx:id="breadcrumbRow" styleClass="fluent-toolbar, breadcrumb-row, breadcrumb-row-force"
+                            minHeight="52.0" prefHeight="52.0" maxHeight="52.0"
+                            visible="true" managed="true">
+                    <center>
+                        <StackPane fx:id="breadcrumbHost" id="breadcrumbHost" alignment="CENTER_LEFT"
+                                   minHeight="52.0" prefHeight="52.0" maxHeight="52.0">
+                            <fx:include source="../breadcrumb/BreadcrumbBar.fxml" fx:id="breadcrumbBar"/>
+                        </StackPane>
+                    </center>
+                    <right>
+                        <TextField fx:id="searchField"
+                                   promptText="Search"
+                                   prefWidth="320"
+                                   maxWidth="420"
+                                   minHeight="36.0"
+                                   prefHeight="36.0"
+                                   maxHeight="36.0"
+                                   BorderPane.alignment="CENTER_RIGHT">
+                            <tooltip><Tooltip text="Search in current folder"/></tooltip>
+                        </TextField>
+                    </right>
+                    <padding>
+                        <Insets top="4" right="8" bottom="4" left="8"/>
+                    </padding>
+                </BorderPane>
+
+                <!-- Command bar under breadcrumb -->
+                <ToolBar fx:id="commandBar" styleClass="fluent-toolbar, command-bar">
+                    <items>
+
+                        <!-- New menu (with icons) -->
+                        <MenuButton fx:id="newMenuButton" text="New" focusTraversable="false">
+                            <tooltip><Tooltip text="Create new item"/></tooltip>
+                            <graphic>
+                                <Label text="&#xE710;" styleClass="fluent-icon"/>
+                            </graphic>
+
+                            <items>
+                                <MenuItem text="Folder">
+                                    <graphic><Label text="&#xE8B7;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Shortcut">
+                                    <graphic><Label text="&#xE71B;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Microsoft Access Database">
+                                    <graphic><Label text="&#xE8A5;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Bitmap Image">
+                                    <graphic><Label text="&#xEB9F;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Microsoft Word Document">
+                                    <graphic><Label text="&#xE8A5;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Microsoft Access Database">
+                                    <graphic><Label text="&#xE8A5;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Microsoft PowerPoint Presentation">
+                                    <graphic><Label text="&#xE8A5;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Microsoft Publisher Document">
+                                    <graphic><Label text="&#xE8A5;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Rich Text Format">
+                                    <graphic><Label text="&#xE8D2;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Text Document">
+                                    <graphic><Label text="&#xE8A5;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Microsoft Excel Worksheet">
+                                    <graphic><Label text="&#xE8A5;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Compressed (zipped) Folder">
+                                    <graphic><Label text="&#xF012;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                            </items>
+                        </MenuButton>
+
+                        <Separator orientation="VERTICAL"/>
+
+                        <Button fx:id="cutButton" text="Cut" focusTraversable="false">
+                            <tooltip><Tooltip text="Cut"/></tooltip>
+                            <graphic><Label text="&#xE8C6;" styleClass="fluent-icon"/></graphic>
+                        </Button>
+                        <Button fx:id="copyButton" text="Copy" focusTraversable="false">
+                            <tooltip><Tooltip text="Copy"/></tooltip>
+                            <graphic><Label text="&#xE8C8;" styleClass="fluent-icon"/></graphic>
+                        </Button>
+                        <Button fx:id="pasteButton" text="Paste" focusTraversable="false">
+                            <tooltip><Tooltip text="Paste"/></tooltip>
+                            <graphic><Label text="&#xE77F;" styleClass="fluent-icon"/></graphic>
+                        </Button>
+                        <Button fx:id="renameButton" text="Rename" focusTraversable="false">
+                            <tooltip><Tooltip text="Rename"/></tooltip>
+                            <graphic><Label text="&#xE8AC;" styleClass="fluent-icon"/></graphic>
+                        </Button>
+                        <Button fx:id="shareButton" text="Share" focusTraversable="false">
+                            <tooltip><Tooltip text="Share"/></tooltip>
+                            <graphic><Label text="&#xE72D;" styleClass="fluent-icon"/></graphic>
+                        </Button>
+                        <Button fx:id="deleteButton" text="Delete" focusTraversable="false">
+                            <tooltip><Tooltip text="Delete"/></tooltip>
+                            <graphic><Label text="&#xE74D;" styleClass="fluent-icon"/></graphic>
+                        </Button>
+
+                        <Separator orientation="VERTICAL"/>
+
+                        <!-- Sort menu -->
+                        <MenuButton fx:id="sortMenuButton" text="Sort" focusTraversable="false">
+                            <tooltip><Tooltip text="Sort"/></tooltip>
+                            <graphic><Label text="&#xE8CB;" styleClass="fluent-icon"/></graphic>
+                            <items>
+                                <MenuItem text="Name"/>
+                                <MenuItem text="Date modified"/>
+                                <MenuItem text="Type"/>
+                                <MenuItem text="Size"/>
+                            </items>
+                        </MenuButton>
+
+                        <!-- View menu -->
+                        <MenuButton fx:id="viewMenuButton" text="View" focusTraversable="false">
+                            <tooltip><Tooltip text="View"/></tooltip>
+                            <graphic><Label text="&#xE8A7;" styleClass="fluent-icon"/></graphic>
+                            <fx:define>
+                                <ToggleGroup fx:id="viewModeToggleGroup"/>
+                            </fx:define>
+                            <items>
+                                <CustomMenuItem hideOnClick="true">
+                                    <content>
+                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                            <RadioButton fx:id="viewExtraLargeIcons" toggleGroup="$viewModeToggleGroup"
+                                                         userData="EXTRA_LARGE_ICONS" onAction="#onViewModeRadio"
+                                                         focusTraversable="false" styleClass="view-menu-radio"/>
+                                            <Label text="&#xE8A7;" styleClass="fluent-icon view-menu-icon"/>
+                                            <Label text="Extra large icons" styleClass="view-menu-text"/>
+                                        </HBox>
+                                    </content>
+                                </CustomMenuItem>
+
+                                <CustomMenuItem hideOnClick="true">
+                                    <content>
+                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                            <RadioButton fx:id="viewLargeIcons" toggleGroup="$viewModeToggleGroup"
+                                                         userData="LARGE_ICONS" onAction="#onViewModeRadio"
+                                                         focusTraversable="false" styleClass="view-menu-radio"/>
+                                            <Label text="&#xE8A7;" styleClass="fluent-icon view-menu-icon"/>
+                                            <Label text="Large icons" styleClass="view-menu-text"/>
+                                        </HBox>
+                                    </content>
+                                </CustomMenuItem>
+
+                                <CustomMenuItem hideOnClick="true">
+                                    <content>
+                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                            <RadioButton fx:id="viewMediumIcons" toggleGroup="$viewModeToggleGroup"
+                                                         userData="MEDIUM_ICONS" onAction="#onViewModeRadio"
+                                                         focusTraversable="false" styleClass="view-menu-radio"/>
+                                            <Label text="&#xE8A7;" styleClass="fluent-icon view-menu-icon"/>
+                                            <Label text="Medium icons" styleClass="view-menu-text"/>
+                                        </HBox>
+                                    </content>
+                                </CustomMenuItem>
+
+                                <CustomMenuItem hideOnClick="true">
+                                    <content>
+                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                            <RadioButton fx:id="viewSmallIcons" toggleGroup="$viewModeToggleGroup"
+                                                         userData="SMALL_ICONS" onAction="#onViewModeRadio"
+                                                         focusTraversable="false" styleClass="view-menu-radio"/>
+                                            <Label text="&#xE8A7;" styleClass="fluent-icon view-menu-icon"/>
+                                            <Label text="Small icons" styleClass="view-menu-text"/>
+                                        </HBox>
+                                    </content>
+                                </CustomMenuItem>
+
+                                <CustomMenuItem hideOnClick="true">
+                                    <content>
+                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                            <RadioButton fx:id="viewList" toggleGroup="$viewModeToggleGroup"
+                                                         userData="LIST" onAction="#onViewModeRadio"
+                                                         focusTraversable="false" styleClass="view-menu-radio"/>
+                                            <Label text="&#xE8A7;" styleClass="fluent-icon view-menu-icon"/>
+                                            <Label text="List" styleClass="view-menu-text"/>
+                                        </HBox>
+                                    </content>
+                                </CustomMenuItem>
+
+                                <CustomMenuItem hideOnClick="true">
+                                    <content>
+                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                            <RadioButton fx:id="viewDetails" toggleGroup="$viewModeToggleGroup" selected="true"
+                                                         userData="DETAILS" onAction="#onViewModeRadio"
+                                                         focusTraversable="false" styleClass="view-menu-radio"/>
+                                            <Label text="&#xE8A7;" styleClass="fluent-icon view-menu-icon"/>
+                                            <Label text="Details" styleClass="view-menu-text"/>
+                                        </HBox>
+                                    </content>
+                                </CustomMenuItem>
+
+                                <CustomMenuItem hideOnClick="true">
+                                    <content>
+                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                            <RadioButton fx:id="viewTiles" toggleGroup="$viewModeToggleGroup"
+                                                         userData="TILES" onAction="#onViewModeRadio"
+                                                         focusTraversable="false" styleClass="view-menu-radio"/>
+                                            <Label text="&#xE8A7;" styleClass="fluent-icon view-menu-icon"/>
+                                            <Label text="Tiles" styleClass="view-menu-text"/>
+                                        </HBox>
+                                    </content>
+                                </CustomMenuItem>
+
+                                <CustomMenuItem hideOnClick="true">
+                                    <content>
+                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                            <RadioButton fx:id="viewContent" toggleGroup="$viewModeToggleGroup"
+                                                         userData="CONTENT" onAction="#onViewModeRadio"
+                                                         focusTraversable="false" styleClass="view-menu-radio"/>
+                                            <Label text="&#xE8A7;" styleClass="fluent-icon view-menu-icon"/>
+                                            <Label text="Content" styleClass="view-menu-text"/>
+                                        </HBox>
+                                    </content>
+                                </CustomMenuItem>
+
+                                <SeparatorMenuItem/>
+
+                                <CustomMenuItem hideOnClick="false">
+                                    <content>
+                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                            <RadioButton fx:id="detailsPaneMenuItem"
+                                                         onAction="#onDetailsPaneRadioToggle"
+                                                         focusTraversable="false" styleClass="view-menu-radio"/>
+                                            <Label text="&#xE946;" styleClass="fluent-icon view-menu-icon"/>
+                                            <Label text="Details pane" styleClass="view-menu-text"/>
+                                        </HBox>
+                                    </content>
+                                </CustomMenuItem>
+
+                                <CustomMenuItem hideOnClick="false">
+                                    <content>
+                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                            <RadioButton fx:id="previewPaneMenuItem"
+                                                         onAction="#onPreviewPaneRadioToggle"
+                                                         focusTraversable="false" styleClass="view-menu-radio"/>
+                                            <Label text="&#xEB9F;" styleClass="fluent-icon view-menu-icon"/>
+                                            <Label text="Preview pane" styleClass="view-menu-text"/>
+                                        </HBox>
+                                    </content>
+                                </CustomMenuItem>
+
+                                <SeparatorMenuItem/>
+
+                                <Menu text="Show">
+                                    <items>
+                                        <CustomMenuItem hideOnClick="false">
+                                            <content>
+                                                <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                                    <CheckBox fx:id="showNavigationPaneMenuItem" selected="true"
+                                                              onAction="#onShowNavigationPaneToggle"
+                                                              focusTraversable="false" styleClass="view-menu-checkbox"/>
+                                                    <Label text="&#xE8A7;" styleClass="fluent-icon view-menu-icon"/>
+                                                    <Label text="Navigation pane" styleClass="view-menu-text"/>
+                                                </HBox>
+                                            </content>
+                                        </CustomMenuItem>
+
+                                        <CustomMenuItem hideOnClick="false">
+                                            <content>
+                                                <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                                    <CheckBox fx:id="showCompactViewMenuItem"
+                                                              onAction="#onCompactViewToggle"
+                                                              focusTraversable="false" styleClass="view-menu-checkbox"/>
+                                                    <Label text="&#xE8A7;" styleClass="fluent-icon view-menu-icon"/>
+                                                    <Label text="Compact view" styleClass="view-menu-text"/>
+                                                </HBox>
+                                            </content>
+                                        </CustomMenuItem>
+
+                                        <CustomMenuItem hideOnClick="false">
+                                            <content>
+                                                <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                                    <CheckBox fx:id="showItemCheckBoxesMenuItem"
+                                                              onAction="#onItemCheckBoxesToggle"
+                                                              focusTraversable="false" styleClass="view-menu-checkbox"/>
+                                                    <Label text="&#xE8B3;" styleClass="fluent-icon view-menu-icon"/>
+                                                    <Label text="Item check boxes" styleClass="view-menu-text"/>
+                                                </HBox>
+                                            </content>
+                                        </CustomMenuItem>
+
+                                        <CustomMenuItem hideOnClick="false">
+                                            <content>
+                                                <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                                    <CheckBox fx:id="showFileNameExtensionsMenuItem" selected="true"
+                                                              onAction="#onFileNameExtensionsToggle"
+                                                              focusTraversable="false" styleClass="view-menu-checkbox"/>
+                                                    <Label text="&#xE8A5;" styleClass="fluent-icon view-menu-icon"/>
+                                                    <Label text="File name extensions" styleClass="view-menu-text"/>
+                                                </HBox>
+                                            </content>
+                                        </CustomMenuItem>
+
+                                        <CustomMenuItem hideOnClick="false">
+                                            <content>
+                                                <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                                    <CheckBox fx:id="showHiddenItemsMenuItem"
+                                                              onAction="#onHiddenItemsToggle"
+                                                              focusTraversable="false" styleClass="view-menu-checkbox"/>
+                                                    <Label text="&#xE8D7;" styleClass="fluent-icon view-menu-icon"/>
+                                                    <Label text="Hidden items" styleClass="view-menu-text"/>
+                                                </HBox>
+                                            </content>
+                                        </CustomMenuItem>
+                                    </items>
+                                </Menu>
+
+                                <SeparatorMenuItem/>
+                                <CustomMenuItem hideOnClick="false">
+                                    <content>
+                                        <ToggleButton fx:id="themeToggle" text="Light" focusTraversable="false"/>
+                                    </content>
+                                </CustomMenuItem>
+                            </items>
+                        </MenuButton>
+
+                        <!-- See more menu -->
+                        <MenuButton fx:id="seeMoreMenuButton" focusTraversable="false" styleClass="commandbar-icon-button">
+                            <tooltip><Tooltip text="See more"/></tooltip>
+                            <graphic><Label text="&#xE712;" styleClass="fluent-icon"/></graphic>
+                            <items>
+                                <MenuItem text="Undo">
+                                    <graphic><Label text="&#xE7A7;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+
+                                <SeparatorMenuItem/>
+
+                                <MenuItem text="Compress to ZIP file">
+                                    <graphic><Label text="&#xF012;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Add to Favorites">
+                                    <graphic><Label text="&#xE734;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Copy path">
+                                    <graphic><Label text="&#xE8C8;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+
+                                <SeparatorMenuItem/>
+
+                                <MenuItem text="Select all">
+                                    <graphic><Label text="&#xE8B3;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Select none">
+                                    <graphic><Label text="&#xE8C5;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Invert selection">
+                                    <graphic><Label text="&#xE8D4;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+
+                                <SeparatorMenuItem/>
+
+                                <MenuItem text="Properties">
+                                    <graphic><Label text="&#xE946;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Options:">
+                                    <graphic><Label text="&#xE713;" styleClass="fluent-icon"/></graphic>
+                                </MenuItem>
+                            </items>
+                        </MenuButton>
+
+                        <Region HBox.hgrow="ALWAYS"/>
+
+                        <!-- Details (right-most in command bar) -->
+                        <ToggleButton fx:id="detailsToggle"
+                                      text="Details"
+                                      selected="true"
+                                      focusTraversable="false"
+                                      onAction="#onDetailsToggle">
+                            <tooltip><Tooltip text="Details view"/></tooltip>
+                            <graphic>
+                                <Label text="&#xE8A7;" styleClass="fluent-icon"/>
+                            </graphic>
+                        </ToggleButton>
+
+                    </items>
+                </ToolBar>
+
+                <!-- Secondary bar under command bar -->
+                <ToolBar fx:id="secondaryCommandBar" styleClass="fluent-toolbar, secondary-toolbar">
+                    <items>
+                        <Label text="Location:"/>
+                        <Label fx:id="locationLabel"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                    </items>
+                </ToolBar>
+
+            </children>
+        </VBox>
+    </top>
+
+    <!-- Center: left tree + right content / preview -->
+    <center>
+        <SplitPane fx:id="mainSplitPane" dividerPositions="0.25">
+
+            <items>
+                <!-- Left: folder tree -->
+                <TreeView fx:id="folderTree" styleClass="tree-view-fixed explorer-tree" minWidth="275.0" prefWidth="320.0" fixedCellSize="24.0">
+                    <contextMenu>
+                        <ContextMenu>
+                            <items>
+                                <MenuItem text="Expand all"/>
+                                <MenuItem text="Collapse all"/>
+                            </items>
+                        </ContextMenu>
+                    </contextMenu>
+                </TreeView>
+
+                <!-- Right: content and side panes -->
+                <BorderPane fx:id="contentPane">
+
+                    <center>
+                        <StackPane fx:id="viewHost">
+
+                            <!-- Details (table) view -->
+                            <TableView fx:id="fileTable" prefWidth="Infinity" prefHeight="Infinity" maxWidth="Infinity" maxHeight="Infinity">
+                                <columns>
+                                    <TableColumn fx:id="colName" prefWidth="260" text="Name"/>
+                                     <TableColumn fx:id="colStatus" prefWidth="42" text="Status"/>
+                                    <TableColumn fx:id="colType" prefWidth="160" text="Type"/>
+                                    <TableColumn fx:id="colSize" prefWidth="90" text="Size"/>
+                                    <TableColumn fx:id="colModified" prefWidth="170" text="Date modified"/>
+                                </columns>
+                            </TableView>
+
+                            <!-- Large icons view -->
+                            <ScrollPane fx:id="iconScroll" prefWidth="Infinity" prefHeight="Infinity" maxWidth="Infinity" maxHeight="Infinity"
+                                        fitToWidth="true"
+                                        hbarPolicy="NEVER"
+                                        vbarPolicy="AS_NEEDED"
+                                        visible="false"
+                                        managed="false">
+                                <content>
+                                    <FlowPane fx:id="iconFlow"
+                                              hgap="16"
+                                              vgap="16"
+                                              alignment="TOP_LEFT"
+                                              prefWrapLength="600">
+                                        <padding>
+                                            <Insets top="10" right="10" bottom="10" left="10"/>
+                                        </padding>
+                                    </FlowPane>
+                                </content>
+                            </ScrollPane>
+
+                        </StackPane>
+                    </center>
+
+                    <!-- Side panes (preview + details) -->
+                    <right>
+                        <VBox fx:id="sidePane" prefWidth="320" spacing="10" alignment="TOP_LEFT">
+                            <padding>
+                                <Insets top="10" right="10" bottom="10" left="10"/>
+                            </padding>
+
+                            <!-- Preview pane (initially hidden) -->
+                            <VBox fx:id="previewBox" spacing="6" visible="false" managed="false" styleClass="fluent-preview-box">
+                                <children>
+                                    <Label text="Preview" styleClass="fluent-preview-title"/>
+                                    <ImageView fx:id="previewImage" fitWidth="280" preserveRatio="true"/>
+                                    <TextArea fx:id="previewText" editable="false" wrapText="true" prefRowCount="8"/>
+                                </children>
+                            </VBox>
+
+                            <!-- Details pane (initially hidden) -->
+                            <VBox fx:id="detailsBox" spacing="6" visible="false" managed="false" styleClass="fluent-preview-box">
+                                <children>
+                                    <Label text="Details" styleClass="fluent-preview-title"/>
+                                    <TextArea fx:id="detailsText" editable="false" wrapText="true" prefRowCount="10"/>
+                                </children>
+                            </VBox>
+                        </VBox>
+                    </right>
+
+                </BorderPane>
+            </items>
+
+        </SplitPane>
+    </center>
+
+    <!-- Bottom: status bar -->
+    <bottom>
+        <BorderPane fx:id="statusBar" styleClass="status-bar" minHeight="52.0" prefHeight="52.0">
+            <padding>
+                <Insets top="6" right="12" bottom="6" left="12"/>
+            </padding>
+            <left>
+                <Label fx:id="statusLeft"
+                       minHeight="32.0"
+                       maxWidth="Infinity"
+                       textOverrun="ELLIPSIS"
+                       BorderPane.alignment="CENTER_LEFT"/>
+            </left>
+
+            <center>
+                <Label fx:id="statusLabel"
+                       text="Ready."
+                       minHeight="32.0"
+                       maxWidth="Infinity"
+                       textOverrun="ELLIPSIS"
+                       BorderPane.alignment="CENTER_LEFT"/>
+            </center>
+
+            <right>
+                <HBox spacing="6" alignment="CENTER_RIGHT" BorderPane.alignment="CENTER_RIGHT">
+                    <ToggleButton fx:id="statusDetailsButton"
+                                 text="Details"
+                                 selected="true"
+                                 focusTraversable="false"
+                                 styleClass="status-view-toggle"/>
+                    <ToggleButton fx:id="statusLargeIconsButton"
+                                 text="Large"
+                                 focusTraversable="false"
+                                 styleClass="status-view-toggle"/>
+                </HBox>
+            </right>
+        </BorderPane>
+    </bottom>
+
+</BorderPane>

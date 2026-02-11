@@ -1,0 +1,12 @@
+/* table_header_hover.css (DARK LITERAL SAFE) */
+.table-view .column-header:hover {
+    -fx-background-color: derive(#1c2027, 10%);
+}
+
+.table-view .column-header:hover .label {
+    -fx-text-fill: #e6e8eb;
+}
+
+.table-view .column-header-background .filler:hover {
+    -fx-background-color: derive(#1c2027, 10%);
+}

@@ -1,0 +1,26 @@
+FileExplorer Bill of Materials (BOM)
+=================================
+
+Project: FileExplorer
+Version: 0.1.0
+Baseline: 0.1.0_PHASE2_5_HARDENED_BOOTSTRAP
+Integrated through: Phase 3.2 (Event Bus + UI Subscriptions)
+
+Included phases / features:
+- Phase 2.1: Directory listing model alignment (FileItem/FileStatus baseline)
+- Phase 2.2: Tree expand fixes (single-child expand + expand/collapse all reliability)
+- Phase 2.3: Non-blocking tree root bootstrap (placeholder root pattern)
+- Phase 2.4: Display bootstrap hardening (deferred UI load + diagnostics)
+- Phase 2.5: Hardened bootstrap baseline (safe startup + consistent service wiring)
+- Phase 3.0: Directory coordination concept (single owner for directory navigation)
+- Phase 3.1: Event bus foundation (publish/subscribe for app-level events)
+- Phase 3.2: UI subscriptions to event bus (MainController subscribes to directory load events)
+
+Key components:
+- com.fileexplorer.service.event.EventBus (in-process pub/sub)
+- com.fileexplorer.service.coordinator.DirectoryCoordinator (publishes DirectoryLoad* events)
+- com.fileexplorer.service.filesystem.DirectoryLoadManager (cancellable async directory loads)
+
+Packaging notes:
+- This archive is FLATTENED: the project root is the 'FileExplorer/' directory (contains pom.xml).
+- Run with: mvn org.openjfx:javafx-maven-plugin:0.0.8:run

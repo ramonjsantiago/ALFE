@@ -1,0 +1,60 @@
+/* Zoom overrides: keep typography and control metrics scalable without clipping.
+ * IMPORTANT: This file must contain valid CSS only (no stray '...' markers).
+ */
+
+.root {
+    -fx-font-family: "Segoe UI Variable";
+}
+
+/* Keep icon font isolated to icons */
+.fluent-icon {
+    -fx-font-family: "Segoe Fluent Icons";
+    -fx-font-size: 1em; /* scale with UI font size */
+}
+
+/* Toolbars: allow height to grow with font size, add padding to prevent clipping */
+.fluent-toolbar,
+.breadcrumb-row,
+.command-bar,
+.secondary-toolbar,
+.tool-bar {
+    -fx-pref-height: -1;
+    -fx-min-height: -1;
+    -fx-max-height: -1;
+    -fx-padding: 0.25em 0.35em 0.25em 0.35em;
+}
+
+/* ToolBar content container sometimes gets fixed height in custom styles */
+.tool-bar > .container {
+    -fx-pref-height: -1;
+    -fx-min-height: -1;
+    -fx-max-height: -1;
+}
+
+/* Buttons and menu buttons inside toolbars */
+.tool-bar .button,
+.tool-bar .toggle-button,
+.tool-bar .menu-button {
+    -fx-padding: 0.25em 0.55em 0.25em 0.55em;
+    -fx-min-height: 2.2em;
+}
+
+/* Text inputs (search field) */
+.text-field {
+    -fx-padding: 0.25em 0.55em 0.25em 0.55em;
+    -fx-min-height: 2.2em;
+}
+
+/* Table header rows: avoid clipped header text when font grows */
+.table-view .column-header-background,
+.table-view .column-header,
+.table-view .filler {
+    -fx-min-height: 2.2em;
+    -fx-pref-height: -1;
+}
+
+/* Tree: do not lock font size in CSS; controller sets a larger size for readability */
+.tree-view,
+.tree-view .tree-cell {
+    -fx-font-family: "Segoe UI Variable";
+}

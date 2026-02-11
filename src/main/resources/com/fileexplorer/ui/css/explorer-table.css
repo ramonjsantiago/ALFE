@@ -1,31 +1,26 @@
-/* TableView: flat header, no gradients, left aligned header text */
+/* explorer-table.css (DARK LITERAL) */
 
 .table-view {
-    -fx-background-color: transparent;
+    -fx-background-color: #15181d;
     -fx-padding: 0;
 }
 
 .table-view .column-header-background {
-    -fx-background-color: -fx-control-inner-background;
+    -fx-background-color: #1c2027;
     -fx-background-insets: 0;
 }
 
 .table-view .column-header {
-    -fx-background-color: -fx-control-inner-background;
+    -fx-background-color: #1c2027;
     -fx-background-insets: 0;
-    -fx-border-color: -fx-box-border;
-    -fx-border-width: 0 0 1 0;
-}
-
-.table-view .column-header .label {
-    -fx-alignment: CENTER-LEFT;
-    -fx-padding: 0 0 0 10;
-    -fx-font-weight: normal;
+    -fx-border-color: #2a303a;
+    -fx-border-width: 0 1 1 0;
 }
 
 .table-view .filler {
-    -fx-background-color: -fx-control-inner-background;
-    -fx-background-insets: 0;
+    -fx-background-color: #1c2027;
+    -fx-border-color: #2a303a;
+    -fx-border-width: 0 0 1 0;
 }
 
 .table-row-cell {
@@ -34,9 +29,39 @@
 
 .table-row-cell:filled:selected,
 .table-row-cell:filled:selected:focused {
-    -fx-background-color: -fx-selection-bar;
+    -fx-background-color: #2a4a7a;
 }
 
 .table-cell {
+    -fx-text-fill: #e6e8eb;
     -fx-padding: 0 8 0 8;
 }
+
+
+/* Row hover tint (literal) */
+.table-row-cell:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.04);
+}
+/* ==================== Column resize separator + cursor ====================
+   JavaFX draws an internal node ".column-resize-line" while resizing; we style it to look
+   like an Explorer header separator, and force an h-resize cursor on the resize region.
+*/
+.table-view .column-header {
+    /* Always show a subtle vertical separator between headers */
+    -fx-border-color: #2a303a;
+    -fx-border-width: 0 1 1 0;
+}
+
+.table-view .column-header .column-resize-line {
+    -fx-background-color: #3a8dde;
+    -fx-pref-width: 1px;
+    -fx-min-width: 1px;
+    -fx-max-width: 1px;
+    -fx-cursor: h-resize;
+    -fx-opacity: 0.70;
+}
+
+.table-view .column-header:hover .column-resize-line {
+    -fx-opacity: 1.0;
+}
+
