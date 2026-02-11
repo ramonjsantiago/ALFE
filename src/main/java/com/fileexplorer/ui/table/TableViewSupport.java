@@ -3,7 +3,9 @@ package com.fileexplorer.ui.table;
 import com.fileexplorer.app.ExplorerContext;
 import com.fileexplorer.model.FileItem;
 import com.fileexplorer.model.FileStatus;
+import com.fileexplorer.service.icon.AsyncIconService;
 import com.fileexplorer.util.IconLoader;
+import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
@@ -18,6 +20,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 
 import java.nio.file.Path;
+import java.util.Objects;
 import java.util.function.Function;
 
 /**
@@ -55,6 +58,10 @@ public final class TableViewSupport {
                 private final ImageView iconView = new ImageView();
                 private final Label textLabel = new Label();
 
+                // Guards against stale async completions updating a recycled cell.
+                private String lastIdentity = null;
+                private Path lastPath = null;
+
                 {
                     box.setAlignment(Pos.CENTER_LEFT);
                     iconView.setPreserveRatio(true);
@@ -66,7 +73,10 @@ public final class TableViewSupport {
                 @Override
                 protected void updateItem(String item, boolean empty) {
                     super.updateItem(item, empty);
+
                     if (empty || item == null) {
+                        lastIdentity = null;
+                        lastPath = null;
                         setText(null);
                         setGraphic(null);
                         return;
@@ -74,24 +84,53 @@ public final class TableViewSupport {
 
                     FileItem fi = getTableRow() != null ? (FileItem) getTableRow().getItem() : null;
                     Path p = (fi != null) ? fi.path() : null;
-                    double iconPx = 18.0;
 
-                    Image img;
-                    try {
-                        img = IconLoader.loadForPath(p, ctx.themeService().isDarkPreferred(), (int) Math.round(iconPx));
-                    } catch (Exception ex) {
-                        img = IconLoader.load(IconLoader.IconType.FILE, ctx.themeService().isDarkPreferred(), (int) Math.round(iconPx));
-                    }
+                    final boolean dark = ctx.themeService().isDarkPreferred();
+                    final int iconPx = 18;
+
+                    // Set placeholder immediately (cheap).
+                    final boolean isFolder = (fi != null) && "Folder".equalsIgnoreCase(Objects.requireNonNullElse(fi.type(), ""));
+                    Image placeholder = IconLoader.load(isFolder ? IconLoader.IconType.FOLDER : IconLoader.IconType.FILE, dark, iconPx);
 
                     iconView.setFitWidth(iconPx);
                     iconView.setFitHeight(iconPx);
-                    iconView.setImage(img);
+                    iconView.setImage(placeholder);
 
                     textLabel.setText(item);
                     setText(null);
                     setGraphic(box);
+
+                    // Compute identity without I/O: directories from FileItem.type, otherwise by extension.
+                    final String identity = computeIdentityNoIo(p, isFolder);
+
+                    lastIdentity = identity;
+                    lastPath = p;
+
+                    AsyncIconService.getInstance()
+                            .request(identity, dark, iconPx)
+                            .thenAccept(img -> Platform.runLater(() -> {
+                                // Ignore stale completions (cell reused).
+                                if (!Objects.equals(lastIdentity, identity)) return;
+                                if (!Objects.equals(lastPath, p)) return;
+                                if (img == null) return;
+                                iconView.setImage(img);
+                            }));
+                }
+
+                private String computeIdentityNoIo(Path p, boolean isFolder) {
+                    if (isFolder) return "type:" + IconLoader.IconType.FOLDER.name();
+                    if (p == null) return "type:" + IconLoader.IconType.FILE.name();
+
+                    String name = p.getFileName() != null ? p.getFileName().toString() : p.toString();
+                    int dot = name.lastIndexOf('.');
+                    if (dot > 0 && dot < name.length() - 1) {
+                        String ext = name.substring(dot + 1).toLowerCase(java.util.Locale.ROOT);
+                        if (!ext.isBlank()) return "ext:" + ext;
+                    }
+                    return "type:" + IconLoader.IconType.FILE.name();
                 }
             });
+
         }
 
         if (colStatus != null) {
