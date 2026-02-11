@@ -1,5 +1,9 @@
 package com.fileexplorer.controller.navigation;
 
+import com.fileexplorer.lifecycle.Lifecycle;
+import com.fileexplorer.app.ExplorerContext;
+import com.fileexplorer.util.CompositeCloseable;
+
 import com.fileexplorer.util.IconLoader;
 import com.fileexplorer.service.theme.ThemeService;
 import javafx.application.Platform;
@@ -33,7 +37,7 @@ import java.nio.file.Path;
  * - Icon-to-text gap: 5px
  * - Left padding: 8px (indent handled by -fx-indent:16px via explorer_tree.css)
  */
-public final class NavigationPaneController {
+public final class NavigationPaneController implements Lifecycle {
 
     @FXML private BorderPane navRoot;
     @FXML private TreeView<NavEntry> navTreeView;
@@ -43,6 +47,10 @@ public final class NavigationPaneController {
 
     // --- Metrics ------------------------------------------------------------
     private static final double TREE_ROW_HEIGHT_PX = 24.0;
+
+
+    private ExplorerContext context;
+    private final CompositeCloseable disposables = new CompositeCloseable();
     private static final double TREE_ICON_SIZE_PX = 16.0;
     private static final double TREE_GRAPHIC_TEXT_GAP_PX = 5.0;
     private static final Insets TREE_CELL_PADDING = new Insets(0, 8, 0, 8);
@@ -217,4 +225,22 @@ public final class NavigationPaneController {
             }
         }
     }
+
+    @Override
+    public void attach(ExplorerContext context) {
+        this.context = context;
+        // Ensure this controller's disposables are closed when the shared context is disposed.
+        if (context != null) {
+            context.disposables().add(disposables);
+        }
+    }
+
+    @Override
+    public void dispose() {
+        try {
+            disposables.close();
+        } catch (Exception ignored) {
+        }
+    }
+
 }

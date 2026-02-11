@@ -37,6 +37,12 @@ import javafx.stage.Screen;
 import javafx.stage.Stage;
 import com.fileexplorer.util.LogSupport;
 import javafx.geometry.Insets;
+import java.util.concurrent.atomic.AtomicReference;
+import com.fileexplorer.lifecycle.Lifecycle;
+import com.fileexplorer.service.event.EventBus;
+import com.fileexplorer.service.filesystem.FileMetadataService;
+import com.fileexplorer.service.filesystem.TreeBuildService;
+import com.fileexplorer.service.icon.IconCacheService;
 
 /**
  * Application bootstrap.
@@ -289,6 +295,25 @@ if (baseCss != null) {
 stage.setScene(loadingScene);
 stage.show();
 
+// Phase 3.4: allow deterministic controller teardown on window close.
+final AtomicReference<MainController> mainControllerRef = new AtomicReference<>();
+AtomicReference<ExplorerContext> contextRef = new AtomicReference<>();
+stage.setOnCloseRequest(e -> {
+    MainController c = mainControllerRef.get();
+    if (c != null) {
+        try {
+            c.dispose();
+        } catch (Exception ignored) {
+        }
+    }
+    ExplorerContext ctx = contextRef.get();
+    if (ctx != null) {
+        try {
+            ctx.close();
+        } catch (Exception ignored) {
+        }
+    }
+});
 // Defer the heavy FXML load so the window can paint at least once.
 javafx.animation.PauseTransition delay = new javafx.animation.PauseTransition(javafx.util.Duration.millis(75));
 delay.setOnFinished(evt -> {
@@ -300,6 +325,19 @@ delay.setOnFinished(evt -> {
         FXMLLoader loader = new FXMLLoader(fxmlUrl);
         Parent root = loader.load();
 
+        // Phase 3.4.4: MainApp owns the ExplorerContext (single instance).
+        ThemeService themeService = new ThemeService();
+        FileMetadataService fileMetadataService = new FileMetadataService();
+        TreeBuildService treeBuildService = new TreeBuildService();
+        EventBus eventBus = new EventBus();
+        ExplorerContext context = new ExplorerContext(
+                themeService,
+                fileMetadataService,
+                IconCacheService.getInstance(),
+                treeBuildService,
+                eventBus
+        );
+        contextRef.set(context);
         ZoomRoot zoomRoot = new ZoomRoot(root);
         Scene scene = new Scene(zoomRoot.getRoot(), DEFAULT_WIDTH, DEFAULT_HEIGHT);
 
@@ -317,7 +355,9 @@ delay.setOnFinished(evt -> {
         // Wire controller
         MainController controller = loader.getController();
         if (controller != null) {
-// MainController owns its ExplorerContext.
+            mainControllerRef.set(controller);
+            // Phase 3.4.4: Attach shared ExplorerContext before any scene-dependent work.
+            controller.attach(context);
             controller.setScene(scene);
 
             if (Boolean.getBoolean("fileexplorer.safeMode")) {

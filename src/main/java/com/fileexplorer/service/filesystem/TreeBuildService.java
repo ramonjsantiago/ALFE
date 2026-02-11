@@ -29,6 +29,11 @@ public final class TreeBuildService {
     public interface LazyLoadingTreeItem {
         void ensureChildrenLoaded();
         boolean isChildrenLoaded();
+        /**
+         * Reset the node so it will re-probe and/or reload children.
+         * Used by Refresh to keep chevrons/children accurate.
+         */
+        void invalidate();
     }
 
 
@@ -195,8 +200,16 @@ public static final class MessageTreeItem extends TreeItem<Path> {
             this.childrenLoaded = false;
             this.childrenLoading = false;
 
-            // Placeholder child so the disclosure node appears without triggering directory enumeration.
-            super.getChildren().add(placeholder);
+            // Cheap pre-check: only show the disclosure chevron if we can quickly confirm at least
+            // one visible sub-directory exists. This matches Windows Explorer behavior (no chevron
+            // on empty directories) without doing a full enumeration.
+            if (hasAnyVisibleChildDirectory(value, isRootChild)) {
+                // Placeholder child so the disclosure node appears without triggering full enumeration.
+                super.getChildren().add(placeholder);
+            } else {
+                // No visible children: treat as loaded so isLeaf() can return true immediately.
+                this.childrenLoaded = true;
+            }
 
             // Load children only when the item is expanded.
             expandedProperty().addListener((_, _, isExpanded) -> {
@@ -208,13 +221,63 @@ public static final class MessageTreeItem extends TreeItem<Path> {
             setExpanded(false);
         }
 
+        /**
+         * Fast probe: returns true if the directory appears to contain at least one eligible
+         * sub-directory. Stops after the first match.
+         */
+        private boolean hasAnyVisibleChildDirectory(Path dir, boolean parentIsRootChild) {
+            if (dir == null) {
+                return false;
+            }
+            try {
+                if (!Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS) || !Files.isReadable(dir)) {
+                    return false;
+                }
+            } catch (Exception ex) {
+                return false;
+            }
+
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
+                for (Path p : stream) {
+                    try {
+                        if (p == null || !Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS)) {
+                            continue;
+                        }
+                        if (parentIsRootChild && denyRootNoise(dir, p)) {
+                            continue;
+                        }
+                        if (isHiddenSafe(p)) {
+                            continue;
+                        }
+                        return true; // stop at first qualifying child
+                    } catch (Exception ex) {
+                        // ignore per-entry failures
+                    }
+                }
+            } catch (Exception ex) {
+                return false;
+            }
+
+            return false;
+        }
+
         @Override
         public boolean isLeaf() {
             Path v = getValue();
             if (v == null) {
                 return false;
             }
-            return !Files.isDirectory(v, LinkOption.NOFOLLOW_LINKS);
+
+            // For lazy directory nodes we intentionally avoid enumerating children until the user expands.
+            // However, once children have been loaded we can accurately report leaf-ness so empty folders
+            // do not display a disclosure chevron (Explorer-like behavior).
+            if (!Files.isDirectory(v, LinkOption.NOFOLLOW_LINKS)) {
+                return true;
+            }
+            if (childrenLoaded) {
+                return super.getChildren().isEmpty();
+            }
+            return false;
         }
 
         @Override
@@ -257,7 +320,34 @@ public static final class MessageTreeItem extends TreeItem<Path> {
         }
 
 
-private List<TreeItem<Path>> loadChildren(Path dir, boolean parentIsRootChild) {
+
+
+        @Override
+                public void invalidate() {
+                    Path v = getValue();
+                    // Reset lazy state and re-run the cheap "has any child dir" probe so the disclosure node
+                    // matches Explorer behavior after filesystem changes.
+                    childrenLoaded = false;
+                    childrenLoading = false;
+                    Platform.runLater(() -> {
+                        try {
+                            setExpanded(false);
+                            super.getChildren().clear();
+        
+                            if (v != null && hasAnyVisibleChildDirectory(v, isRootChild)) {
+                                super.getChildren().add(placeholder);
+                            } else {
+                                // No visible children: treat as loaded so isLeaf() can return true immediately.
+                                childrenLoaded = true;
+                            }
+                        } catch (Exception ex) {
+                            // fall back to leaf behavior
+                            childrenLoaded = true;
+                        }
+                    });
+                }
+        
+        private List<TreeItem<Path>> loadChildren(Path dir, boolean parentIsRootChild) {
     LogSupport.enter(LOG, "loadChildren");
     if (dir == null || !Files.isDirectory(dir) || !Files.isReadable(dir)) {
         return List.of();

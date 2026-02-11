@@ -1,0 +1,31 @@
+/* Coolors Exported Palette - https://coolors.co/626262-191919-191919-383c3d-191919 */
+
+- CSV
+
+626262,191919,191919,383C3D,191919
+
+- With #
+
+#626262, #191919, #191919, #383C3D, #191919
+
+- Array
+
+["626262","191919","191919","383C3D","191919"]
+
+- Object
+
+{"Dim Grey":"626262","Carbon Black":"191919","Carbon Black 2":"191919","Gunmetal":"383C3D","Carbon Black 3":"191919"}
+
+- Extended Array
+
+[{"name":"Dim Grey","hex":"626262","rgb":[98,98,98],"cmyk":[0,0,0,62],"hsb":[0,0,38],"hsl":[0,0,38],"lab":[42,0,0]},{"name":"Carbon Black","hex":"191919","rgb":[25,25,25],"cmyk":[0,0,0,90],"hsb":[0,0,10],"hsl":[0,0,10],"lab":[9,0,0]},{"name":"Carbon Black","hex":"191919","rgb":[25,25,25],"cmyk":[0,0,0,90],"hsb":[0,0,10],"hsl":[0,0,10],"lab":[9,0,0]},{"name":"Gunmetal","hex":"383C3D","rgb":[56,60,61],"cmyk":[8,2,0,76],"hsb":[192,8,24],"hsl":[192,4,23],"lab":[25,-1,-1]},{"name":"Carbon Black","hex":"191919","rgb":[25,25,25],"cmyk":[0,0,0,90],"hsb":[0,0,10],"hsl":[0,0,10],"lab":[9,0,0]}]
+
+- XML
+
+<palette>
+  <color name="Dim Grey" hex="626262" r="98" g="98" b="98" />
+  <color name="Carbon Black" hex="191919" r="25" g="25" b="25" />
+  <color name="Carbon Black" hex="191919" r="25" g="25" b="25" />
+  <color name="Gunmetal" hex="383C3D" r="56" g="60" b="61" />
+  <color name="Carbon Black" hex="191919" r="25" g="25" b="25" />
+</palette>

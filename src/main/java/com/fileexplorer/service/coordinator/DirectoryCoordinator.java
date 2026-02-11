@@ -28,10 +28,10 @@ public final class DirectoryCoordinator {
         this.loadManager = Objects.requireNonNull(loadManager, "loadManager");
     }
 
-    public void requestLoad(Path directory, boolean showHidden) {
-        if (directory == null) return;
+    public long requestLoad(Path directory, boolean showHidden) {
+        if (directory == null) return 0L;
         long requestId = seq.incrementAndGet();
-        bus.publish(new DirectoryLoadRequested(directory));
+        bus.publish(new DirectoryLoadRequested(requestId, directory, showHidden));
         long startNanos = System.nanoTime();
         bus.publish(new DirectoryLoadStarted(requestId, directory));
 
@@ -44,9 +44,11 @@ public final class DirectoryCoordinator {
                 },
                 error -> bus.publish(new DirectoryLoadFailed(requestId, directory, error))
         );
+
+        return requestId;
     }
 
-    public void requestLoad(Path directory) {
-        requestLoad(directory, true);
+    public long requestLoad(Path directory) {
+        return requestLoad(directory, true);
     }
 }

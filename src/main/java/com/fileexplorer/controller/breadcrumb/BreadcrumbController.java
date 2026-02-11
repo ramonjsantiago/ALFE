@@ -1,5 +1,9 @@
 package com.fileexplorer.controller.breadcrumb;
 
+import com.fileexplorer.lifecycle.Lifecycle;
+import com.fileexplorer.app.ExplorerContext;
+import com.fileexplorer.util.CompositeCloseable;
+
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,9 +38,13 @@ import com.fileexplorer.util.LogSupport;
  *  - fx:id="addressField" (TextField) for address mode
  *  - fx:id="dropdownButton" (Button) for overflow/actions
  */
-public final class BreadcrumbController {
+public final class BreadcrumbController implements Lifecycle {
 
     private static final Logger LOG = Logger.getLogger(BreadcrumbController.class.getName());
+
+
+    private ExplorerContext context;
+    private final CompositeCloseable disposables = new CompositeCloseable();
 
     private static final String STYLE_INVALID = "address-invalid";
 
@@ -640,4 +648,22 @@ public final class BreadcrumbController {
         String s = path.toString();
         return (s == null) ? "" : s;
     }
+
+    @Override
+    public void attach(ExplorerContext context) {
+        this.context = context;
+        // Ensure this controller's disposables are closed when the shared context is disposed.
+        if (context != null) {
+            context.disposables().add(disposables);
+        }
+    }
+
+    @Override
+    public void dispose() {
+        try {
+            disposables.close();
+        } catch (Exception ignored) {
+        }
+    }
+
 }

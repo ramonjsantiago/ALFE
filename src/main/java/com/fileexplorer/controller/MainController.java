@@ -1,6 +1,8 @@
 package com.fileexplorer.controller;
 
 import com.fileexplorer.app.MainApp;
+import com.fileexplorer.util.CompositeCloseable;
+import com.fileexplorer.lifecycle.Lifecycle;
 import com.fileexplorer.service.filesystem.FileMetadataService;
 import com.fileexplorer.service.theme.ThemeService;
 import com.fileexplorer.service.filesystem.TreeBuildService;
@@ -114,13 +116,25 @@ import com.fileexplorer.service.event.EventBus;
 import com.fileexplorer.service.coordinator.DirectoryCoordinator;
 import com.fileexplorer.service.event.events.DirectoryLoadSucceeded;
 import com.fileexplorer.service.event.events.DirectoryLoadFailed;
-public final class MainController implements Initializable {
+public final class MainController implements Initializable, Lifecycle {
 
     private static final Logger LOG = Logger.getLogger(MainController.class.getName());
 
-    private final ExplorerContext context;
+    private final CompositeCloseable localDisposables = new CompositeCloseable();
 
-    private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMode");
+    
+
+    // Scene reference passed from MainApp; may arrive before ExplorerContext is attached.
+    private volatile Scene boundScene;
+private ExplorerContext context;
+
+    
+// Phase 3.4.4: initialize() is called during FXML load before MainApp attaches the ExplorerContext.
+// We gate initialization that depends on context/services until attach() has been invoked.
+private volatile boolean fxmlInitialized = false;
+
+    private volatile boolean contextInitialized = false;
+private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMode");
     private static final boolean RESOURCE_AUDIT = Boolean.getBoolean("fileexplorer.resourceAudit");
 
     // Fix16: diagnostics guard against VirtualFlow runaway cell creation during preferred-size computation
@@ -222,20 +236,27 @@ public final class MainController implements Initializable {
     // Included controller from fx:include fx:id="breadcrumbBar"
     @FXML private BreadcrumbController breadcrumbBarController;
 
-    private final FileMetadataService fileMetadataService;
-    private final ThemeService themeService;
-    private final DirectoryListingService listingService;
-    private final DirectoryLoadManager directoryLoadManager;
+    private FileMetadataService fileMetadataService;
+    private ThemeService themeService;
+    private DirectoryListingService listingService;
+    private DirectoryLoadManager directoryLoadManager;
 
-    private final EventBus eventBus;
-    private final DirectoryCoordinator directoryCoordinator;
+    private EventBus eventBus;
+    private DirectoryCoordinator directoryCoordinator;
 
     private volatile java.nio.file.Path lastRequestedDirectory;
     private volatile boolean lastRequestedShowHidden;
 
+
+    private volatile long lastRequestedRequestId;
+
+    // Phase 3.5.1: Refresh should preserve selection/scroll when possible.
+    private volatile java.nio.file.Path pendingReselectPath;
+    private volatile int pendingReselectIndex = -1;
+    private volatile boolean pendingRestoreSelection;
 /** Display-name helper used by TreeCells. */
-    private final com.fileexplorer.service.filesystem.TreeBuildService displayService;
-    private final TreeBuildService treeBuildService;
+    private com.fileexplorer.service.filesystem.TreeBuildService displayService;
+    private TreeBuildService treeBuildService;
 
     private final ObservableList<FileItem> tableItems;
     private final AtomicLong directoryLoadSeq;
@@ -311,20 +332,19 @@ private boolean hoverPrefetchEnabled;
 
     public MainController() {
         LogSupport.enter(LOG, "MainController");
-        this.fileMetadataService = new FileMetadataService();
-        this.themeService = new ThemeService();
-        this.treeBuildService = new TreeBuildService();
+        // Phase 3.4.4: ExplorerContext is owned by MainApp and injected via attach(context).
+        // Services are assigned during attach().
+        this.context = null;
+        this.fileMetadataService = null;
+        this.themeService = null;
+        this.treeBuildService = null;
+        this.eventBus = null;
+        this.displayService = null;
+        this.listingService = null;
+        this.directoryLoadManager = null;
+        this.directoryCoordinator = null;
 
-        this.eventBus = new EventBus();
-        this.context = new ExplorerContext(
-                this.themeService,
-                this.fileMetadataService,
-                IconCacheService.getInstance(),
-                this.treeBuildService,
-                this.eventBus
-        );
-        // Keep a stable reference for TreeCell display-name lookups.
-        this.displayService = this.treeBuildService;
+
         this.tableItems = FXCollections.observableArrayList();
         this.directoryLoadSeq = new AtomicLong(0L);
 
@@ -335,11 +355,7 @@ private boolean hoverPrefetchEnabled;
             return t;
         };
         this.ioExecutor = Executors.newSingleThreadExecutor(tf);
-        this.listingService = new DirectoryListingService(this.ioExecutor, this.fileMetadataService);
-
-
-        this.directoryLoadManager = new DirectoryLoadManager(this.context, this.listingService, this.ioExecutor);
-        this.directoryCoordinator = new DirectoryCoordinator(this.eventBus, this.directoryLoadManager);
+        // listingService is created in attach(context)        // directoryLoadManager is created in attach(context)        // directoryCoordinator is created in attach(context)
 // Hover prefetch (Explorer-style): warm icon + metadata caches on pointer hover.
         this.hoverPrefetchSeq = new AtomicLong(0L);
         this.hoverPrefetchExecutor = Executors.newSingleThreadExecutor(r -> {
@@ -377,6 +393,52 @@ this.tableIndexByPath = new HashMap<>();
 
         this.focusCycleIndex = 0;
     }
+@Override
+public void attach(ExplorerContext context) {
+    if (context == null) {
+        return;
+    }
+    // Idempotent attach: tolerate repeated calls.
+    if (this.context == context) {
+        return;
+    }
+
+    this.context = context;
+    this.themeService = context.themeService();
+    this.fileMetadataService = context.fileMetadataService();
+    this.treeBuildService = context.treeBuildService();
+    this.eventBus = context.eventBus();
+
+
+    
+
+        // Phase 3.4.4: MainController is constructed by FXMLLoader before ExplorerContext is attached,
+        // so any services that depend on context/service instances must be initialized here.
+        //
+        // These were previously built in the constructor (when MainController owned the context) and are
+        // required for directory listing, TreeView population, and icon/metadata loading.
+        this.displayService = this.treeBuildService;
+
+        if (this.listingService == null) {
+            this.listingService = new DirectoryListingService(this.ioExecutor, this.fileMetadataService);
+        }
+        if (this.directoryLoadManager == null) {
+            this.directoryLoadManager = new DirectoryLoadManager(this.context, this.listingService, this.ioExecutor);
+        }
+        if (this.directoryCoordinator == null) {
+            this.directoryCoordinator = new DirectoryCoordinator(this.eventBus, this.directoryLoadManager);
+        }
+// If MainApp already provided a Scene, apply the theme now that ThemeService is available.
+    Scene s = this.boundScene;
+    if (s != null) {
+        javafx.application.Platform.runLater(() -> applyThemeToCurrentScene(s));
+    }
+    // If FXML initialize() already ran, complete deferred initialization now on the FX thread.
+    if (this.fxmlInitialized) {
+        javafx.application.Platform.runLater(this::initializeWithContext);
+    }
+}
+
 
     private void configureToolbarActions() {
     LogSupport.enter(LOG, "configureToolbarActions");
@@ -417,8 +479,25 @@ this.tableIndexByPath = new HashMap<>();
 }
 
 @Override
-    public void initialize(URL location, ResourceBundle resources) {
-        LogSupport.enter(LOG, "initialize");
+public void initialize(URL location, ResourceBundle resources) {
+    LogSupport.enter(LOG, "initialize");
+    this.fxmlInitialized = true;
+
+    // Phase 3.4.4: ExplorerContext is injected by MainApp via Lifecycle.attach(context) AFTER FXMLLoader construction.
+    // JavaFX calls initialize() during load, so we must defer initialization that depends on context/services until attach().
+    if (this.context == null) {
+        return;
+    }
+
+    initializeWithContext();
+}
+
+private void initializeWithContext() {
+        LogSupport.enter(LOG, "initializeWithContext");
+        if (contextInitialized) {
+            return;
+        }
+        contextInitialized = true;
         configureTree();
         configureTable();
         configureThemeToggle();
@@ -429,14 +508,16 @@ this.tableIndexByPath = new HashMap<>();
         configureIconActivation();
 
         // Phase 3.2: UI subscribes to directory load events
-        eventBus.subscribe(DirectoryLoadSucceeded.class, e -> {
+        localDisposables.add(eventBus.subscribe(DirectoryLoadSucceeded.class, e -> {
+            if (e.requestId() != lastRequestedRequestId) return;
             if (lastRequestedDirectory != null && !lastRequestedDirectory.equals(e.directory())) return;
             applyDirectoryListing(e.directory(), e.children());
-        });
-        eventBus.subscribe(DirectoryLoadFailed.class, e -> {
+        }));
+        localDisposables.add(eventBus.subscribe(DirectoryLoadFailed.class, e -> {
+            if (e.requestId() != lastRequestedRequestId) return;
             if (lastRequestedDirectory != null && !lastRequestedDirectory.equals(e.directory())) return;
             handleDirectoryListingFailed(e.directory(), e.error());
-        });
+        }));
 
         if (!SAFE_MODE) {
             Platform.runLater(() -> {
@@ -451,7 +532,9 @@ this.tableIndexByPath = new HashMap<>();
         setViewMode(ViewMode.DETAILS);
 
         setStatus("Ready.");
+    
     }
+
 
     public void setScene(Scene scene) {
         LogSupport.enter(LOG, "setScene");
@@ -459,7 +542,9 @@ this.tableIndexByPath = new HashMap<>();
             return;
         }
 
-        if (!zoomShortcutsInstalled) {
+        
+        this.boundScene = scene;
+if (!zoomShortcutsInstalled) {
             installZoomShortcuts(scene);
             zoomShortcutsInstalled = true;
         }
@@ -1172,7 +1257,10 @@ folderTree.setCellFactory(tv -> {
             return new IconPathTreeCell(treeFixedCellSize, themeService, treeBuildService);
         });
 
-        // Optional hover-based prefetch (disabled in safe mode by default).
+        
+
+        configureTreeContextMenu();
+// Optional hover-based prefetch (disabled in safe mode by default).
         if (hoverPrefetchEnabled) {
             folderTree.addEventFilter(MouseEvent.MOUSE_MOVED, e -> {
                 Node n = e.getPickResult() != null ? e.getPickResult().getIntersectedNode() : null;
@@ -1347,15 +1435,48 @@ folderTree.setCellFactory(tv -> {
     }
 
 
-    private static Label createStatusCheckIcon(Color color) {
-    Label icon = new Label("\uE73E"); // Fluent CheckMark (outline)
-    icon.setFont(Font.font("Segoe Fluent Icons", 14));
-    icon.setTextFill(color);
-    icon.setMinWidth(18);
-    icon.setPrefWidth(18);
-    icon.setAlignment(Pos.CENTER);
-    return icon;
-}
+        private static Label createStatusCheckIcon(Color color) {
+        Label icon = new Label("\uE73E"); // Fluent CheckMark (outline)
+        icon.setFont(Font.font("Segoe Fluent Icons", 14));
+        icon.setTextFill(color);
+        icon.setMinWidth(18);
+        icon.setPrefWidth(18);
+        icon.setAlignment(Pos.CENTER);
+        return icon;
+    }
+
+
+    /**
+     * Phase 3.5.1: Tree context menu (Refresh re-probes the selected node).
+     */
+    private void configureTreeContextMenu() {
+        if (folderTree == null) {
+            return;
+        }
+        folderTree.setOnContextMenuRequested(ev -> {
+            try {
+                TreeItem<java.nio.file.Path> sel = folderTree.getSelectionModel().getSelectedItem();
+                if (sel == null) {
+                    return;
+                }
+                javafx.scene.control.ContextMenu menu = new javafx.scene.control.ContextMenu();
+                javafx.scene.control.MenuItem refreshItem = new javafx.scene.control.MenuItem("Refresh");
+                refreshItem.setOnAction(ae -> {
+                    if (sel instanceof com.fileexplorer.service.filesystem.TreeBuildService.LazyLoadingTreeItem lazy) {
+                        lazy.invalidate();
+                    }
+                    if (sel.getValue() != null && sel.getValue().equals(currentDirectory)) {
+                        refresh();
+                    }
+                });
+                menu.getItems().add(refreshItem);
+                menu.show(folderTree, ev.getScreenX(), ev.getScreenY());
+                ev.consume();
+            } catch (Exception ex) {
+                // ignore
+            }
+        });
+    }
 
 private void configureTable() {
         LogSupport.enter(LOG, "configureTable");
@@ -1803,6 +1924,10 @@ private String displayNameForTable(Path p) {
 
     private void configureBreadcrumbs() {
         LogSupport.enter(LOG, "configureBreadcrumbs");
+
+        if (breadcrumbBarController instanceof com.fileexplorer.lifecycle.Lifecycle lc) {
+            lc.attach(context);
+        }
             if (breadcrumbBarController == null) {
                 return;
             }
@@ -1858,7 +1983,30 @@ private String displayNameForTable(Path p) {
         tableItems.setAll(listing);
         rebuildTableIndexCache(listing);
 
-        // Update view-specific UI
+        
+        // Phase 3.5.1: Restore selection after refresh if possible.
+        if (pendingRestoreSelection && pendingReselectPath != null) {
+            int idx = -1;
+            for (int i = 0; i < listing.size(); i++) {
+                com.fileexplorer.model.FileItem it = listing.get(i);
+                if (it != null && pendingReselectPath.equals(it.path())) {
+                    idx = i;
+                    break;
+                }
+            }
+            if (fileTable != null) {
+                if (idx >= 0) {
+                    fileTable.getSelectionModel().clearAndSelect(idx);
+                    fileTable.scrollTo(Math.max(0, idx - 2));
+                } else if (pendingReselectIndex >= 0 && pendingReselectIndex < listing.size()) {
+                    fileTable.scrollTo(Math.max(0, pendingReselectIndex - 2));
+                }
+            }
+            pendingRestoreSelection = false;
+            pendingReselectPath = null;
+            pendingReselectIndex = -1;
+        }
+// Update view-specific UI
         if (isIconMode(viewMode)) {
             rebuildIconTiles();
         } else {
@@ -2024,6 +2172,10 @@ private void configureThemeToggle() {
         if (scene == null) {
             return;
         }
+        // Scene may be set before ExplorerContext is attached.
+        if (themeService == null) {
+            return;
+        }
         themeService.apply(scene);
     }
 
@@ -2049,7 +2201,7 @@ private void configureThemeToggle() {
 
         lastRequestedDirectory = currentDirectory;
         lastRequestedShowHidden = showHiddenItems;
-        directoryCoordinator.requestLoad(currentDirectory, showHiddenItems);
+        lastRequestedRequestId = directoryCoordinator.requestLoad(currentDirectory, showHiddenItems);
     }
 
 
@@ -3446,13 +3598,55 @@ private void createNewFolder() {
 
     private void refresh() {
         LogSupport.enter(LOG, "refresh");
+
+        // Preserve current selection (table) if possible.
+        try {
+            if (fileTable != null) {
+                com.fileexplorer.model.FileItem sel = fileTable.getSelectionModel().getSelectedItem();
+                if (sel != null) {
+                    pendingReselectPath = sel.path();
+                    pendingReselectIndex = fileTable.getSelectionModel().getSelectedIndex();
+                    pendingRestoreSelection = true;
+                } else {
+                    pendingRestoreSelection = false;
+                    pendingReselectPath = null;
+                    pendingReselectIndex = -1;
+                }
+            }
+        } catch (Exception ex) {
+            pendingRestoreSelection = false;
+            pendingReselectPath = null;
+            pendingReselectIndex = -1;
+        }
+
+        // Refresh the selected tree node (re-probe chevron/children) if it supports lazy loading.
+        refreshSelectedTreeNode();
+
         Path dir = currentDirectory;
         if (dir != null) {
             loadDirectoryIntoTableAsync(dir);
         }
     }
 
-    private void toggleFullScreen() {
+    
+    /**
+     * Phase 3.5.1: Re-probe the currently selected TreeView node if it supports lazy loading.
+     */
+    private void refreshSelectedTreeNode() {
+        try {
+            if (folderTree == null) {
+                return;
+            }
+            TreeItem<java.nio.file.Path> sel = folderTree.getSelectionModel().getSelectedItem();
+            if (sel instanceof com.fileexplorer.service.filesystem.TreeBuildService.LazyLoadingTreeItem lazy) {
+                lazy.invalidate();
+            }
+        } catch (Exception ex) {
+            // ignore
+        }
+    }
+
+private void toggleFullScreen() {
         LogSupport.enter(LOG, "toggleFullScreen");
         Scene scene = (themeToggle != null) ? themeToggle.getScene() : (fileTable != null ? fileTable.getScene() : null);
         if (scene == null) {
@@ -4101,6 +4295,49 @@ private static boolean syspropBoolean(String key, boolean def) {
                 // Non-fatal: styling will fall back to existing CSS.
             }
         });
+    }
+
+    /**
+     * Phase 3.4: deterministic teardown hook.
+     * <p>
+     * Releases EventBus subscriptions and any other aggregated listeners.
+     * Safe to call multiple times.
+     */
+    public void dispose() {
+        try {
+            localDisposables.close();
+        } catch (Exception ignored) {
+        }
+
+        // Stop hover prefetch timer if it exists.
+        try {
+            if (hoverPrefetchTimer != null) {
+                hoverPrefetchTimer.stop();
+            }
+        } catch (Exception ignored) {
+        }
+
+        // Shut down executors to avoid hanging process on exit.
+        try {
+            if (hoverPrefetchExecutor != null) {
+                hoverPrefetchExecutor.shutdownNow();
+            }
+        } catch (Exception ignored) {
+        }
+        try {
+            if (ioExecutor != null) {
+                ioExecutor.shutdownNow();
+            }
+        } catch (Exception ignored) {
+        }
+
+        // Dispose child controllers.
+        try {
+            if (breadcrumbBarController != null) {
+                breadcrumbBarController.dispose();
+            }
+        } catch (Exception ignored) {
+        }
     }
 
 }

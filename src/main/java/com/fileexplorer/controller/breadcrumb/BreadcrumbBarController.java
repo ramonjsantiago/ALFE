@@ -1,5 +1,9 @@
 package com.fileexplorer.controller.breadcrumb;
 
+import com.fileexplorer.lifecycle.Lifecycle;
+import com.fileexplorer.app.ExplorerContext;
+import com.fileexplorer.util.CompositeCloseable;
+
 import com.fileexplorer.app.MainApp;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
@@ -25,9 +29,13 @@ import com.fileexplorer.util.LogSupport;
 /**
  * Win11-style breadcrumb bar with chevrons that show popup menus.
  */
-public class BreadcrumbBarController {
+public class BreadcrumbBarController implements Lifecycle {
 
     private static final Logger LOG = Logger.getLogger(BreadcrumbBarController.class.getName());
+
+
+    private ExplorerContext context;
+    private final CompositeCloseable disposables = new CompositeCloseable();
 
     @FXML
     private HBox root;
@@ -196,4 +204,22 @@ public class BreadcrumbBarController {
             ex.printStackTrace();
         }
     }
+
+    @Override
+    public void attach(ExplorerContext context) {
+        this.context = context;
+        // Ensure this controller's disposables are closed when the shared context is disposed.
+        if (context != null) {
+            context.disposables().add(disposables);
+        }
+    }
+
+    @Override
+    public void dispose() {
+        try {
+            disposables.close();
+        } catch (Exception ignored) {
+        }
+    }
+
 }
