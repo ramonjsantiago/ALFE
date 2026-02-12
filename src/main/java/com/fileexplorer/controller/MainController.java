@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.collections.FXCollections;
+import javafx.collections.transformation.FilteredList;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
@@ -259,6 +260,15 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     private TreeBuildService treeBuildService;
 
     private final ObservableList<FileItem> tableItems;
+    /**
+     * Visible (filtered) items shown in the TableView.
+     * Backed by {@link #tableItems} (the full directory listing).
+     */
+    private final FilteredList<FileItem> filteredTableItems;
+
+    // Phase 3.5.4: Search (fast filter of current folder)
+    private final javafx.animation.PauseTransition searchDebounce;
+    private volatile String activeSearchQuery = "";
     private final AtomicLong directoryLoadSeq;
 
     // Index cache to avoid O(n) indexOf calls in large folders (used by icon views).
@@ -346,6 +356,8 @@ private boolean hoverPrefetchEnabled;
 
 
         this.tableItems = FXCollections.observableArrayList();
+        this.filteredTableItems = new FilteredList<>(this.tableItems, _ -> true);
+        this.searchDebounce = new javafx.animation.PauseTransition(javafx.util.Duration.millis(200));
         this.directoryLoadSeq = new AtomicLong(0L);
 
         // Shared background I/O executor for directory listing and paste/copy/move operations.
@@ -502,6 +514,7 @@ private void initializeWithContext() {
         configureTable();
         configureThemeToggle();
         configureBreadcrumbs();
+        configureSearch();
         configureStatusBar();
         configureToolbarActions();
         configureViewMenu();
@@ -886,9 +899,10 @@ if (!zoomShortcutsInstalled) {
                 return;
             }
 
-            // F4 OR Alt + D: Address bar (breadcrumbs)
+            // F4 OR Alt + D OR Ctrl + L: Address bar (breadcrumbs)
             if ((!e.isAltDown() && !e.isControlDown() && code == KeyCode.F4)
-                    || (e.isAltDown() && code == KeyCode.D)) {
+                    || (e.isAltDown() && code == KeyCode.D)
+                    || (e.isControlDown() && !e.isShiftDown() && code == KeyCode.L)) {
                 focusAddressBar();
                 e.consume();
                 return;
@@ -1486,7 +1500,7 @@ private void configureTable() {
                 "fileexplorer.ui.table.prefWidth", -1);
         // Stretch columns to the end of the container (last column flexes).
         fileTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-fileTable.setItems(tableItems);
+fileTable.setItems(filteredTableItems);
         fileTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
 
         // Step 7: delegate TableView wiring
@@ -1981,6 +1995,7 @@ private String displayNameForTable(Path p) {
         }
 
         tableItems.setAll(listing);
+        updateStatusCounts();
         rebuildTableIndexCache(listing);
 
         
@@ -2019,6 +2034,95 @@ private String displayNameForTable(Path p) {
     /**
      * UI-thread handler invoked by the DirectoryCoordinator via the event bus.
      */
+
+    // ---------------------------------------------------------------------
+    // Phase 3.5.4: Search (fast filter within current folder)
+    // ---------------------------------------------------------------------
+
+    private void configureSearch() {
+        if (searchField == null) {
+            return;
+        }
+        // Keep the search box lightweight: debounce changes and filter the current listing in-memory.
+        searchField.textProperty().addListener((obs, oldV, newV) -> {
+            searchDebounce.stop();
+            searchDebounce.setOnFinished(_ -> applySearchFilterNow(newV));
+            searchDebounce.playFromStart();
+        });
+
+        searchField.addEventFilter(javafx.scene.input.KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
+                if (!searchField.getText().isEmpty()) {
+                    searchField.clear();
+                    e.consume();
+                    return;
+                }
+            }
+            if (e.getCode() == javafx.scene.input.KeyCode.ENTER) {
+                // For now: ENTER just keeps focus; deep search comes later.
+                e.consume();
+            }
+        });
+
+        // Initial predicate
+        applySearchFilterNow(searchField.getText());
+    }
+
+    private void applySearchFilterNow(String rawQuery) {
+        String q = (rawQuery == null) ? "" : rawQuery.trim().toLowerCase(java.util.Locale.ROOT);
+        activeSearchQuery = q;
+
+        if (filteredTableItems == null) {
+            return;
+        }
+
+        if (q.isEmpty()) {
+            filteredTableItems.setPredicate(_ -> true);
+        } else {
+            filteredTableItems.setPredicate(fi -> {
+                if (fi == null) return false;
+                java.nio.file.Path p = fi.path();
+                if (p == null) return false;
+                String name = displayNameForTable(p);
+                if (name == null) return false;
+                return name.toLowerCase(java.util.Locale.ROOT).contains(q);
+            });
+        }
+
+        // Keep status text honest when filtering is active.
+        updateStatusCounts();
+        // If icon view is currently visible, rebuild it from the filtered set.
+        if (viewMode != null && viewMode != ViewMode.DETAILS) {
+            tryRebuildIconViewFromVisibleItems();
+        }
+    }
+
+    private void tryRebuildIconViewFromVisibleItems() {
+        if (fileTable == null) return;
+        if (iconFlow == null && virtualIconGridView == null && virtualIconListView == null) return;
+
+        try {
+            java.util.List<java.nio.file.Path> items = fileTable.getItems().stream().map(com.fileexplorer.model.FileItem::path).filter(java.util.Objects::nonNull).toList();
+            rebuildTableIndexCache(fileTable.getItems());
+            if (iconScroll != null && iconScroll.isVisible()) {
+                rebuildIconTilesIncremental(items);
+            }
+        } catch (Exception ignore) {
+        }
+    }
+
+    private void updateStatusCounts() {
+        if (statusLabel == null) return;
+        int visible = (fileTable != null && fileTable.getItems() != null) ? fileTable.getItems().size() : 0;
+        int total = (tableItems != null) ? tableItems.size() : 0;
+        if (activeSearchQuery != null && !activeSearchQuery.isEmpty() && total != visible) {
+            statusLabel.setText(String.format(java.util.Locale.ROOT, "%d of %d items", visible, total));
+        } else {
+            statusLabel.setText(String.format(java.util.Locale.ROOT, "%d items", total));
+        }
+    }
+
+
     private void handleDirectoryListingFailed(Path directory, Throwable error) {
         this.currentDirectory = directory;
 

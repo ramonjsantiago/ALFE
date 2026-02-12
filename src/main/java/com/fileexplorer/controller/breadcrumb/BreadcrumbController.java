@@ -25,6 +25,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import java.util.logging.Logger;
 import com.fileexplorer.util.LogSupport;
@@ -88,6 +89,8 @@ public final class BreadcrumbController implements Lifecycle {
         }
 
         ensureCrumbInfrastructure();
+
+        installCrumbEmptyClickHandler();
 
         if (dropdownButton != null) {
             dropdownButton.setOnMouseClicked(evt -> {
@@ -287,6 +290,39 @@ public final class BreadcrumbController implements Lifecycle {
     // ---------------------------------------------------------------------
     // Rendering
     // ---------------------------------------------------------------------
+
+
+    private void installCrumbEmptyClickHandler() {
+        if (root == null) {
+            return;
+        }
+
+        // Explorer-like: clicking the empty area of the breadcrumb bar enters address mode.
+        root.addEventFilter(MouseEvent.MOUSE_CLICKED, evt -> {
+            if (evt == null || addressMode) {
+                return;
+            }
+            if (evt.getButton() != MouseButton.PRIMARY || evt.getClickCount() != 1) {
+                return;
+            }
+
+            Object target = evt.getTarget();
+            if (target instanceof Button) {
+                return; // crumb buttons handle themselves
+            }
+            if (target instanceof Label lbl && lbl.getStyleClass().contains("breadcrumb-separator")) {
+                // Treat separator clicks as empty-space clicks.
+                enterAddressMode();
+                evt.consume();
+                return;
+            }
+
+            if (target == root || target == crumbScroll || target == crumbContainer) {
+                enterAddressMode();
+                evt.consume();
+            }
+        });
+    }
 
     private void ensureCrumbInfrastructure() {
         LogSupport.enter(LOG, "ensureCrumbInfrastructure");

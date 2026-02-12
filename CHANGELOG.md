@@ -1,5 +1,13 @@
 CHANGELOG.md
 
+
+## 2026-02-11 (Phase 3.5.3)
+
+### Added
+- Breadcrumb/address-bar parity improvements:
+  - Ctrl+L now focuses the address bar (in addition to F4 and Alt+D).
+  - Clicking empty space in the breadcrumb bar enters address mode (Explorer-like).
+
 ## 2026-01-26 (Fix22)
 
 ### Fixed
@@ -413,6 +421,7 @@ All notable changes to the FileExplorer UI/zoom work are documented here.
 - **View modes**: implemented real `Tiles` and `Content` layouts using the existing icon panel:
   - `Tiles`: vertical rows with icon + name + type/size summary.
   - `Content`: vertical rows with icon + name + type/size summary + modified time.
+- **Search in folder (Phase 3.5.4)**: added fast, debounced filtering of the current directory listing via the Search box; `Ctrl+F` focuses search; `Esc` clears.
 
 ### Notes
 - These changes avoid window/scene scale transforms and instead rely on font-driven sizing plus control metric overrides, which is substantially more stable across platforms and DPI settings.
