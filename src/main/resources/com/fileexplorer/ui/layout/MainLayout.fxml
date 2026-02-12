@@ -33,6 +33,7 @@
 <?import javafx.scene.layout.Region?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
+<?import javafx.scene.control.ProgressBar?>
 
 <BorderPane fx:id="root"
             xmlns="http://javafx.com/javafx/25"
@@ -559,6 +560,7 @@
 
             <right>
                 <HBox spacing="6" alignment="CENTER_RIGHT" BorderPane.alignment="CENTER_RIGHT">
+                    <ProgressBar fx:id="statusProgress" prefWidth="140.0" minWidth="140.0" maxWidth="140.0" visible="false" managed="false" />
                     <ToggleButton fx:id="statusDetailsButton"
                                  text="Details"
                                  selected="true"

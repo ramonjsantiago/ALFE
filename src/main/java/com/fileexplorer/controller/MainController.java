@@ -41,7 +41,10 @@ import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ContentDisplay;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableCell;
@@ -111,15 +114,22 @@ import com.fileexplorer.ui.tree.SimplePathTreeCell;
 import com.fileexplorer.ui.tree.IconPathTreeCell;
 import com.fileexplorer.model.FileItem;
 import com.fileexplorer.service.filesystem.DirectoryListingService;
+import com.fileexplorer.service.filesystem.FileOperationsService;
+import com.fileexplorer.service.filesystem.FileOpHistory;
 
 import com.fileexplorer.service.filesystem.DirectoryLoadManager;
 import com.fileexplorer.service.event.EventBus;
 import com.fileexplorer.service.coordinator.DirectoryCoordinator;
 import com.fileexplorer.service.event.events.DirectoryLoadSucceeded;
 import com.fileexplorer.service.event.events.DirectoryLoadFailed;
+import com.fileexplorer.service.event.events.FileOpFailed;
+import com.fileexplorer.service.event.events.FileOpProgress;
+import com.fileexplorer.service.event.events.FileOpStarted;
+import com.fileexplorer.service.event.events.FileOpSucceeded;
 public final class MainController implements Initializable, Lifecycle {
 
     private static final Logger LOG = Logger.getLogger(MainController.class.getName());
+    private static final int NAV_EXPAND_BATCH = 64; // Phase 3.6.x: nav expand pump budget
 
     private final CompositeCloseable localDisposables = new CompositeCloseable();
 
@@ -211,6 +221,8 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     @FXML private CheckBox showHiddenItemsMenuItem;
 
     @FXML private Label statusLabel;
+    @FXML private Label statusLeft;
+    @FXML private ProgressBar statusProgress;
     @FXML private Label locationLabel;
 
     @FXML private TextField searchField;
@@ -232,6 +244,8 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     @FXML private VBox detailsBox;
 
     @FXML private TextArea previewText;
+
+    @FXML private ImageView previewImage;
     @FXML private TextArea detailsText;
 
     // Included controller from fx:include fx:id="breadcrumbBar"
@@ -244,6 +258,15 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
 
     private EventBus eventBus;
     private DirectoryCoordinator directoryCoordinator;
+
+    // Phase 3.6.0: file operations (copy/cut/paste, delete, rename)
+    private FileOperationsService fileOperationsService;
+
+    private final FileOpHistory fileOpHistory = new FileOpHistory();
+
+    private enum ClipboardMode { COPY, CUT }
+    private final java.util.List<java.nio.file.Path> clipboardPaths = new java.util.ArrayList<>();
+    private volatile ClipboardMode clipboardMode = null;
 
     private volatile java.nio.file.Path lastRequestedDirectory;
     private volatile boolean lastRequestedShowHidden;
@@ -297,6 +320,9 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     private String systemFontFamilyResolved;
     private double treeFontSizePxApplied;
     private final Preferences prefs;
+
+    // Phase 3.6.1: status-bar file operation progress
+    private PauseTransition fileOpHideTransition;
     private final ToggleGroup viewModeToggleGroup;
     private boolean windowPrefsInstalled;
     private boolean zoomShortcutsInstalled;
@@ -326,6 +352,9 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
 // Hover prefetch (Explorer-style): warm icon + metadata caches on pointer hover.
 private static final Duration HOVER_PREFETCH_DELAY = Duration.millis(175);
 private final AtomicLong hoverPrefetchSeq;
+
+    private final AtomicLong previewLoadSeq;
+    private volatile long activePreviewLoadId;
 private PauseTransition hoverPrefetchTimer;
 private volatile Path hoverPrefetchTarget;
 private final ExecutorService hoverPrefetchExecutor;
@@ -359,6 +388,8 @@ private boolean hoverPrefetchEnabled;
         this.filteredTableItems = new FilteredList<>(this.tableItems, _ -> true);
         this.searchDebounce = new javafx.animation.PauseTransition(javafx.util.Duration.millis(200));
         this.directoryLoadSeq = new AtomicLong(0L);
+        this.previewLoadSeq = new AtomicLong(0L);
+        this.activePreviewLoadId = 0L;
 
         // Shared background I/O executor for directory listing and paste/copy/move operations.
         ThreadFactory tf = r -> {
@@ -440,6 +471,12 @@ public void attach(ExplorerContext context) {
         if (this.directoryCoordinator == null) {
             this.directoryCoordinator = new DirectoryCoordinator(this.eventBus, this.directoryLoadManager);
         }
+
+        if (this.fileOperationsService == null) {
+            this.fileOperationsService = new FileOperationsService(this.eventBus, this.ioExecutor);
+        }
+
+        // File operation event wiring is installed in initializeWithContext() once UI elements are ready.
 // If MainApp already provided a Scene, apply the theme now that ThemeService is available.
     Scene s = this.boundScene;
     if (s != null) {
@@ -530,6 +567,27 @@ private void initializeWithContext() {
             if (e.requestId() != lastRequestedRequestId) return;
             if (lastRequestedDirectory != null && !lastRequestedDirectory.equals(e.directory())) return;
             handleDirectoryListingFailed(e.directory(), e.error());
+        }));
+
+        // Phase 3.6.x: File operations feedback (status bar progress)
+        localDisposables.add(eventBus.subscribe(FileOpStarted.class, e -> {
+            Platform.runLater(() -> showFileOpProgress(e.op(), 0, (e.sources() != null) ? e.sources().size() : 0));
+        }));
+        localDisposables.add(eventBus.subscribe(com.fileexplorer.service.event.events.FileOpProgress.class, e -> {
+            Platform.runLater(() -> showFileOpProgress(e.op(), e.completed(), e.total()));
+        }));
+        localDisposables.add(eventBus.subscribe(com.fileexplorer.service.event.events.FileOpSucceeded.class, e -> {
+            Platform.runLater(() -> {
+                showFileOpComplete(e.op(), true, null);
+                refresh();
+            });
+        }));
+        localDisposables.add(eventBus.subscribe(com.fileexplorer.service.event.events.FileOpFailed.class, e -> {
+            Platform.runLater(() -> {
+                showFileOpComplete(e.op(), false, e.message());
+                showError("File operation failed", e.message(), e.error());
+                refresh();
+            });
         }));
 
         if (!SAFE_MODE) {
@@ -838,6 +896,14 @@ if (!zoomShortcutsInstalled) {
             // Ctrl + V: Paste
             if (e.isControlDown() && !e.isShiftDown() && code == KeyCode.V) {
                 pasteIntoCurrentFolder();
+                e.consume();
+                return;
+            }
+
+
+            // Ctrl + Z: Undo last file operation (Phase 3.6.2)
+            if (e.isControlDown() && !e.isShiftDown() && code == KeyCode.Z) {
+                undoLastFileOperation();
                 e.consume();
                 return;
             }
@@ -1661,6 +1727,30 @@ colType.setCellValueFactory(param -> {
         fileTable.setRowFactory(_ -> {
             TableRow<FileItem> row = new TableRow<>();
 
+            // Phase 3.6.0: Explorer-like context menu on rows.
+            javafx.scene.control.MenuItem miCopy = new javafx.scene.control.MenuItem("Copy");
+            miCopy.setOnAction(e -> copySelection());
+            javafx.scene.control.MenuItem miCut = new javafx.scene.control.MenuItem("Cut");
+            miCut.setOnAction(e -> cutSelection());
+            javafx.scene.control.MenuItem miPaste = new javafx.scene.control.MenuItem("Paste");
+            miPaste.setOnAction(e -> pasteIntoCurrentFolder());
+            javafx.scene.control.MenuItem miRename = new javafx.scene.control.MenuItem("Rename");
+            miRename.setOnAction(e -> renameSelection());
+            javafx.scene.control.MenuItem miDelete = new javafx.scene.control.MenuItem("Delete");
+            miDelete.setOnAction(e -> moveSelectionToTrash());
+
+            javafx.scene.control.ContextMenu cm = new javafx.scene.control.ContextMenu(
+                    miCopy, miCut, miPaste,
+                    new javafx.scene.control.SeparatorMenuItem(),
+                    miRename, miDelete
+            );
+            // Only show on non-empty rows; for empty rows, allow paste into current dir.
+            row.contextMenuProperty().bind(
+                    javafx.beans.binding.Bindings.when(row.emptyProperty())
+                            .then(new javafx.scene.control.ContextMenu(miPaste))
+                            .otherwise(cm)
+            );
+
             row.setOnMouseClicked(me -> {
                 if (me.getButton() == MouseButton.PRIMARY && me.getClickCount() == 2 && !row.isEmpty()) {
                     FileItem fi = row.getItem();
@@ -1685,6 +1775,53 @@ colType.setCellValueFactory(param -> {
 
         
     fileTable.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+        // Phase 3.6.0: Explorer-style file ops shortcuts.
+        if (e.isControlDown() && !e.isAltDown() && !e.isMetaDown()) {
+            if (e.getCode() == KeyCode.C) {
+                copySelection();
+                e.consume();
+                return;
+            }
+            if (e.getCode() == KeyCode.X) {
+                cutSelection();
+                e.consume();
+                return;
+            }
+            if (e.getCode() == KeyCode.V) {
+                pasteIntoCurrentFolder();
+                e.consume();
+                return;
+            }
+            if (e.getCode() == KeyCode.A) {
+                fileTable.getSelectionModel().selectAll();
+                e.consume();
+                return;
+            }
+        }
+
+        if (e.getCode() == KeyCode.F2 && !e.isAltDown() && !e.isControlDown() && !e.isMetaDown()) {
+            renameSelection();
+            e.consume();
+            return;
+        }
+
+        if (e.getCode() == KeyCode.DELETE && !e.isAltDown() && !e.isControlDown() && !e.isMetaDown()) {
+            if (e.isShiftDown()) {
+                // Shift+Delete = permanent delete (recursive).
+                List<Path> sel = getSelectedItems();
+                if (!sel.isEmpty() && confirmDangerous("Permanently delete", "This will permanently delete the selected item(s).")) {
+                    if (fileOperationsService != null) {
+                        fileOperationsService.delete(sel, true);
+                    }
+                }
+            } else {
+                // Delete = move to trash (best-effort).
+                moveSelectionToTrash();
+            }
+            e.consume();
+            return;
+        }
+
         // Keyboard parity: RIGHT enters folder; LEFT goes to parent; ENTER enters folder.
         if (e.getCode() == KeyCode.LEFT && !e.isAltDown() && !e.isControlDown() && !e.isMetaDown() && !e.isShiftDown()) {
             navigateUp();
@@ -2391,10 +2528,220 @@ private void configureThemeToggle() {
             detailsText.setText(sb.toString());
         }
 
-        if (previewText != null) {
-            previewText.setText(selected.toString());
-        }
+        updatePreviewAsync(selected);
     }
+
+    // ---------------------------------------------------------------------
+    // Preview pane (Phase 3.7.0)
+    // ---------------------------------------------------------------------
+
+    private static final int PREVIEW_TEXT_MAX_BYTES = 256 * 1024;
+
+    private static boolean isLikelyTextExtension(String ext) {
+        if (ext == null) return false;
+        return switch (ext.toLowerCase(Locale.ROOT)) {
+            case "txt", "md", "log", "csv", "tsv", "json", "xml", "yml", "yaml", "ini", "properties",
+                 "java", "kt", "groovy", "js", "ts", "css", "html", "htm", "sql", "bat", "ps1", "sh" -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isLikelyImageExtension(String ext) {
+        if (ext == null) return false;
+        return switch (ext.toLowerCase(Locale.ROOT)) {
+            case "png", "jpg", "jpeg", "gif", "bmp", "webp" -> true;
+            default -> false;
+        };
+    }
+
+    private void updatePreviewAsync(Path selected) {
+        if (previewBox == null || (!previewBox.isVisible() && !previewBox.isManaged())) {
+            // Preview pane hidden; don't do work.
+            return;
+        }
+        if (previewText == null && previewImage == null) {
+            return;
+        }
+
+        // Cancel/replace any in-flight preview work.
+        final long reqId = previewLoadSeq.incrementAndGet();
+        activePreviewLoadId = reqId;
+
+        // Clear UI immediately.
+        Platform.runLater(() -> {
+            if (reqId != activePreviewLoadId) return;
+            if (previewImage != null) {
+                previewImage.setImage(null);
+                previewImage.setVisible(false);
+                previewImage.setManaged(false);
+            }
+            if (previewText != null) {
+                previewText.clear();
+                previewText.setVisible(true);
+                previewText.setManaged(true);
+            }
+        });
+
+        if (selected == null) {
+            return;
+        }
+
+        // Directory preview: cheap count (bounded).
+        if (Files.isDirectory(selected)) {
+            ioExecutor.execute(() -> {
+                String text = buildDirectoryPreview(selected, 2000);
+                Platform.runLater(() -> {
+                    if (reqId != activePreviewLoadId) return;
+                    if (previewText != null) previewText.setText(text);
+                });
+            });
+            return;
+        }
+
+        final String fileName = selected.getFileName() != null ? selected.getFileName().toString() : selected.toString();
+        final String ext = extensionOf(fileName);
+
+        if (isLikelyImageExtension(ext)) {
+            Platform.runLater(() -> {
+                if (reqId != activePreviewLoadId) return;
+                if (previewImage != null) {
+                    previewImage.setVisible(true);
+                    previewImage.setManaged(true);
+
+                    // Use backgroundLoading=true so JavaFX loads off-thread.
+                    Image img = new Image(selected.toUri().toString(), 280, 0, true, true, true);
+                    previewImage.setImage(img);
+
+                    // Keep previewText as metadata stub until loaded.
+                    if (previewText != null) {
+                        previewText.setText(buildBasicFilePreview(selected) + "\n\n(Loading image...)");
+                    }
+
+                    img.progressProperty().addListener((obs, o, n) -> {
+                        if (reqId != activePreviewLoadId) return;
+                        if (n != null && n.doubleValue() >= 1.0) {
+                            String meta = buildBasicFilePreview(selected);
+                            if (img.getWidth() > 0 && img.getHeight() > 0) {
+                                meta += "\nDimensions: " + (int) img.getWidth() + " × " + (int) img.getHeight();
+                            }
+                            final String metaFinal = meta;
+                            Platform.runLater(() -> {
+                                if (reqId != activePreviewLoadId) return;
+                                if (previewText != null) previewText.setText(metaFinal);
+                            });
+                        }
+                    });
+                }
+            });
+            return;
+        }
+
+        // Text preview (best-effort): only for likely text extensions; otherwise show basic summary.
+        if (isLikelyTextExtension(ext)) {
+            ioExecutor.execute(() -> {
+                String text = readTextPreview(selected, PREVIEW_TEXT_MAX_BYTES);
+                Platform.runLater(() -> {
+                    if (reqId != activePreviewLoadId) return;
+                    if (previewText != null) previewText.setText(text);
+                });
+            });
+            return;
+        }
+
+        // Unknown/binary: show basic properties only.
+        ioExecutor.execute(() -> {
+            String text = buildBasicFilePreview(selected);
+            Platform.runLater(() -> {
+                if (reqId != activePreviewLoadId) return;
+                if (previewText != null) previewText.setText(text);
+            });
+        });
+    }
+
+    private String buildDirectoryPreview(Path dir, int maxEntries) {
+        int dirs = 0;
+        int files = 0;
+        int total = 0;
+        try (var ds = Files.newDirectoryStream(dir)) {
+            for (Path p : ds) {
+                total++;
+                if (Files.isDirectory(p)) dirs++; else files++;
+                if (total >= maxEntries) break;
+            }
+        } catch (Exception ex) {
+            return "Folder: " + dir + "\n\nUnable to enumerate folder contents: " + ex.getMessage();
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Folder: ").append(dir).append("\n");
+        sb.append("Items: ").append(total);
+        if (total >= maxEntries) sb.append("+");
+        sb.append("\n");
+        sb.append("Folders: ").append(dirs).append("\n");
+        sb.append("Files: ").append(files).append("\n");
+        String mod = fileMetadataService.lastModifiedLocalString(dir);
+        if (!mod.isBlank()) sb.append("Date modified: ").append(mod).append("\n");
+        return sb.toString();
+    }
+
+    private String buildBasicFilePreview(Path file) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Name: ").append(displayNameForTable(file)).append("\n");
+        sb.append("Path: ").append(file).append("\n");
+        sb.append("Type: ").append(fileMetadataService.detectFileType(file)).append("\n");
+        String size = fileMetadataService.humanReadableSize(file);
+        if (!size.isBlank()) sb.append("Size: ").append(size).append("\n");
+        String mod = fileMetadataService.lastModifiedLocalString(file);
+        if (!mod.isBlank()) sb.append("Date modified: ").append(mod).append("\n");
+        return sb.toString();
+    }
+
+    private String readTextPreview(Path file, int maxBytes) {
+        // Read a bounded number of bytes and decode as UTF-8 (replacement on errors).
+        byte[] buf;
+        try (var in = Files.newInputStream(file)) {
+            buf = in.readNBytes(maxBytes);
+        } catch (Exception ex) {
+            return buildBasicFilePreview(file) + "\n\nUnable to read preview: " + ex.getMessage();
+        }
+
+        // Very cheap binary detection: NUL byte.
+        for (byte b : buf) {
+            if (b == 0) {
+                return buildBasicFilePreview(file) + "\n\n(Binary file preview not available)";
+            }
+        }
+
+        String text = new String(buf, StandardCharsets.UTF_8);
+
+        // Normalize line endings for TextArea rendering.
+        text = text.replace("\r\n", "\n").replace("\r", "\n");
+
+        if (buf.length >= maxBytes) {
+            text += "\n\n… (truncated)";
+        }
+        return text;
+    }
+
+    private static String extensionOf(String name) {
+        if (name == null) return "";
+        int idx = name.lastIndexOf('.');
+        if (idx <= 0 || idx == name.length() - 1) return "";
+        return name.substring(idx + 1);
+    }
+
+    private Path currentSelectionPath() {
+        if (fileTable != null) {
+            FileItem item = fileTable.getSelectionModel().getSelectedItem();
+            if (item != null) return item.path();
+        }
+        if (folderTree != null) {
+            TreeItem<Path> ti = folderTree.getSelectionModel().getSelectedItem();
+            if (ti != null) return ti.getValue();
+        }
+        return null;
+    }
+
 
     // ---------------------------------------------------------------------
     // View mode (Details vs Large icons)
@@ -3346,37 +3693,124 @@ private void configureThemeToggle() {
 
         boolean doMove = cutMode && !cutBuffer.isEmpty() && sameSet(cutBuffer, src);
 
-        ioExecutor.execute(() -> {
-            int count = 0;
-                        for (Path s : src) {
-                            try {
-                                Path target = resolvePasteTarget(dir, s.getFileName() == null ? s : s.getFileName());
-                                if (target == null) {
-                                    continue;
-                                }
+        // Phase 3.6.0: delegate filesystem mutations to FileOperationsService (background + events)
+        if (fileOperationsService != null) {
+            // Phase 3.6.1: conflict policy prompt (Replace / Skip / Rename)
+            int conflicts = 0;
+            for (Path sp : src) {
+                if (sp == null) continue;
+                Path fn = sp.getFileName();
+                if (fn == null) continue;
+                try {
+                    if (Files.exists(dir.resolve(fn.toString()))) {
+                        conflicts++;
+                    }
+                } catch (Exception ignore) {
+                    // ignore
+                }
+            }
+            FileOperationsService.ConflictPolicy policy = FileOperationsService.ConflictPolicy.RENAME;
+            if (conflicts > 0) {
+                policy = promptPasteConflictPolicy(conflicts);
+                if (policy == null) {
+                    setStatus("Paste cancelled.");
+                    return;
+                }
+            }
 
-                                if (doMove) {
-                                    moveRecursively(s, target);
-                                } else {
-                                    copyRecursively(s, target);
-                                }
-                                count++;
-                            } catch (Exception ex) {
-                                // ignore; continue
+            if (doMove) {
+                // Phase 3.6.2: record move for Undo (best-effort; mirrors ConflictPolicy)
+                try {
+                    List<Path> from = new ArrayList<>();
+                    List<Path> to = new ArrayList<>();
+                    for (Path p : src) {
+                        if (p == null) continue;
+                        String name = (p.getFileName() != null) ? p.getFileName().toString() : "item";
+                        Path dest = dir.resolve(name);
+                        boolean exists = false;
+                        try { exists = Files.exists(dest); } catch (Exception ignore) { /* ignore */ }
+                        if (exists && policy == FileOperationsService.ConflictPolicy.SKIP) {
+                            continue;
+                        }
+                        if (exists && policy == FileOperationsService.ConflictPolicy.RENAME) {
+                            try {
+                                dest = FileOperationsService.computeUniqueTarget(dir, name);
+                            } catch (Exception ignore) {
+                                // keep dest
                             }
                         }
+                        from.add(p);
+                        to.add(dest);
+                    }
+                    fileOpHistory.recordMove(from, to);
+                } catch (Exception ignore) {
+                    // ignore
+                }
 
-                        int finalCount = count;
-                        Platform.runLater(() -> {
-                            if (doMove) {
-                                cutMode = false;
-                                cutBuffer.clear();
-                            }
-                            refresh();
-                            setStatus((doMove ? "Moved " : "Copied ") + finalCount + " item(s).");
-                        });
-        });
+                fileOperationsService.move(src, dir, policy);
+                cutMode = false;
+                cutBuffer.clear();
+            } else {
+                fileOperationsService.copy(src, dir, policy);
+            }
+        } else {
+            // Fallback (legacy)
+            ioExecutor.execute(() -> {
+                int count = 0;
+                for (Path s : src) {
+                    try {
+                        Path target = resolvePasteTarget(dir, s.getFileName() == null ? s : s.getFileName());
+                        if (target == null) {
+                            continue;
+                        }
+
+                        if (doMove) {
+                            moveRecursively(s, target);
+                        } else {
+                            copyRecursively(s, target);
+                        }
+                        count++;
+                    } catch (Exception ex) {
+                        // ignore; continue
+                    }
+                }
+
+                int finalCount = count;
+                Platform.runLater(() -> {
+                    if (doMove) {
+                        cutMode = false;
+                        cutBuffer.clear();
+                    }
+                    refresh();
+                    setStatus((doMove ? "Moved " : "Copied ") + finalCount + " item(s).");
+                });
+            });
+        }
 }
+
+    
+    private FileOperationsService.ConflictPolicy promptPasteConflictPolicy(int conflictCount) {
+        LogSupport.enter(LOG, "promptPasteConflictPolicy");
+        Alert alert = new Alert(AlertType.CONFIRMATION);
+        alert.setTitle("File name conflict");
+        alert.setHeaderText(conflictCount == 1 ? "An item with the same name already exists." : (conflictCount + " items with the same name already exist."));
+        alert.setContentText("Choose how to handle the conflict(s) when pasting.");
+
+        ButtonType btReplace = new ButtonType("Replace", ButtonBar.ButtonData.OK_DONE);
+        ButtonType btSkip = new ButtonType("Skip", ButtonBar.ButtonData.OTHER);
+        ButtonType btRename = new ButtonType("Rename", ButtonBar.ButtonData.YES);
+        ButtonType btCancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        alert.getButtonTypes().setAll(btReplace, btSkip, btRename, btCancel);
+
+        var result = alert.showAndWait();
+        if (result.isEmpty() || result.get() == btCancel) {
+            return null;
+        }
+        if (result.get() == btReplace) return FileOperationsService.ConflictPolicy.REPLACE;
+        if (result.get() == btSkip) return FileOperationsService.ConflictPolicy.SKIP;
+        return FileOperationsService.ConflictPolicy.RENAME;
+    }
+
 
     private boolean sameSet(List<Path> a, List<Path> b) {
         LogSupport.enter(LOG, "sameSet");
@@ -3471,7 +3905,9 @@ private void configureThemeToggle() {
         Files.move(src, dest, new CopyOption[] { StandardCopyOption.REPLACE_EXISTING });
     }
 
-    private void moveSelectionToTrash() {
+        
+
+private void moveSelectionToTrash() {
     LogSupport.enter(LOG, "moveSelectionToTrash");
 
     List<Path> selected = getSelectedItems();
@@ -3480,335 +3916,27 @@ private void configureThemeToggle() {
         return;
     }
 
-    Desktop desktop;
+    // Prefer OS recycle bin (Explorer parity). If not supported, fall back to confirmed permanent delete.
+    boolean trashSupported = false;
     try {
-        if (!Desktop.isDesktopSupported()) {
-            setStatus("Trash not supported on this platform.");
-            return;
+        if (Desktop.isDesktopSupported()) {
+            Desktop d = Desktop.getDesktop();
+            trashSupported = d.isSupported(Desktop.Action.MOVE_TO_TRASH);
         }
-        desktop = Desktop.getDesktop();
-    } catch (HeadlessException ex) {
-        setStatus("Trash not supported (headless).");
-        return;
-    } catch (Exception ex) {
-        setStatus("Trash not available.");
-        return;
+    } catch (Throwable ignore) {
+        trashSupported = false;
     }
 
-    int moved = 0;
-    for (Path p : selected) {
-        try {
-            boolean ok = desktop.moveToTrash(p.toFile());
-            if (ok) {
-                moved++;
-            }
-        } catch (Exception ignore) {
-            // continue
-        }
-    }
-
-    if (moved > 0) {
-        setStatus("Moved to trash: " + moved + (moved == 1 ? " item." : " items."));
-        // Refresh current directory view
-        if (currentDirectory != null) {
-            refresh();
-        }
-    } else {
-        setStatus("Could not move selection to trash.");
-    }
-}
-
-private void createNewFolder() {
-        LogSupport.enter(LOG, "createNewFolder");
-        Path dir = currentDirectory;
-        if (dir == null) {
-            return;
-        }
-
-        Path target = dir.resolve("New folder");
-        if (Files.exists(target)) {
-            for (int i = 2; i <= 999; i++) {
-                Path p = dir.resolve("New folder (" + i + ")");
-                if (!Files.exists(p)) {
-                    target = p;
-                    break;
-                }
+    if (!trashSupported || fileOperationsService == null) {
+        if (confirmDangerous("Delete", "Trash is not supported here. Permanently delete the selected item(s)?")) {
+            if (fileOperationsService != null) {
+                fileOperationsService.delete(selected, true);
             }
         }
-
-        try {
-            Files.createDirectories(target);
-            refresh();
-            setStatus("Created: " + target.getFileName());
-        } catch (Exception ex) {
-            setStatus("Failed to create folder.");
-        }
-    }
-
-    private void renameSelection() {
-        LogSupport.enter(LOG, "renameSelection");
-        Path sel = getPrimarySelection();
-        if (sel == null) {
-            return;
-        }
-
-        Path parent = sel.getParent();
-        if (parent == null) {
-            return;
-        }
-
-        String currentName = displayNameForTable(sel);
-
-        TextInputDialog d = new TextInputDialog(currentName);
-        d.setTitle("Rename");
-        d.setHeaderText("Rename item");
-        d.setContentText("New name:");
-
-        Optional<String> result = d.showAndWait();
-        if (result.isEmpty()) {
-            return;
-        }
-
-        String newName = result.get().trim();
-        if (newName.isEmpty() || newName.equals(currentName)) {
-            return;
-        }
-
-        Path dest = parent.resolve(newName);
-
-        try {
-            Files.move(sel, dest, new CopyOption[] { StandardCopyOption.REPLACE_EXISTING });
-            refresh();
-            setStatus("Renamed.");
-        } catch (Exception ex) {
-            setStatus("Rename failed.");
-        }
-    }
-
-    private void openPropertiesForSelection() {
-        LogSupport.enter(LOG, "openPropertiesForSelection");
-        Path sel = getPrimarySelection();
-        if (sel == null) {
-            return;
-        }
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("Name: ").append(displayNameForTable(sel)).append("\n");
-        sb.append("Path: ").append(sel).append("\n");
-        sb.append("Type: ").append(fileMetadataService.detectFileType(sel)).append("\n");
-
-        String size = fileMetadataService.humanReadableSize(sel);
-        if (!size.isBlank()) {
-            sb.append("Size: ").append(size).append("\n");
-        }
-
-        String mod = fileMetadataService.lastModifiedLocalString(sel);
-        if (!mod.isBlank()) {
-            sb.append("Date modified: ").append(mod).append("\n");
-        }
-
-        Alert a = new Alert(AlertType.INFORMATION);
-        a.setTitle("Properties");
-        a.setHeaderText(displayNameForTable(sel));
-        a.setContentText(sb.toString());
-        a.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
-        a.showAndWait();
-    }
-
-    // ---------------------------------------------------------------------
-    // Pane toggles
-    // ---------------------------------------------------------------------
-
-    private void togglePreviewPane() {
-        LogSupport.enter(LOG, "togglePreviewPane");
-        boolean show = previewBox != null && !previewBox.isVisible();
-        setPreviewPaneVisible(show);
-    }
-
-    private void toggleDetailsPane() {
-        LogSupport.enter(LOG, "toggleDetailsPane");
-        boolean show = detailsBox != null && !detailsBox.isVisible();
-        setDetailsPaneVisible(show);
-    }
-
-    // ---------------------------------------------------------------------
-    // Focus / window helpers
-    // ---------------------------------------------------------------------
-
-    private void focusSearch() {
-        LogSupport.enter(LOG, "focusSearch");
-        if (searchField != null) {
-            searchField.requestFocus();
-            searchField.selectAll();
-        }
-    }
-
-    private void focusAddressBar() {
-        LogSupport.enter(LOG, "focusAddressBar");
-        if (breadcrumbBarController != null) {
-            breadcrumbBarController.requestAddressFocus();
-            return;
-        }
-        // fallback
-        if (folderTree != null) {
-            folderTree.requestFocus();
-        }
-    }
-
-    private void cyclePanesFocus() {
-        LogSupport.enter(LOG, "cyclePanesFocus");
-        List<Node> panes = new ArrayList<>();
-        if (searchField != null) panes.add(searchField);
-        if (folderTree != null) panes.add(folderTree);
-        if (fileTable != null) panes.add(fileTable);
-        if (previewBox != null && previewBox.isManaged()) panes.add(previewBox);
-        if (detailsBox != null && detailsBox.isManaged()) panes.add(detailsBox);
-
-        if (panes.isEmpty()) {
-            return;
-        }
-
-        focusCycleIndex = (focusCycleIndex + 1) % panes.size();
-        panes.get(focusCycleIndex).requestFocus();
-    }
-
-    private void scrollToTop() {
-        LogSupport.enter(LOG, "scrollToTop");
-        if (viewMode == ViewMode.DETAILS) {
-            if (!tableItems.isEmpty()) {
-                fileTable.scrollTo(0);
-            }
-            return;
-        }
-
-        if (iconScroll != null) {
-            iconScroll.setVvalue(0.0);
-        }
-    }
-
-    private void scrollToBottom() {
-        LogSupport.enter(LOG, "scrollToBottom");
-        if (viewMode == ViewMode.DETAILS) {
-            if (!tableItems.isEmpty()) {
-                fileTable.scrollTo(tableItems.size() - 1);
-            }
-            return;
-        }
-
-        if (iconScroll != null) {
-            iconScroll.setVvalue(1.0);
-        }
-    }
-
-    private void refresh() {
-        LogSupport.enter(LOG, "refresh");
-
-        // Preserve current selection (table) if possible.
-        try {
-            if (fileTable != null) {
-                com.fileexplorer.model.FileItem sel = fileTable.getSelectionModel().getSelectedItem();
-                if (sel != null) {
-                    pendingReselectPath = sel.path();
-                    pendingReselectIndex = fileTable.getSelectionModel().getSelectedIndex();
-                    pendingRestoreSelection = true;
-                } else {
-                    pendingRestoreSelection = false;
-                    pendingReselectPath = null;
-                    pendingReselectIndex = -1;
-                }
-            }
-        } catch (Exception ex) {
-            pendingRestoreSelection = false;
-            pendingReselectPath = null;
-            pendingReselectIndex = -1;
-        }
-
-        // Refresh the selected tree node (re-probe chevron/children) if it supports lazy loading.
-        refreshSelectedTreeNode();
-
-        Path dir = currentDirectory;
-        if (dir != null) {
-            loadDirectoryIntoTableAsync(dir);
-        }
-    }
-
-    
-    /**
-     * Phase 3.5.1: Re-probe the currently selected TreeView node if it supports lazy loading.
-     */
-    private void refreshSelectedTreeNode() {
-        try {
-            if (folderTree == null) {
-                return;
-            }
-            TreeItem<java.nio.file.Path> sel = folderTree.getSelectionModel().getSelectedItem();
-            if (sel instanceof com.fileexplorer.service.filesystem.TreeBuildService.LazyLoadingTreeItem lazy) {
-                lazy.invalidate();
-            }
-        } catch (Exception ex) {
-            // ignore
-        }
-    }
-
-private void toggleFullScreen() {
-        LogSupport.enter(LOG, "toggleFullScreen");
-        Scene scene = (themeToggle != null) ? themeToggle.getScene() : (fileTable != null ? fileTable.getScene() : null);
-        if (scene == null) {
-            return;
-        }
-        Window w = scene.getWindow();
-        if (!(w instanceof Stage stage)) {
-            return;
-        }
-        stage.setFullScreen(!stage.isFullScreen());
-    }
-
-    private void closeCurrentWindow() {
-        LogSupport.enter(LOG, "closeCurrentWindow");
-        Scene scene = (themeToggle != null) ? themeToggle.getScene() : (fileTable != null ? fileTable.getScene() : null);
-        if (scene == null) {
-            return;
-        }
-        Window w = scene.getWindow();
-        if (w instanceof Stage) {
-            ((Stage) w).close();
-        }
-    }
-
-    private void openNewWindow() {
-        LogSupport.enter(LOG, "openNewWindow");
-        openNewWindow(currentDirectory);
-    }
-
-    private void openNewWindow(Path initialFolder) {
-        LogSupport.enter(LOG, "openNewWindow");
-        Platform.runLater(() -> {
-            Stage stage = new Stage();
-            try {
-                MainApp.configureExplorerStage(stage, Objects.requireNonNullElseGet(initialFolder, () -> Paths.get(System.getProperty("user.home"))), themeService.isDarkPreferred());
-                stage.show();
-            } catch (IOException ex) {
-                // ignore
-            }
-        });
-    }
-
-// NOTE: Fully expanding the entire filesystem tree is an easy way to create millions of TreeItems,
-// which will exhaust the heap (and can also violate JavaFX thread-confinement if done off-thread).
-// This implementation performs a *bounded* expansion on the JavaFX Application Thread.
-private static final int NAV_EXPAND_MAX_DEPTH = 64;     // 0=root, 1=children, 2=grandchildren
-private static final int NAV_EXPAND_MAX_NODES = 5_000; // hard cap to prevent OOME
-private static final int NAV_EXPAND_BATCH = 150;       // nodes expanded per pulse
-
-private void expandAllFoldersInNavigationPane() {
-    final TreeItem<Path> root = folderTree != null ? folderTree.getRoot() : null;
-    if (root == null) {
-        setStatus("Navigation tree is not available.");
         return;
     }
 
-    setStatus("Expanding navigation tree...");
-    com.fileexplorer.ui.tree.TreeViewSupport.expandAllAsync(root, NAV_EXPAND_MAX_DEPTH);
+    fileOperationsService.trash(selected);
 }
 
 private void collapseAllFoldersInNavigationPane() {
@@ -3981,6 +4109,60 @@ private void expandNavigationTreeLimited(TreeItem<Path> root, int maxDepth, int 
         }
     }
 
+    private void showFileOpProgress(String op, int completed, int total) {
+        if (statusLeft != null) {
+            int t = total <= 0 ? 0 : total;
+            int c = Math.max(0, completed);
+            if (t > 0) {
+                statusLeft.setText(op + "… (" + c + "/" + t + ")");
+            } else {
+                statusLeft.setText(op + "…");
+            }
+        }
+        if (statusProgress != null) {
+            if (fileOpHideTransition != null) {
+                fileOpHideTransition.stop();
+            }
+            statusProgress.setManaged(true);
+            statusProgress.setVisible(true);
+            if (total <= 0) {
+                statusProgress.setProgress(-1.0);
+            } else {
+                double p = Math.max(0.0, Math.min(1.0, completed / (double) total));
+                statusProgress.setProgress(p);
+            }
+        }
+    }
+
+    private void showFileOpComplete(String op, boolean ok, String message) {
+        if (statusLeft != null) {
+            if (ok) {
+                statusLeft.setText(op + " complete.");
+            } else {
+                String m = (message == null) ? "" : message;
+                statusLeft.setText(op + " failed" + (m.isBlank() ? "." : (": " + m)));
+            }
+        }
+        if (statusProgress != null) {
+            statusProgress.setProgress(ok ? 1.0 : 0.0);
+            if (fileOpHideTransition == null) {
+                fileOpHideTransition = new PauseTransition(Duration.millis(1800));
+                fileOpHideTransition.setOnFinished(ev -> {
+                    if (statusProgress != null) {
+                        statusProgress.setVisible(false);
+                        statusProgress.setManaged(false);
+                        statusProgress.setProgress(0.0);
+                    }
+                    if (statusLeft != null) {
+                        statusLeft.setText("");
+                    }
+                });
+            }
+            fileOpHideTransition.playFromStart();
+        }
+    }
+
+
     private void wireViewMenuHandlers() {
         LogSupport.enter(LOG, "wireViewMenuHandlers");
         // Wire view mode radio items (mutually exclusive).
@@ -4029,6 +4211,7 @@ private void expandNavigationTreeLimited(TreeItem<Path> root, int maxDepth, int 
         item.setOnAction(this::onViewModeRadio);
     }
 
+
     private void configureStatusBar() {
         LogSupport.enter(LOG, "configureStatusBar");
         if (statusLabel != null) {
@@ -4037,6 +4220,19 @@ private void expandNavigationTreeLimited(TreeItem<Path> root, int maxDepth, int 
             statusLabel.setPadding(new Insets(2, 8, 2, 8));
             statusLabel.setMaxWidth(Double.MAX_VALUE);
             statusLabel.setAlignment(Pos.CENTER_LEFT);
+        }
+        if (statusLeft != null) {
+            statusLeft.setMinHeight(Region.USE_PREF_SIZE);
+            statusLeft.setTextOverrun(OverrunStyle.ELLIPSIS);
+            statusLeft.setPadding(new Insets(2, 8, 2, 8));
+            statusLeft.setMaxWidth(Double.MAX_VALUE);
+            statusLeft.setAlignment(Pos.CENTER_LEFT);
+        }
+        if (statusProgress != null) {
+            statusProgress.setVisible(false);
+            statusProgress.setManaged(false);
+            statusProgress.setProgress(0.0);
+            statusProgress.setMaxHeight(14.0);
         }
         if (locationLabel != null) {
             locationLabel.setMinHeight(Region.USE_PREF_SIZE);
@@ -4442,6 +4638,235 @@ private static boolean syspropBoolean(String key, boolean def) {
             }
         } catch (Exception ignored) {
         }
+    }
+    // ---------------------------------------------------------------------
+    // Phase 3.6.x: Compatibility shims / UI actions
+    // ---------------------------------------------------------------------
+
+    private void refresh() {
+        refreshCurrentDirectoryView();
+    }
+
+    private void focusSearch() {
+        if (searchField != null) {
+            searchField.requestFocus();
+            searchField.selectAll();
+        }
+    }
+
+    private void focusAddressBar() {
+        if (breadcrumbBarController != null) {
+            breadcrumbBarController.requestAddressFocus();
+        }
+    }
+
+    private void togglePreviewPane() {
+        if (previewBox == null) return;
+        boolean newVisible = !previewBox.isVisible();
+        previewBox.setVisible(newVisible);
+        previewBox.setManaged(newVisible);
+
+        if (newVisible) {
+            // When enabling, eagerly populate preview for current selection.
+            Path sel = currentSelectionPath();
+            updatePreviewAsync(sel);
+        }
+    }
+
+    private void toggleDetailsPane() {
+        if (detailsBox == null) return;
+        boolean newVisible = !detailsBox.isVisible();
+        detailsBox.setVisible(newVisible);
+        detailsBox.setManaged(newVisible);
+    }
+
+    private void cyclePanesFocus() {
+        // Best-effort: table -> tree -> search -> table
+        if (fileTable != null && fileTable.isFocused()) {
+            if (folderTree != null) folderTree.requestFocus();
+            return;
+        }
+        if (folderTree != null && folderTree.isFocused()) {
+            focusSearch();
+            return;
+        }
+        if (searchField != null && searchField.isFocused()) {
+            if (fileTable != null) fileTable.requestFocus();
+            return;
+        }
+        if (fileTable != null) fileTable.requestFocus();
+    }
+
+    private void scrollToTop() {
+        if (fileTable == null) return;
+        if (!fileTable.getItems().isEmpty()) {
+            fileTable.scrollTo(0);
+            fileTable.getSelectionModel().select(0);
+        }
+    }
+
+    private void scrollToBottom() {
+        if (fileTable == null) return;
+        int n = fileTable.getItems().size();
+        if (n > 0) {
+            fileTable.scrollTo(n - 1);
+            fileTable.getSelectionModel().select(n - 1);
+        }
+    }
+
+    private boolean confirmDangerous(String title, String message) {
+        try {
+            Alert a = new Alert(Alert.AlertType.CONFIRMATION);
+            a.setTitle(title);
+            a.setHeaderText(title);
+            a.setContentText(message);
+            a.getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
+            return a.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK;
+        } catch (Exception ex) {
+            // If dialogs fail (headless), be safe.
+            return false;
+        }
+    }
+
+    private void showError(String title, String message, Throwable t) {
+        try {
+            Alert a = new Alert(Alert.AlertType.ERROR);
+            a.setTitle(title);
+            a.setHeaderText(title);
+            StringBuilder sb = new StringBuilder();
+            if (message != null) sb.append(message);
+            if (t != null) {
+                sb.append("\n\n").append(t.getClass().getSimpleName()).append(": ").append(String.valueOf(t.getMessage()));
+            }
+            a.setContentText(sb.toString());
+            a.showAndWait();
+        } catch (Exception ex) {
+            setStatus((title != null ? title : "Error") + ": " + (message != null ? message : String.valueOf(t)));
+        }
+    }
+
+    private void closeCurrentWindow() {
+        try {
+            if (boundScene != null && boundScene.getWindow() instanceof Stage st) {
+                st.close();
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void toggleFullScreen() {
+        try {
+            if (boundScene != null && boundScene.getWindow() instanceof Stage st) {
+                st.setFullScreen(!st.isFullScreen());
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void openNewWindow() {
+        openNewWindow(currentDirectory);
+    }
+
+    private void openNewWindow(java.nio.file.Path startDir) {
+        // Not implemented in this codebase yet.
+        setStatus("Open new window: not implemented yet.");
+    }
+
+    private void openPropertiesForSelection() {
+        setStatus("Properties: not implemented yet.");
+    }
+
+    private void expandAllFoldersInNavigationPane() {
+        if (folderTree == null) return;
+        TreeItem<java.nio.file.Path> root = folderTree.getRoot();
+        if (root == null) return;
+        expandNavigationTreeLimited(root, 8, 2500);
+    }
+
+
+    private void collapseTree(TreeItem<java.nio.file.Path> item) {
+        if (item == null) return;
+        item.setExpanded(false);
+        for (TreeItem<java.nio.file.Path> c : item.getChildren()) {
+            collapseTree(c);
+        }
+    }
+
+    private void undoLastFileOperation() {
+        if (fileOperationsService == null) {
+            setStatus("Undo not available.");
+            return;
+        }
+        if (!fileOpHistory.canUndo()) {
+            setStatus("Nothing to undo.");
+            return;
+        }
+        FileOpHistory.UndoEntry entry = fileOpHistory.popUndo();
+        if (entry == null) {
+            setStatus("Nothing to undo.");
+            return;
+        }
+        String label = entry.label();
+        entry.undo(fileOperationsService);
+        setStatus("Undo: " + label);
+        refresh();
+    }
+
+    private void createNewFolder() {
+        if (currentDirectory == null) {
+            setStatus("No current folder.");
+            return;
+        }
+        TextInputDialog d = new TextInputDialog("New Folder");
+        d.setTitle("New Folder");
+        d.setHeaderText("Create a new folder");
+        d.setContentText("Folder name:");
+        String name = d.showAndWait().orElse(null);
+        if (name == null) return;
+        name = name.trim();
+        if (name.isEmpty()) return;
+
+        final String finalName = name;
+
+        final java.nio.file.Path finalTarget = currentDirectory.resolve(finalName);
+        ioExecutor.submit(() -> {
+            try {
+                java.nio.file.Files.createDirectory(finalTarget);
+                javafx.application.Platform.runLater(() -> {
+                    setStatus("Folder created: " + finalName);
+                    refresh();
+                });
+            } catch (Exception ex) {
+                javafx.application.Platform.runLater(() -> showError("Create folder failed", finalTarget.toString(), ex));
+            }
+        });
+    }
+
+    private void renameSelection() {
+        if (fileTable == null) return;
+        FileItem sel = fileTable.getSelectionModel().getSelectedItem();
+        if (sel == null) {
+            setStatus("No selection.");
+            return;
+        }
+        java.nio.file.Path p = sel.path();
+        if (p == null) return;
+        String currentName = (p.getFileName() != null) ? p.getFileName().toString() : "";
+        TextInputDialog d = new TextInputDialog(currentName);
+        d.setTitle("Rename");
+        d.setHeaderText("Rename");
+        d.setContentText("New name:");
+        String newName = d.showAndWait().orElse(null);
+        if (newName == null) return;
+        newName = newName.trim();
+        if (newName.isEmpty() || newName.equals(currentName)) return;
+
+        if (fileOperationsService == null) {
+            setStatus("Rename not available.");
+            return;
+        }
+        fileOpHistory.recordRename(p, p.getParent() != null ? p.getParent().resolve(newName) : p);
+        fileOperationsService.rename(p, newName);
     }
 
 }
