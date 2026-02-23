@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx"
+            xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.fileexplorer.controller.OperationHistoryController">
+
+    <top>
+        <VBox spacing="6" BorderPane.alignment="CENTER">
+            <children>
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <padding>
+                        <Insets top="8" right="8" bottom="8" left="8"/>
+                    </padding>
+                    <children>
+                        <Label text="Operation History" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+
+                        <Label text="Type:"/>
+                        <ComboBox fx:id="typeFilter" prefWidth="120"/>
+
+                        <Label text="Status:"/>
+                        <ComboBox fx:id="statusFilter" prefWidth="140"/>
+
+                        <Label text="Search:"/>
+                        <TextField fx:id="filterField" promptText="type, target, message..." prefWidth="220"/>
+
+                        <Label text="Keep:"/>
+                        <Spinner fx:id="maxEntriesSpinner" prefWidth="100"/>
+                        <Label text="entries,"/>
+                        <Spinner fx:id="maxDaysSpinner" prefWidth="80"/>
+                        <Label text="days"/>
+
+                        <Button text="Clear" fx:id="clearButton" onAction="#onClear"/>
+                        <MenuButton text="Export" fx:id="exportMenu">
+                            <items>
+                                <MenuItem text="Export JSONL" onAction="#onExportJsonl"/>
+                                <MenuItem text="Export JSON" onAction="#onExportJson"/>
+                                <MenuItem text="Export CSV" onAction="#onExportCsv"/>
+                                <SeparatorMenuItem/>
+                                <MenuItem text="Export Selected JSONL" onAction="#onExportSelectedJsonl"/>
+                                <MenuItem text="Export Selected JSON" onAction="#onExportSelectedJson"/>
+                                <MenuItem text="Export Selected CSV" onAction="#onExportSelectedCsv"/>
+                                <SeparatorMenuItem/>
+                                <MenuItem text="Diagnostics..." onAction="#onShowDiagnostics"/>
+                                <MenuItem text="Force checkpoint now" onAction="#onForceCheckpoint"/>
+                                <MenuItem text="Copy diagnostics to clipboard" onAction="#onCopyDiagnostics"/>
+                                <SeparatorMenuItem/>
+                                <MenuItem text="Persistence Settings..." onAction="#onShowPersistenceSettings"/>
+                                <MenuItem text="Reveal Storage Folder" onAction="#onRevealStorageFolder"/>
+                            </items>
+                        </MenuButton>
+
+                        <Button text="Reveal" fx:id="revealButton" onAction="#onReveal"/>
+                        <Button text="Copy" fx:id="copyButton" onAction="#onCopy"/>
+                        <Button text="Retry" fx:id="retryButton" onAction="#onRetry"/>
+                    </children>
+                </HBox>
+            </children>
+        </VBox>
+    </top>
+
+    <center>
+        <TreeTableView fx:id="table">
+            <columns>
+                <TreeTableColumn fx:id="typeCol" text="Type" prefWidth="90"/>
+                <TreeTableColumn fx:id="statusCol" text="Status" prefWidth="110"/>
+                                <TreeTableColumn fx:id="undoableCol" text="Undo" prefWidth="70"/>
+                <TreeTableColumn fx:id="startedCol" text="Started" prefWidth="160"/>
+                <TreeTableColumn fx:id="durationCol" text="Duration" prefWidth="90"/>
+                <TreeTableColumn fx:id="bytesCol" text="Bytes" prefWidth="130"/>
+                <TreeTableColumn fx:id="targetCol" text="Target" prefWidth="260"/>
+                <TreeTableColumn fx:id="messageCol" text="Message" prefWidth="400"/>
+            </columns>
+        </TreeTableView>
+    </center>
+
+    <bottom>
+        <HBox spacing="8" alignment="CENTER_LEFT">
+            <padding>
+                <Insets top="6" right="6" bottom="6" left="6"/>
+            </padding>
+            <children>
+                <Label fx:id="healthLabel" text="History: loading..." />
+                <Region HBox.hgrow="ALWAYS"/>
+                <Button text="Diagnostics..." onAction="#onShowDiagnostics"/>
+            </children>
+        </HBox>
+    </bottom>
+
+</BorderPane>

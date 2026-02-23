@@ -80,8 +80,8 @@
     -fx-background-insets: 0;
     -fx-border-color: #2a303a;
     -fx-border-width: 1;
-    -fx-background-radius: 8;
-    -fx-border-radius: 8;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
     -fx-padding: 6 10 6 10;
 }
 
@@ -109,7 +109,7 @@
 
 .scroll-bar .thumb {
     -fx-background-color: derive(#2a303a, 10%);
-    -fx-background-radius: 8;
+    -fx-background-radius: 0;
 }
 
 .scroll-bar .increment-button,
@@ -130,8 +130,8 @@
     -fx-background-insets: 0;
     -fx-border-color: #2a303a;
     -fx-border-width: 1;
-    -fx-background-radius: 8;
-    -fx-border-radius: 8;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
 }
 
 /* Selection */

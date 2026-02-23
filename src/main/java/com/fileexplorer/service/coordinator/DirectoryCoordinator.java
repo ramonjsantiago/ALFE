@@ -23,6 +23,13 @@ public final class DirectoryCoordinator {
     private final DirectoryLoadManager loadManager;
     private final AtomicLong seq = new AtomicLong(0);
 
+/**
+ * DirectoryCoordinator.
+ *
+ * @param bus TODO
+ * @param loadManager TODO
+ * @return TODO
+ */
     public DirectoryCoordinator(EventBus bus, DirectoryLoadManager loadManager) {
         this.bus = Objects.requireNonNull(bus, "bus");
         this.loadManager = Objects.requireNonNull(loadManager, "loadManager");
@@ -48,6 +55,12 @@ public final class DirectoryCoordinator {
         return requestId;
     }
 
+/**
+ * requestLoad.
+ *
+ * @param directory TODO
+ * @return TODO
+ */
     public long requestLoad(Path directory) {
         return requestLoad(directory, true);
     }

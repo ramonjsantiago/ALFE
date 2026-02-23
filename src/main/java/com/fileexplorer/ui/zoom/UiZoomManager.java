@@ -11,6 +11,11 @@ import javafx.stage.Stage;
 import java.util.logging.Logger;
 import com.fileexplorer.util.LogSupport;
 
+/**
+ * UiZoomManager.
+ * <p>
+ * Auto-generated API documentation for this type.
+ */
 public final class UiZoomManager {
 
     private static final Logger LOG = Logger.getLogger(UiZoomManager.class.getName());
@@ -32,6 +37,13 @@ public final class UiZoomManager {
     // Baseline minimum font size
     private final double baseFontPx;
 
+/**
+ * UiZoomManager.
+ *
+ * @param zoomRoot TODO
+ * @param stageOrNull TODO
+ * @return TODO
+ */
     public UiZoomManager(ZoomRoot zoomRoot, Stage stageOrNull) {
         LogSupport.enter(LOG, "UiZoomManager");
         this(zoomRoot, stageOrNull, 1.0, 1.0, 3.0, 0.1, 24.0);
@@ -72,6 +84,11 @@ public final class UiZoomManager {
         this.zoom = clamp(initialZoom, minZoom, maxZoom);
     }
 
+/**
+ * install.
+ *
+ * @param scene TODO
+ */
     public void install(Scene scene) {
         LogSupport.enter(LOG, "install");
         if (scene == null) {
@@ -102,26 +119,48 @@ public final class UiZoomManager {
         applyCssZoom(1.0);
     }
 
+/**
+ * getZoom.
+ *
+ * @return TODO
+ */
     public double getZoom() {
         LogSupport.enter(LOG, "getZoom");
         return zoom;
     }
 
+/**
+ * zoomIn.
+ *
+ */
     public void zoomIn() {
         LogSupport.enter(LOG, "zoomIn");
         setZoom(zoom + step);
     }
 
+/**
+ * zoomOut.
+ *
+ */
     public void zoomOut() {
         LogSupport.enter(LOG, "zoomOut");
         setZoom(zoom - step);
     }
 
+/**
+ * reset.
+ *
+ */
     public void reset() {
         LogSupport.enter(LOG, "reset");
         setZoom(1.0);
     }
 
+/**
+ * setZoom.
+ *
+ * @param newZoom TODO
+ */
     public void setZoom(double newZoom) {
         LogSupport.enter(LOG, "setZoom");
         double oldZoom = this.zoom;
@@ -129,6 +168,11 @@ public final class UiZoomManager {
         applyCssZoom(oldZoom);
     }
 
+/**
+ * applyCssZoom.
+ *
+ * @param oldZoom TODO
+ */
     private void applyCssZoom(double oldZoom) {
         LogSupport.enter(LOG, "applyCssZoom");
         Scene scene = this.sceneOrNull;
@@ -189,6 +233,12 @@ public final class UiZoomManager {
         }
     }
 
+/**
+ * getVisualBoundsForStage.
+ *
+ * @param stage TODO
+ * @return TODO
+ */
     private static Rectangle2D getVisualBoundsForStage(Stage stage) {
         LogSupport.enter(LOG, "getVisualBoundsForStage");
         double x = stage.getX();
@@ -207,6 +257,13 @@ public final class UiZoomManager {
         return screens.getFirst().getVisualBounds();
     }
 
+/**
+ * register.
+ *
+ * @param scene TODO
+ * @param kc TODO
+ * @param action TODO
+ */
     private static void register(Scene scene, KeyCombination kc, Runnable action) {
         LogSupport.enter(LOG, "register");
         scene.getAccelerators().put(kc, action);

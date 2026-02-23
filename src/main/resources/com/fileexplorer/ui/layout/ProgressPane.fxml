@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.fileexplorer.controller.ProgressPaneController"
+      spacing="10"
+      styleClass="progress-pane">
+
+    <padding>
+        <Insets top="10" right="10" bottom="10" left="10"/>
+    </padding>
+
+    <Label text="Operations" styleClass="progress-pane-title"/>
+
+    <HBox fx:id="conflictPolicyBar" spacing="8" alignment="CENTER_LEFT" styleClass="recovered-bar">
+        <Label text="Conflict policy:"/>
+        <ComboBox fx:id="conflictPolicyProfileCombo" prefWidth="190"/>
+        <Label text="CUSTOM action:"/>
+        <ComboBox fx:id="conflictPolicyCustomActionCombo" prefWidth="150"/>
+        <Region HBox.hgrow="ALWAYS"/>
+        <Button fx:id="editConflictPolicyButton" text="Edit…"/>
+    </HBox>
+
+    <HBox fx:id="recoveredBar" spacing="8" alignment="CENTER_LEFT" visible="false" managed="false" styleClass="recovered-bar">
+        <Label fx:id="recoveredLabel" text="" wrapText="true"/>
+        <Region HBox.hgrow="ALWAYS"/>
+        <Button fx:id="resumeRecoveredButton" text="Resume (safe)"/>
+        <Button fx:id="resumeQueuedOnlyButton" text="Resume queued only"/>
+        <Button fx:id="resumeAllRecoveredButton" text="Resume all (unsafe)"/>
+        <Button fx:id="discardRecoveredButton" text="Discard"/>
+    </HBox>
+
+    <HBox fx:id="orphanTempBar" spacing="8" alignment="CENTER_LEFT" visible="false" managed="false" styleClass="recovered-bar">
+        <Label fx:id="orphanTempLabel" text="" wrapText="true"/>
+        <Region HBox.hgrow="ALWAYS"/>
+        <Label text="Orphans:"/>
+        <ComboBox fx:id="orphanPolicyCombo" prefWidth="150"/>
+        <Button fx:id="cleanupOrphanButton" text="Clean up"/>
+        <Button fx:id="ignoreOrphanButton" text="Ignore"/>
+    </HBox>
+
+
+    <VBox spacing="6" styleClass="active-op-card">
+        <HBox spacing="8" alignment="CENTER_LEFT">
+            <Label fx:id="activeHeaderLabel" text="Active (0/0)" styleClass="queue-title"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label text="Concurrency:"/>
+            <ComboBox fx:id="concurrencyCombo" prefWidth="90"/>
+            <Label text="Recovery:"/>
+            <ComboBox fx:id="recoveryPolicyCombo" prefWidth="190"/>
+            <Button fx:id="openRecoveryManagerButton" text="Recovery manager…"/>
+            <Button fx:id="openTemplatesButton" text="Templates…"/>
+            <Button fx:id="openSchedulerButton" text="Scheduler…"/>
+            <ToggleButton fx:id="pauseToggleButton" text="Pause" mnemonicParsing="false"/>
+            <Button fx:id="cancelSelectedButton" text="Cancel selected" mnemonicParsing="false"/>
+
+            <Separator orientation="VERTICAL" prefHeight="18"/>
+            <CheckBox fx:id="batchTransactionModeCheckBox" text="Batch txn" mnemonicParsing="false"/>
+            <Label text="Group:"/>
+            <Label fx:id="currentGroupIdLabel" text="-" styleClass="mono-label"/>
+            <Button fx:id="commitGroupButton" text="Commit" mnemonicParsing="false"/>
+            <Button fx:id="discardGroupButton" text="Discard" mnemonicParsing="false"/>
+        </HBox>
+        <Label fx:id="aggregateLabel" text="" wrapText="true" styleClass="aggregate-label"/>
+        <ListView fx:id="activeListView" prefHeight="160" />
+    </VBox>
+
+    <Separator/>
+
+    <HBox spacing="8" alignment="CENTER_LEFT">
+        <Label text="Queue" styleClass="queue-title"/>
+        <Region HBox.hgrow="ALWAYS"/>
+        <Button fx:id="clearSavedButton" text="Clear saved"/>
+        <Button fx:id="cancelAllButton" text="Cancel all"/>
+        <Button fx:id="clearFinishedButton" text="Clear finished"/>
+    </HBox>
+
+    <ListView fx:id="queueListView" prefHeight="220"/>
+
+</VBox>

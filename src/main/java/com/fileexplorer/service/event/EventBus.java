@@ -18,6 +18,13 @@ public final class EventBus {
 
     private final Map<Class<?>, List<Consumer<?>>> subscribers = new ConcurrentHashMap<>();
 
+/**
+ * subscribe.
+ *
+ * @param eventType TODO
+ * @param handler TODO
+ * @return TODO
+ */
     public <E> AutoCloseable subscribe(Class<E> eventType, Consumer<E> handler) {
         Objects.requireNonNull(eventType, "eventType");
         Objects.requireNonNull(handler, "handler");
@@ -30,6 +37,11 @@ public final class EventBus {
         };
     }
 
+/**
+ * publish.
+ *
+ * @param event TODO
+ */
     public void publish(Object event) {
         if (event == null) return;
         Runnable deliver = () -> {

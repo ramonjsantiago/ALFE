@@ -21,3 +21,8 @@ Requires JDK 25 (or later compatible) and Maven.
 ```bash
 cd FileExplorer
 mvn clean javafx:run
+test
+
+## CI
+
+This repo includes GitHub Actions workflows for build/test and release packaging.

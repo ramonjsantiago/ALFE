@@ -43,10 +43,20 @@ public final class ResourceAudit {
     private static volatile boolean installed;
     private static volatile ClassLoader loggingClassLoader;
 
+/**
+ * ResourceAudit.
+ *
+ * @return TODO
+ */
     private ResourceAudit() {
         LogSupport.enter(LOG, "ResourceAudit");
     }
 
+/**
+ * install.
+ *
+ * @param anchor TODO
+ */
     public static void install(Class<?> anchor) {
         LogSupport.enter(LOG, "install");
         if (!ENABLED) {
@@ -87,6 +97,11 @@ public final class ResourceAudit {
         }
     }
 
+/**
+ * classLoader.
+ *
+ * @return TODO
+ */
     public static ClassLoader classLoader() {
         LogSupport.enter(LOG, "classLoader");
         if (!ENABLED) {
@@ -95,6 +110,13 @@ public final class ResourceAudit {
         return loggingClassLoader;
     }
 
+/**
+ * resourceUrl.
+ *
+ * @param anchor TODO
+ * @param resourcePath TODO
+ * @return TODO
+ */
     public static URL resourceUrl(Class<?> anchor, String resourcePath) {
         LogSupport.enter(LOG, "resourceUrl");
 
@@ -142,6 +164,13 @@ public final class ResourceAudit {
         return url;
     }
 
+/**
+ * addStylesheet.
+ *
+ * @param scene TODO
+ * @param anchor TODO
+ * @param resourcePath TODO
+ */
     public static void addStylesheet(Scene scene, Class<?> anchor, String resourcePath) {
         LogSupport.enter(LOG, "addStylesheet");
         if (!ENABLED) {
@@ -160,6 +189,11 @@ public final class ResourceAudit {
         scanStylesheetForUrlReferences(resolved);
     }
 
+/**
+ * attachStylesheetAudit.
+ *
+ * @param scene TODO
+ */
     public static void attachStylesheetAudit(Scene scene) {
         LogSupport.enter(LOG, "attachStylesheetAudit");
         if (!ENABLED) {
@@ -186,6 +220,11 @@ public final class ResourceAudit {
         });
     }
 
+/**
+ * attachStylesheetAudit.
+ *
+ * @param parent TODO
+ */
     public static void attachStylesheetAudit(Parent parent) {
         LogSupport.enter(LOG, "attachStylesheetAudit");
         if (!ENABLED) {
@@ -212,6 +251,11 @@ public final class ResourceAudit {
         });
     }
 
+/**
+ * attachImageViewAudit.
+ *
+ * @param root TODO
+ */
     public static void attachImageViewAudit(Parent root) {
         LogSupport.enter(LOG, "attachImageViewAudit");
         if (!ENABLED) {
@@ -223,6 +267,13 @@ public final class ResourceAudit {
         walkAndAttachImageViews(root);
     }
 
+/**
+ * logFontLoaded.
+ *
+ * @param requestedPath TODO
+ * @param resolvedUrl TODO
+ * @param loadedFont TODO
+ */
     public static void logFontLoaded(String requestedPath, URL resolvedUrl, Font loadedFont) {
         LogSupport.enter(LOG, "logFontLoaded");
         if (!ENABLED) {
@@ -241,6 +292,13 @@ public final class ResourceAudit {
         }
     }
 
+/**
+ * logImageLoaded.
+ *
+ * @param source TODO
+ * @param requestedPath TODO
+ * @param resolvedUrl TODO
+ */
     public static void logImageLoaded(String source, String requestedPath, String resolvedUrl) {
         LogSupport.enter(LOG, "logImageLoaded");
         if (!ENABLED) {
@@ -264,6 +322,10 @@ public final class ResourceAudit {
         }
     }
 
+/**
+ * configureLogger.
+ *
+ */
     private static void configureLogger() {
         LogSupport.enter(LOG, "configureLogger");
         try {
@@ -282,6 +344,13 @@ public final class ResourceAudit {
         }
     }
 
+/**
+ * logCssLoaded.
+ *
+ * @param source TODO
+ * @param requestedPath TODO
+ * @param resolvedUrl TODO
+ */
     private static void logCssLoaded(String source, String requestedPath, String resolvedUrl) {
         LogSupport.enter(LOG, "logCssLoaded");
         if (resolvedUrl == null || resolvedUrl.isBlank()) {
@@ -299,6 +368,13 @@ public final class ResourceAudit {
         }
     }
 
+/**
+ * logResolved.
+ *
+ * @param source TODO
+ * @param requestedPath TODO
+ * @param resolvedUrl TODO
+ */
     private static void logResolved(String source, String requestedPath, String resolvedUrl) {
         LogSupport.enter(LOG, "logResolved");
         if (resolvedUrl == null || resolvedUrl.isBlank()) {
@@ -323,6 +399,12 @@ public final class ResourceAudit {
         }
     }
 
+/**
+ * looksAuditable.
+ *
+ * @param path TODO
+ * @return TODO
+ */
     private static boolean looksAuditable(String path) {
         LogSupport.enter(LOG, "looksAuditable");
         if (path == null) {
@@ -335,11 +417,22 @@ public final class ResourceAudit {
                 || lower.endsWith(".bmp") || lower.endsWith(".webp") || lower.endsWith(".svg");
     }
 
+/**
+ * safeString.
+ *
+ * @param v TODO
+ * @return TODO
+ */
     private static String safeString(String v) {
         LogSupport.enter(LOG, "safeString");
         return v == null ? "" : v;
     }
 
+/**
+ * scanStylesheetForUrlReferences.
+ *
+ * @param stylesheetExternalForm TODO
+ */
     private static void scanStylesheetForUrlReferences(String stylesheetExternalForm) {
         LogSupport.enter(LOG, "scanStylesheetForUrlReferences");
         if (stylesheetExternalForm == null || stylesheetExternalForm.isBlank()) {
@@ -353,6 +446,11 @@ public final class ResourceAudit {
         }
     }
 
+/**
+ * scanStylesheet.
+ *
+ * @param cssUrl TODO
+ */
     private static void scanStylesheet(URL cssUrl) {
         LogSupport.enter(LOG, "scanStylesheet");
         if (cssUrl == null) {
@@ -406,6 +504,13 @@ public final class ResourceAudit {
         }
     }
 
+/**
+ * resolveCssReference.
+ *
+ * @param cssUrl TODO
+ * @param ref TODO
+ * @return TODO
+ */
     private static URL resolveCssReference(URL cssUrl, String ref) {
         LogSupport.enter(LOG, "resolveCssReference");
         if (cssUrl == null || ref == null) {
@@ -450,6 +555,12 @@ public final class ResourceAudit {
         return null;
     }
 
+/**
+ * readUrlAsString.
+ *
+ * @param url TODO
+ * @return TODO
+ */
     private static String readUrlAsString(URL url) {
         LogSupport.enter(LOG, "readUrlAsString");
         try (InputStream in = url.openStream()) {
@@ -463,6 +574,12 @@ public final class ResourceAudit {
         }
     }
 
+/**
+ * stripCssComments.
+ *
+ * @param css TODO
+ * @return TODO
+ */
     private static String stripCssComments(String css) {
         LogSupport.enter(LOG, "stripCssComments");
         if (css == null || css.isEmpty()) {
@@ -491,6 +608,12 @@ public final class ResourceAudit {
         return out.toString();
     }
 
+/**
+ * extractImports.
+ *
+ * @param css TODO
+ * @return TODO
+ */
     private static List<String> extractImports(String css) {
         LogSupport.enter(LOG, "extractImports");
         List<String> imports = new ArrayList<>();
@@ -539,6 +662,12 @@ public final class ResourceAudit {
         return imports;
     }
 
+/**
+ * extractUrlFunctions.
+ *
+ * @param css TODO
+ * @return TODO
+ */
     private static List<String> extractUrlFunctions(String css) {
         LogSupport.enter(LOG, "extractUrlFunctions");
         List<String> urls = new ArrayList<>();
@@ -563,6 +692,14 @@ public final class ResourceAudit {
         return urls;
     }
 
+/**
+ * startsWithIgnoreCase.
+ *
+ * @param lower TODO
+ * @param index TODO
+ * @param tokenLower TODO
+ * @return TODO
+ */
     private static boolean startsWithIgnoreCase(String lower, int index, String tokenLower) {
         LogSupport.enter(LOG, "startsWithIgnoreCase");
         if (lower == null || tokenLower == null) {
@@ -574,6 +711,13 @@ public final class ResourceAudit {
         return lower.startsWith(tokenLower, index);
     }
 
+/**
+ * skipWhitespace.
+ *
+ * @param s TODO
+ * @param i TODO
+ * @return TODO
+ */
     private static int skipWhitespace(String s, int i) {
         LogSupport.enter(LOG, "skipWhitespace");
         int n = s.length();
@@ -588,6 +732,13 @@ public final class ResourceAudit {
         return j;
     }
 
+/**
+ * parseFunctionArgument.
+ *
+ * @param s TODO
+ * @param startIndex TODO
+ * @return TODO
+ */
     private static ParsedFunction parseFunctionArgument(String s, int startIndex) {
         LogSupport.enter(LOG, "parseFunctionArgument");
         int i = startIndex;
@@ -628,6 +779,13 @@ public final class ResourceAudit {
         return new ParsedFunction(unquote(value), i);
     }
 
+/**
+ * parseStringOrBare.
+ *
+ * @param s TODO
+ * @param startIndex TODO
+ * @return TODO
+ */
     private static ParsedString parseStringOrBare(String s, int startIndex) {
         LogSupport.enter(LOG, "parseStringOrBare");
         int i = skipWhitespace(s, startIndex);
@@ -654,6 +812,13 @@ public final class ResourceAudit {
         return new ParsedString(unquote(sb.toString()), i);
     }
 
+/**
+ * parseQuoted.
+ *
+ * @param s TODO
+ * @param startIndex TODO
+ * @return TODO
+ */
     private static ParsedString parseQuoted(String s, int startIndex) {
         LogSupport.enter(LOG, "parseQuoted");
         int n = s.length();
@@ -679,6 +844,12 @@ public final class ResourceAudit {
         return new ParsedString(sb.toString(), i);
     }
 
+/**
+ * unquote.
+ *
+ * @param v TODO
+ * @return TODO
+ */
     private static String unquote(String v) {
         LogSupport.enter(LOG, "unquote");
         if (v == null) {
@@ -695,6 +866,11 @@ public final class ResourceAudit {
         return s;
     }
 
+/**
+ * walkAndAttachImageViews.
+ *
+ * @param node TODO
+ */
     private static void walkAndAttachImageViews(Node node) {
         LogSupport.enter(LOG, "walkAndAttachImageViews");
         if (node == null) {
@@ -728,6 +904,12 @@ public final class ResourceAudit {
         }
 
         @Override
+/**
+ * getResource.
+ *
+ * @param name TODO
+ * @return TODO
+ */
         public URL getResource(String name) {
             LogSupport.enter(LOG, "getResource");
             URL url = super.getResource(name);
@@ -738,6 +920,12 @@ public final class ResourceAudit {
         }
 
         @Override
+/**
+ * getResourceAsStream.
+ *
+ * @param name TODO
+ * @return TODO
+ */
         public InputStream getResourceAsStream(String name) {
             LogSupport.enter(LOG, "getResourceAsStream");
             InputStream in = super.getResourceAsStream(name);
@@ -751,6 +939,12 @@ public final class ResourceAudit {
 
     private static final class SimpleConsoleFormatter extends Formatter {
         @Override
+/**
+ * format.
+ *
+ * @param record TODO
+ * @return TODO
+ */
         public String format(LogRecord record) {
             LogSupport.enter(LOG, "format");
             return record.getLevel().getName() + " " + record.getLoggerName()

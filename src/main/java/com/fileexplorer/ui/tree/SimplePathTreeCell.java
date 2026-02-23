@@ -31,6 +31,13 @@ public class SimplePathTreeCell extends TreeCell<Path> {
     private final ChangeListener<Boolean> expandedListener = (obs, oldV, newV) -> updateDisclosure();
     private TreeItem<Path> observedTreeItem;
 
+/**
+ * SimplePathTreeCell.
+ *
+ * @param fixedCellSize TODO
+ * @param displayService TODO
+ * @return TODO
+ */
     public SimplePathTreeCell(double fixedCellSize, TreeBuildService displayService) {
         this.displayService = displayService;
 
@@ -83,6 +90,12 @@ public class SimplePathTreeCell extends TreeCell<Path> {
     }
 
     @Override
+/**
+ * updateItem.
+ *
+ * @param item TODO
+ * @param empty TODO
+ */
     protected void updateItem(Path item, boolean empty) {
         super.updateItem(item, empty);
 
@@ -122,6 +135,10 @@ public class SimplePathTreeCell extends TreeCell<Path> {
         updateDisclosure();
     }
 
+/**
+ * detach.
+ *
+ */
     private void detach() {
         if (observedTreeItem != null) {
             observedTreeItem.expandedProperty().removeListener(expandedListener);
@@ -129,6 +146,10 @@ public class SimplePathTreeCell extends TreeCell<Path> {
         }
     }
 
+/**
+ * updateDisclosure.
+ *
+ */
     private void updateDisclosure() {
         TreeItem<Path> ti = getTreeItem();
 
@@ -153,10 +174,22 @@ public class SimplePathTreeCell extends TreeCell<Path> {
         disclosureChevron.setRotate(ti.isExpanded() ? 90.0 : 0.0);
     }
 
+/**
+ * chevronRight.
+ *
+ * @return TODO
+ */
     private static PathElement[] chevronRight() {
         return new PathElement[] {
                 new MoveTo(6.0, 4.0),
                 new LineTo(10.0, 8.0),
+/**
+ * LineTo.
+ *
+ * @param 6.0 TODO
+ * @param 12.0 TODO
+ * @return TODO
+ */
                 new LineTo(6.0, 12.0)
         };
     }

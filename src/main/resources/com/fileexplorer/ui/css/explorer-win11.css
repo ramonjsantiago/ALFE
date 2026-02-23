@@ -41,6 +41,12 @@
     -fx-pref-height: 26;
 }
 
+/* Explorer-like row density */
+
+.table-row-cell {
+    -fx-cell-size: 28;
+}
+
 /* Icon tiles layout */
 
 .icon-flow {
@@ -59,6 +65,10 @@
     -fx-padding: 4 8 4 8;
 }
 
+.breadcrumb-crumb-container {
+    -fx-alignment: center-left;
+}
+
 .breadcrumb-button {
     -fx-min-height: 22;
 }
@@ -67,4 +77,41 @@
 
 #previewText {
     -fx-pref-row-count: 8;
+}
+/* ---------------------------------------------------------------------
+ * Dialogs (Windows 11 shape / layout)
+ * ------------------------------------------------------------------- */
+
+.dialog-pane {
+    -fx-padding: 18;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+}
+
+.dialog-pane > .header-panel {
+    -fx-padding: 16 18 8 18;
+    -fx-background-radius: 10 10 0 0;
+}
+
+.dialog-pane > .content {
+    -fx-padding: 8 18 10 18;
+}
+
+.dialog-pane > .button-bar {
+    -fx-padding: 10 18 16 18;
+}
+
+.dialog-pane .button {
+    -fx-min-height: 32;
+    -fx-pref-height: 32;
+    -fx-padding: 0 14 0 14;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+}
+
+.dialog-pane .text-input,
+.dialog-pane .combo-box-base,
+.dialog-pane .spinner {
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
 }

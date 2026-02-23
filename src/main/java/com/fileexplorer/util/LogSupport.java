@@ -22,6 +22,11 @@ public final class LogSupport {
      */
     private static final String PROP_ENTER = "fileexplorer.log.enter";
 
+/**
+ * LogSupport.
+ *
+ * @return TODO
+ */
     private LogSupport() {
         // utility
     }

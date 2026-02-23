@@ -37,6 +37,12 @@ public final class FileMetadataService {
      */
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("MM/dd/yyyy h:mm a", Locale.US);
 
+/**
+ * listDirectory.
+ *
+ * @param dir TODO
+ * @return TODO
+ */
     public List<Path> listDirectory(Path dir) {
         LogSupport.enter(LOG, "listDirectory");
         if (dir == null || !safeIsDirectory(dir) || !Files.isReadable(dir)) {
@@ -45,6 +51,11 @@ public final class FileMetadataService {
 
         // Use a DirectoryStream (lower overhead than Files.list) and precompute
         // stable sort keys once to avoid allocation-heavy per-compare lowercasing.
+/**
+ * DirEntry.
+ * <p>
+ * Auto-generated API documentation for this type.
+ */
         record DirEntry(Path path, boolean isDir, String name) {}
 
         List<DirEntry> entries = new ArrayList<>(2048);
@@ -139,6 +150,12 @@ public DirectoryListing listDirectoryLimited(Path dir, boolean includeHidden, in
         return new DirectoryListing(out, truncated, capped);
     }
 
+/**
+ * isHiddenSafe.
+ *
+ * @param p TODO
+ * @return TODO
+ */
 private boolean isHiddenSafe(Path p) {
     if (p == null) {
         return false;
@@ -152,6 +169,12 @@ private boolean isHiddenSafe(Path p) {
     }
 }
 
+/**
+ * displayName.
+ *
+ * @param p TODO
+ * @return TODO
+ */
     public String displayName(Path p) {
         LogSupport.enter(LOG, "displayName");
         if (p == null) {
@@ -196,6 +219,12 @@ private boolean isHiddenSafe(Path p) {
         return "File";
     }
 
+/**
+ * humanReadableSize.
+ *
+ * @param p TODO
+ * @return TODO
+ */
     public String humanReadableSize(Path p) {
         LogSupport.enter(LOG, "humanReadableSize");
         if (p == null) {
@@ -212,6 +241,12 @@ private boolean isHiddenSafe(Path p) {
         }
     }
 
+/**
+ * lastModifiedLocalString.
+ *
+ * @param p TODO
+ * @return TODO
+ */
     public String lastModifiedLocalString(Path p) {
         LogSupport.enter(LOG, "lastModifiedLocalString");
         if (p == null) {
@@ -227,6 +262,12 @@ private boolean isHiddenSafe(Path p) {
         }
     }
 
+/**
+ * describeForStatusBar.
+ *
+ * @param p TODO
+ * @return TODO
+ */
     public String describeForStatusBar(Path p) {
         LogSupport.enter(LOG, "describeForStatusBar");
         if (p == null) {
@@ -251,6 +292,12 @@ private boolean isHiddenSafe(Path p) {
         return sb.toString();
     }
 
+/**
+ * displayPathForStatus.
+ *
+ * @param p TODO
+ * @return TODO
+ */
     public String displayPathForStatus(Path p) {
         LogSupport.enter(LOG, "displayPathForStatus");
         if (p == null) {
@@ -354,6 +401,12 @@ private boolean isHiddenSafe(Path p) {
 
         String e = extLower.toLowerCase(Locale.ROOT);
 
+/**
+ * switch.
+ *
+ * @param e TODO
+ * @return TODO
+ */
         return switch (e) {
             case "pdf" -> IconLoader.IconType.PDF;
             case "png",
@@ -406,6 +459,12 @@ private boolean isHiddenSafe(Path p) {
         return n.substring(lastDot + 1).toLowerCase(Locale.ROOT);
     }
 
+/**
+ * safeIsDirectory.
+ *
+ * @param p TODO
+ * @return TODO
+ */
     private static boolean safeIsDirectory(Path p) {
         LogSupport.enter(LOG, "safeIsDirectory");
         try {
@@ -415,6 +474,12 @@ private boolean isHiddenSafe(Path p) {
         }
     }
 
+/**
+ * formatBytes.
+ *
+ * @param bytes TODO
+ * @return TODO
+ */
     private static String formatBytes(long bytes) {
         LogSupport.enter(LOG, "formatBytes");
         if (bytes < 0) {

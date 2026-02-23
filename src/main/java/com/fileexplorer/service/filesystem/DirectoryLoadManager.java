@@ -100,6 +100,12 @@ public final class DirectoryLoadManager {
         );
     }
 
+/**
+ * buildListingOptions.
+ *
+ * @param includeHidden TODO
+ * @return TODO
+ */
     private DirectoryListingService.ListingOptions buildListingOptions(boolean includeHidden) {
         // Keep this simple and deterministic.
         // Use system properties (the app already prints them on boot).
@@ -120,6 +126,13 @@ public final class DirectoryLoadManager {
         return new DirectoryListingService.ListingOptions(effectiveMax, includeHidden, foldersFirst);
     }
 
+/**
+ * intProp.
+ *
+ * @param key TODO
+ * @param def TODO
+ * @return TODO
+ */
     private static int intProp(String key, int def) {
         String v = System.getProperty(key);
         if (v == null || v.isBlank()) return def;
@@ -130,6 +143,13 @@ public final class DirectoryLoadManager {
         }
     }
 
+/**
+ * boolProp.
+ *
+ * @param key TODO
+ * @param def TODO
+ * @return TODO
+ */
     private static boolean boolProp(String key, boolean def) {
         String v = System.getProperty(key);
         if (v == null || v.isBlank()) return def;

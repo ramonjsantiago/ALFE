@@ -1,6 +1,7 @@
 package com.fileexplorer.app;
 
 import com.fileexplorer.controller.MainController;
+import com.fileexplorer.controller.ProgressPaneController;
 import com.fileexplorer.ui.zoom.ZoomRoot;
 import com.fileexplorer.service.theme.ThemeService;
 import java.io.IOException;
@@ -32,6 +33,8 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
 import javafx.scene.text.Font;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
@@ -43,6 +46,12 @@ import com.fileexplorer.service.event.EventBus;
 import com.fileexplorer.service.filesystem.FileMetadataService;
 import com.fileexplorer.service.filesystem.TreeBuildService;
 import com.fileexplorer.service.icon.IconCacheService;
+import com.fileexplorer.service.diag.CrashReportService;
+import com.fileexplorer.service.diag.DiagnosticsBundleService;
+import com.fileexplorer.service.diag.StartupSelfCheckService;
+
+import java.nio.file.Files;
+import java.time.Instant;
 
 /**
  * Application bootstrap.
@@ -102,10 +111,20 @@ private static final Set<String> LOGGED_RESOURCES = ConcurrentHashMap.newKeySet(
     private static volatile String resolvedUiFamily = SYSTEM_FONT_FAMILY_KEYWORD;
     private static volatile String resolvedSystemFamily = SYSTEM_FONT_FAMILY_KEYWORD;
 
+/**
+ * isSafeMode.
+ *
+ * @return TODO
+ */
     private static boolean isSafeMode() {
         return Boolean.getBoolean("fileexplorer.safeMode");
     }
 
+/**
+ * isResourceAuditEnabled.
+ *
+ * @return TODO
+ */
     private static boolean isResourceAuditEnabled() {
         // Safe mode forces resource audit off to keep startup as minimal as possible.
         if (isSafeMode()) {
@@ -115,6 +134,11 @@ private static final Set<String> LOGGED_RESOURCES = ConcurrentHashMap.newKeySet(
     }
 
 
+/**
+ * printJvmDiagnosticsOnce.
+ *
+ * @param phase TODO
+ */
     private static void printJvmDiagnosticsOnce(String phase) {
         if (JVM_ARGS_PRINTED) {
             return;
@@ -172,7 +196,20 @@ private static final Set<String> LOGGED_RESOURCES = ConcurrentHashMap.newKeySet(
     }
 
     @Override
+/**
+ * start.
+ *
+ * @param stage TODO
+ */
     public void start(Stage stage) throws Exception {
+
+        // Crash snapshot: capture any uncaught exceptions best-effort.
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            try {
+                CrashReportService.writeCrashReport(t, e);
+            } catch (Throwable ignored) {
+            }
+        });
 
         try {
             java.nio.file.Files.createDirectories(java.nio.file.Path.of("heapdumps"));
@@ -191,6 +228,10 @@ private static final Set<String> LOGGED_RESOURCES = ConcurrentHashMap.newKeySet(
         LogSupport.enter(LOG, "end");
     }
 
+/**
+ * configureResourceLoggerIfNeeded.
+ *
+ */
     private static void configureResourceLoggerIfNeeded() {
         LogSupport.enter(LOG, "configureResourceLoggerIfNeeded");
 
@@ -243,6 +284,12 @@ private static final Set<String> LOGGED_RESOURCES = ConcurrentHashMap.newKeySet(
         LogSupport.enter(LOG, "end");
     }
 
+/**
+ * configureExplorerStage.
+ *
+ * @param stage TODO
+ * @param initialFolder TODO
+ */
     public static void configureExplorerStage(Stage stage, Path initialFolder) throws IOException {
         LogSupport.enter(LOG, "configureExplorerStage");
         ThemeService themeService = new ThemeService();
@@ -252,6 +299,13 @@ private static final Set<String> LOGGED_RESOURCES = ConcurrentHashMap.newKeySet(
         LogSupport.enter(LOG, "end");
     }
 
+/**
+ * configureExplorerStage.
+ *
+ * @param stage TODO
+ * @param initialFolder TODO
+ * @param dark TODO
+ */
     public static void configureExplorerStage(Stage stage, Path initialFolder, boolean dark) throws IOException {
 
 if (stage == null) {
@@ -335,7 +389,8 @@ delay.setOnFinished(evt -> {
                 fileMetadataService,
                 IconCacheService.getInstance(),
                 treeBuildService,
-                eventBus
+                eventBus,
+                isSafeMode()
         );
         contextRef.set(context);
         ZoomRoot zoomRoot = new ZoomRoot(root);
@@ -351,6 +406,7 @@ delay.setOnFinished(evt -> {
         addStylesheet(scene, dark ? "/com/fileexplorer/ui/css/fluent-dark.css" : "/com/fileexplorer/ui/css/fluent-light.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/fluent-explorer.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-override-everything.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/progress_pane.css");
 
         // Wire controller
         MainController controller = loader.getController();
@@ -358,6 +414,38 @@ delay.setOnFinished(evt -> {
             mainControllerRef.set(controller);
             // Phase 3.4.4: Attach shared ExplorerContext before any scene-dependent work.
             controller.attach(context);
+
+            // Phase 3.6.2: attach included controllers (e.g., ProgressPane)
+            Object ppcObj = loader.getNamespace().get("progressPaneController");
+            if (ppcObj instanceof ProgressPaneController ppc) {
+                ppc.attach(context);
+
+                // Phase 6.4.0: Startup self-check + quarantine (best-effort).
+                try {
+                    StartupSelfCheckService.SelfCheckResult r = new StartupSelfCheckService().run(context);
+                    if (r != null && r.hadIssues()) {
+                        javafx.application.Platform.runLater(() -> showSelfCheckDialog(r.report()));
+                    }
+                } catch (Exception ignored) {
+                }
+
+                // Phase 3.6.7: restore any persisted operations from prior session.
+                // Phase 6.4.0: Safe mode disables auto-recovery re-enqueue.
+                if (!isSafeMode()) {
+                    int recovered = context.operationQueueService().restoreSavedQueue();
+                    if (recovered > 0) {
+                        // Phase 3.6.7.1: Prompt the user to Resume or Discard recovered operations.
+                        javafx.application.Platform.runLater(() -> showRecoveredOpsDialog(context, recovered));
+                    }
+                }
+
+                // Phase 3.6.10: scan for orphan atomic-copy temp files (best-effort).
+                context.operationQueueService().scanForOrphanTempFiles();
+
+                // Phase 4.5.0: scan for incomplete transaction journals (crash recovery).
+                javafx.application.Platform.runLater(() -> showJournalRecoveryDialog(context));
+            }
+
             controller.setScene(scene);
 
             if (Boolean.getBoolean("fileexplorer.safeMode")) {
@@ -370,6 +458,9 @@ delay.setOnFinished(evt -> {
         }
 
         stage.setScene(scene);
+
+        // Phase 6.4.0: if there is a prior crash snapshot, surface it and offer a one-click bundle.
+        javafx.application.Platform.runLater(() -> showLastCrashDialogIfPresent(context));
 
         // Give controller a chance to release any startup guards after the first real scene is installed.
         if (controller != null) {
@@ -385,6 +476,10 @@ delay.setOnFinished(evt -> {
 delay.play();
     }
 
+/**
+ * bootstrapFonts.
+ *
+ */
     private static void bootstrapFonts() {
         LogSupport.enter(LOG, "bootstrapFonts");
         if (fontsBootstrapped) {
@@ -443,6 +538,11 @@ loadFontsFromResources(List.of(
         resolvedUiFamily = resolveUiFontFamily();
     }
 
+/**
+ * loadFirstFontFromResources.
+ *
+ * @param resourcePaths TODO
+ */
     private static void loadFirstFontFromResources(List<String> resourcePaths) {
         LogSupport.enter(LOG, "loadFirstFontFromResources");
         if (resourcePaths == null || resourcePaths.isEmpty()) {
@@ -470,6 +570,11 @@ loadFontsFromResources(List.of(
         }
     }
 
+/**
+ * loadFontsFromResources.
+ *
+ * @param resourcePaths TODO
+ */
     private static void loadFontsFromResources(List<String> resourcePaths) {
         LogSupport.enter(LOG, "loadFontsFromResources");
         if (resourcePaths == null || resourcePaths.isEmpty()) {
@@ -496,6 +601,11 @@ loadFontsFromResources(List.of(
         }
     }
 
+/**
+ * resolveUiFontFamily.
+ *
+ * @return TODO
+ */
     private static String resolveUiFontFamily() {
         LogSupport.enter(LOG, "resolveUiFontFamily");
         try {
@@ -511,6 +621,11 @@ loadFontsFromResources(List.of(
         return resolvedSystemFamily;
     }
 
+/**
+ * resolveSystemFontFamily.
+ *
+ * @return TODO
+ */
     private static String resolveSystemFontFamily() {
         LogSupport.enter(LOG, "resolveSystemFontFamily");
         try {
@@ -523,6 +638,12 @@ loadFontsFromResources(List.of(
         return SYSTEM_FONT_FAMILY_KEYWORD;
     }
 
+/**
+ * computeStartupFontPx.
+ *
+ * @param stage TODO
+ * @return TODO
+ */
     private static double computeStartupFontPx(Stage stage) {
         LogSupport.enter(LOG, "computeStartupFontPx");
         double override = parseFontOverride();
@@ -548,6 +669,11 @@ loadFontsFromResources(List.of(
         return clamp(base, MIN_FONT_PX, MAX_FONT_PX);
     }
 
+/**
+ * parseFontOverride.
+ *
+ * @return TODO
+ */
     private static double parseFontOverride() {
         LogSupport.enter(LOG, "parseFontOverride");
         try {
@@ -561,6 +687,11 @@ loadFontsFromResources(List.of(
         }
     }
 
+/**
+ * buildFontFamilyCss.
+ *
+ * @return TODO
+ */
     private static String buildFontFamilyCss() {
         LogSupport.enter(LOG, "buildFontFamilyCss");
         // Primary UI family, with fallback.
@@ -572,6 +703,14 @@ loadFontsFromResources(List.of(
                 + ";";
     }
 
+/**
+ * appendBaseStyle.
+ *
+ * @param existingStyle TODO
+ * @param fontFamilyCss TODO
+ * @param fontPx TODO
+ * @return TODO
+ */
     private static String appendBaseStyle(String existingStyle, String fontFamilyCss, double fontPx) {
         LogSupport.enter(LOG, "appendBaseStyle");
         String base = (existingStyle == null) ? "" : existingStyle.trim();
@@ -579,12 +718,26 @@ loadFontsFromResources(List.of(
         return base + sep + fontFamilyCss + " " + buildFontSizeCss(fontPx);
     }
 
+/**
+ * buildFontSizeCss.
+ *
+ * @param fontPx TODO
+ * @return TODO
+ */
     private static String buildFontSizeCss(double fontPx) {
         LogSupport.enter(LOG, "buildFontSizeCss");
         double clamped = clamp(fontPx, MIN_FONT_PX, MAX_FONT_PX);
         return "-fx-font-size: " + clamped + "px;";
     }
 
+/**
+ * clamp.
+ *
+ * @param v TODO
+ * @param lo TODO
+ * @param hi TODO
+ * @return TODO
+ */
     private static double clamp(double v, double lo, double hi) {
         LogSupport.enter(LOG, "clamp");
         if (v < lo) {
@@ -596,6 +749,12 @@ loadFontsFromResources(List.of(
         return v;
     }
 
+/**
+ * getTargetVisualBoundsForStage.
+ *
+ * @param stage TODO
+ * @return TODO
+ */
     private static Rectangle2D getTargetVisualBoundsForStage(Stage stage) {
         LogSupport.enter(LOG, "getTargetVisualBoundsForStage");
         try {
@@ -614,6 +773,12 @@ loadFontsFromResources(List.of(
         return Screen.getPrimary().getVisualBounds();
     }
 
+/**
+ * safeVisualBounds.
+ *
+ * @param b TODO
+ * @return TODO
+ */
     private static Rectangle2D safeVisualBounds(Rectangle2D b) {
         LogSupport.enter(LOG, "safeVisualBounds");
         if (b == null) {
@@ -624,6 +789,11 @@ loadFontsFromResources(List.of(
         return new Rectangle2D(b.getMinX(), b.getMinY(), w, h);
     }
 
+/**
+ * getTargetVisualBoundsForStartup.
+ *
+ * @return TODO
+ */
     private static Rectangle2D getTargetVisualBoundsForStartup() {
         LogSupport.enter(LOG, "getTargetVisualBoundsForStartup");
         Rectangle2D vb = safeVisualBounds(Screen.getPrimary().getVisualBounds());
@@ -638,6 +808,12 @@ loadFontsFromResources(List.of(
         return vb;
     }
 
+/**
+ * getTargetVisualBoundsForStartup.
+ *
+ * @param stage TODO
+ * @return TODO
+ */
     private static Rectangle2D getTargetVisualBoundsForStartup(Stage stage) {
         LogSupport.enter(LOG, "getTargetVisualBoundsForStartup");
         if (stage != null) {
@@ -646,6 +822,12 @@ loadFontsFromResources(List.of(
         return getTargetVisualBoundsForStartup();
     }
 
+/**
+ * getTargetVisualBoundsForStageSafe.
+ *
+ * @param stage TODO
+ * @return TODO
+ */
     private static Rectangle2D getTargetVisualBoundsForStageSafe(Stage stage) {
         LogSupport.enter(LOG, "getTargetVisualBoundsForStageSafe");
         if (stage != null) {
@@ -654,6 +836,13 @@ loadFontsFromResources(List.of(
         return Screen.getPrimary().getVisualBounds();
     }
 
+/**
+ * getTargetVisualBoundsForStage.
+ *
+ * @param stage TODO
+ * @param safe TODO
+ * @return TODO
+ */
     private static Rectangle2D getTargetVisualBoundsForStage(Stage stage, boolean safe) {
         LogSupport.enter(LOG, "getTargetVisualBoundsForStage");
         if (!safe) {
@@ -662,6 +851,12 @@ loadFontsFromResources(List.of(
         return getTargetVisualBoundsForStageSafe(stage);
     }
 
+/**
+ * getTargetVisualBoundsForStageSafeIfNull.
+ *
+ * @param stage TODO
+ * @return TODO
+ */
     private static Rectangle2D getTargetVisualBoundsForStageSafeIfNull(Stage stage) {
         LogSupport.enter(LOG, "getTargetVisualBoundsForStageSafeIfNull");
         if (stage == null) {
@@ -670,6 +865,13 @@ loadFontsFromResources(List.of(
         return getTargetVisualBoundsForStage(stage);
     }
 
+/**
+ * getTargetVisualBoundsForStage.
+ *
+ * @param stage TODO
+ * @param fallback TODO
+ * @return TODO
+ */
     private static Rectangle2D getTargetVisualBoundsForStage(Stage stage, Rectangle2D fallback) {
         LogSupport.enter(LOG, "getTargetVisualBoundsForStage");
         try {
@@ -683,6 +885,13 @@ loadFontsFromResources(List.of(
         return fallback != null ? fallback : Screen.getPrimary().getVisualBounds();
     }
 
+/**
+ * getTargetVisualBoundsForStageSafe.
+ *
+ * @param stage TODO
+ * @param fallback TODO
+ * @return TODO
+ */
     private static Rectangle2D getTargetVisualBoundsForStageSafe(Stage stage, Rectangle2D fallback) {
         LogSupport.enter(LOG, "getTargetVisualBoundsForStageSafe");
         try {
@@ -696,6 +905,14 @@ loadFontsFromResources(List.of(
         return fallback != null ? fallback : Screen.getPrimary().getVisualBounds();
     }
 
+/**
+ * getTargetVisualBoundsForStage.
+ *
+ * @param stage TODO
+ * @param fallback TODO
+ * @param safe TODO
+ * @return TODO
+ */
     private static Rectangle2D getTargetVisualBoundsForStage(Stage stage, Rectangle2D fallback, boolean safe) {
         LogSupport.enter(LOG, "getTargetVisualBoundsForStage");
         if (!safe) {
@@ -704,6 +921,13 @@ loadFontsFromResources(List.of(
         return getTargetVisualBoundsForStageSafe(stage, fallback);
     }
 
+/**
+ * getTargetVisualBoundsForStageSafeIfNull.
+ *
+ * @param stage TODO
+ * @param fallback TODO
+ * @return TODO
+ */
     private static Rectangle2D getTargetVisualBoundsForStageSafeIfNull(Stage stage, Rectangle2D fallback) {
         LogSupport.enter(LOG, "getTargetVisualBoundsForStageSafeIfNull");
         if (stage == null) {
@@ -712,6 +936,14 @@ loadFontsFromResources(List.of(
         return getTargetVisualBoundsForStage(stage, fallback);
     }
 
+/**
+ * getTargetVisualBoundsForStageSafe.
+ *
+ * @param stage TODO
+ * @param fallback TODO
+ * @param safe TODO
+ * @return TODO
+ */
     private static Rectangle2D getTargetVisualBoundsForStageSafe(Stage stage, Rectangle2D fallback, boolean safe) {
         LogSupport.enter(LOG, "getTargetVisualBoundsForStageSafe");
         if (!safe) {
@@ -736,6 +968,12 @@ loadFontsFromResources(List.of(
     // Resource audit (CSS / fonts / images) via java.util.logging
     // ---------------------------------------------------------------------
 
+/**
+ * addStylesheet.
+ *
+ * @param scene TODO
+ * @param resourcePath TODO
+ */
     private static void addStylesheet(Scene scene, String resourcePath) {
         LogSupport.enter(LOG, "addStylesheet");
         if (scene == null || resourcePath == null || resourcePath.isBlank()) {
@@ -756,6 +994,11 @@ loadFontsFromResources(List.of(
         }
     }
 
+/**
+ * attachStylesheetAudit.
+ *
+ * @param scene TODO
+ */
     private static void attachStylesheetAudit(Scene scene) {
         LogSupport.enter(LOG, "attachStylesheetAudit");
         if (scene == null) {
@@ -780,6 +1023,11 @@ loadFontsFromResources(List.of(
         });
     }
 
+/**
+ * attachStylesheetAudit.
+ *
+ * @param parent TODO
+ */
     private static void attachStylesheetAudit(Parent parent) {
         LogSupport.enter(LOG, "attachStylesheetAudit");
         if (parent == null) {
@@ -804,6 +1052,13 @@ loadFontsFromResources(List.of(
         });
     }
 
+/**
+ * logFontLoaded.
+ *
+ * @param requestedPath TODO
+ * @param url TODO
+ * @param loaded TODO
+ */
     private static void logFontLoaded(String requestedPath, URL url, Font loaded) {
         LogSupport.enter(LOG, "logFontLoaded");
         if (!isResourceAuditEnabled()) {
@@ -822,6 +1077,13 @@ loadFontsFromResources(List.of(
         }
     }
 
+/**
+ * logCssLoaded.
+ *
+ * @param source TODO
+ * @param requestedPath TODO
+ * @param resolvedUrl TODO
+ */
     private static void logCssLoaded(String source, String requestedPath, String resolvedUrl) {
         LogSupport.enter(LOG, "logCssLoaded");
         if (!isResourceAuditEnabled()) {
@@ -833,6 +1095,14 @@ loadFontsFromResources(List.of(
         }
     }
 
+/**
+ * logCssLoadedInternal.
+ *
+ * @param source TODO
+ * @param requestedPath TODO
+ * @param resolvedUrl TODO
+ * @return TODO
+ */
     private static boolean logCssLoadedInternal(String source, String requestedPath, String resolvedUrl) {
         LogSupport.enter(LOG, "logCssLoadedInternal");
         if (resolvedUrl == null || resolvedUrl.isBlank()) {
@@ -850,6 +1120,13 @@ loadFontsFromResources(List.of(
         return false;
     }
 
+/**
+ * logImageDeclared.
+ *
+ * @param source TODO
+ * @param requestedPath TODO
+ * @param resolvedUrl TODO
+ */
     private static void logImageDeclared(String source, String requestedPath, String resolvedUrl) {
         LogSupport.enter(LOG, "logImageDeclared");
         if (!isResourceAuditEnabled()) {
@@ -865,6 +1142,13 @@ loadFontsFromResources(List.of(
         }
     }
 
+/**
+ * logFontDeclared.
+ *
+ * @param source TODO
+ * @param requestedPath TODO
+ * @param resolvedUrl TODO
+ */
     private static void logFontDeclared(String source, String requestedPath, String resolvedUrl) {
         LogSupport.enter(LOG, "logFontDeclared");
         if (!isResourceAuditEnabled()) {
@@ -880,6 +1164,11 @@ loadFontsFromResources(List.of(
         }
     }
 
+/**
+ * scanStylesheetForUrlReferences.
+ *
+ * @param stylesheetExternalForm TODO
+ */
     private static void scanStylesheetForUrlReferences(String stylesheetExternalForm) {
         LogSupport.enter(LOG, "scanStylesheetForUrlReferences");
         if (!isResourceAuditEnabled()) {
@@ -906,6 +1195,11 @@ loadFontsFromResources(List.of(
         }
     }
 
+/**
+ * scanStylesheet.
+ *
+ * @param cssUrl TODO
+ */
     private static void scanStylesheet(URL cssUrl) {
         LogSupport.enter(LOG, "scanStylesheet");
         if (cssUrl == null) {
@@ -977,6 +1271,13 @@ loadFontsFromResources(List.of(
         }
     }
 
+/**
+ * resolveCssReference.
+ *
+ * @param cssUrl TODO
+ * @param ref TODO
+ * @return TODO
+ */
     private static URL resolveCssReference(URL cssUrl, String ref) {
         LogSupport.enter(LOG, "resolveCssReference");
         if (cssUrl == null || ref == null) {
@@ -1025,6 +1326,12 @@ loadFontsFromResources(List.of(
         return null;
     }
 
+/**
+ * readUrlAsString.
+ *
+ * @param url TODO
+ * @return TODO
+ */
     private static String readUrlAsString(URL url) {
         LogSupport.enter(LOG, "readUrlAsString");
         try (InputStream in = url.openStream()) {
@@ -1038,6 +1345,12 @@ loadFontsFromResources(List.of(
         }
     }
 
+/**
+ * stripCssComments.
+ *
+ * @param css TODO
+ * @return TODO
+ */
     private static String stripCssComments(String css) {
         LogSupport.enter(LOG, "stripCssComments");
         if (css == null || css.isEmpty()) {
@@ -1066,6 +1379,12 @@ loadFontsFromResources(List.of(
         return out.toString();
     }
 
+/**
+ * extractImports.
+ *
+ * @param css TODO
+ * @return TODO
+ */
     private static List<String> extractImports(String css) {
         LogSupport.enter(LOG, "extractImports");
         List<String> imports = new ArrayList<>();
@@ -1114,6 +1433,12 @@ loadFontsFromResources(List.of(
         return imports;
     }
 
+/**
+ * extractUrlFunctions.
+ *
+ * @param css TODO
+ * @return TODO
+ */
     private static List<String> extractUrlFunctions(String css) {
         LogSupport.enter(LOG, "extractUrlFunctions");
         List<String> urls = new ArrayList<>();
@@ -1138,6 +1463,14 @@ loadFontsFromResources(List.of(
         return urls;
     }
 
+/**
+ * startsWithIgnoreCase.
+ *
+ * @param lower TODO
+ * @param index TODO
+ * @param tokenLower TODO
+ * @return TODO
+ */
     private static boolean startsWithIgnoreCase(String lower, int index, String tokenLower) {
         LogSupport.enter(LOG, "startsWithIgnoreCase");
         if (lower == null || tokenLower == null) {
@@ -1149,6 +1482,13 @@ loadFontsFromResources(List.of(
         return lower.startsWith(tokenLower, index);
     }
 
+/**
+ * skipWhitespace.
+ *
+ * @param s TODO
+ * @param i TODO
+ * @return TODO
+ */
     private static int skipWhitespace(String s, int i) {
         LogSupport.enter(LOG, "skipWhitespace");
         int n = s.length();
@@ -1163,6 +1503,13 @@ loadFontsFromResources(List.of(
         return j;
     }
 
+/**
+ * parseFunctionArgument.
+ *
+ * @param s TODO
+ * @param startIndex TODO
+ * @return TODO
+ */
     private static ParsedFunction parseFunctionArgument(String s, int startIndex) {
         LogSupport.enter(LOG, "parseFunctionArgument");
         int i = startIndex;
@@ -1203,6 +1550,13 @@ loadFontsFromResources(List.of(
         return new ParsedFunction(unquote(value), i);
     }
 
+/**
+ * parseStringOrBare.
+ *
+ * @param s TODO
+ * @param startIndex TODO
+ * @return TODO
+ */
     private static ParsedString parseStringOrBare(String s, int startIndex) {
         LogSupport.enter(LOG, "parseStringOrBare");
         int i = skipWhitespace(s, startIndex);
@@ -1229,6 +1583,13 @@ loadFontsFromResources(List.of(
         return new ParsedString(unquote(sb.toString()), i);
     }
 
+/**
+ * parseQuoted.
+ *
+ * @param s TODO
+ * @param startIndex TODO
+ * @return TODO
+ */
     private static ParsedString parseQuoted(String s, int startIndex) {
         LogSupport.enter(LOG, "parseQuoted");
         int n = s.length();
@@ -1254,6 +1615,12 @@ loadFontsFromResources(List.of(
         return new ParsedString(sb.toString(), i);
     }
 
+/**
+ * unquote.
+ *
+ * @param v TODO
+ * @return TODO
+ */
     private static String unquote(String v) {
         LogSupport.enter(LOG, "unquote");
         if (v == null) {
@@ -1270,6 +1637,12 @@ loadFontsFromResources(List.of(
         return s;
     }
 
+/**
+ * normalizeForExtensionChecks.
+ *
+ * @param url TODO
+ * @return TODO
+ */
     private static String normalizeForExtensionChecks(String url) {
         LogSupport.enter(LOG, "normalizeForExtensionChecks");
         if (url == null) {
@@ -1303,6 +1676,11 @@ loadFontsFromResources(List.of(
         }
         }
 
+/**
+ * logImagesInGraph.
+ *
+ * @param root TODO
+ */
     private static void logImagesInGraph(Parent root) {
         LogSupport.enter(LOG, "logImagesInGraph");
         if (!isResourceAuditEnabled()) {
@@ -1314,6 +1692,11 @@ loadFontsFromResources(List.of(
         walkAndLogImages(root);
     }
 
+/**
+ * walkAndLogImages.
+ *
+ * @param node TODO
+ */
     private static void walkAndLogImages(Node node) {
         LogSupport.enter(LOG, "walkAndLogImages");
         if (node == null) {
@@ -1347,11 +1730,22 @@ loadFontsFromResources(List.of(
         }
     }
 
+/**
+ * safeString.
+ *
+ * @param v TODO
+ * @return TODO
+ */
     private static String safeString(String v) {
         LogSupport.enter(LOG, "safeString");
         return v == null ? "" : v;
     }
 
+/**
+ * attachStylesheets.
+ *
+ * @param scene TODO
+ */
     private static void attachStylesheets(Scene scene) {
         LogSupport.enter(LOG, "attachStylesheets");
         if (scene == null) {
@@ -1369,6 +1763,11 @@ loadFontsFromResources(List.of(
         addStylesheet(scene, "/com/fileexplorer/ui/ui_fixes.css");
     }
 
+/**
+ * configureStartupWindowSize.
+ *
+ * @param stage TODO
+ */
     private static void configureStartupWindowSize(Stage stage) {
         LogSupport.enter(LOG, "configureStartupWindowSize");
         if (stage == null) {
@@ -1400,14 +1799,253 @@ loadFontsFromResources(List.of(
         stage.setY(vb.getMinY() + (vb.getHeight() - targetH) / 2.0);
     }
 
+/**
+ * main.
+ *
+ * @param args TODO
+ */
     public static void main(String[] args) {
         printJvmDiagnosticsOnce("main");
         LogSupport.enter(LOG, "main");
         launch(args);
     }
 
+    /**
+     * Phase 3.6.7.1: Prompt the user what to do with recovered operations.
+     * Recovered operations are loaded in paused mode; "Resume" starts processing, "Discard" clears both
+     * the persisted queue file and the recovered in-memory operations.
+     */
+    private static void showRecoveredOpsDialog(ExplorerContext context, int recovered) {
+        if (context == null || recovered <= 0) return;
+
+        // Phase 3.6.7.2: persisted recovery policy
+        // Values: ASK (default), ALWAYS_RESUME, ALWAYS_RESUME_QUEUED_ONLY, ALWAYS_DISCARD
+        java.util.prefs.Preferences prefs = java.util.prefs.Preferences.userNodeForPackage(MainApp.class);
+        String policy = prefs.get("operations.recoveryPolicy", "ASK");
+        if ("ALWAYS_RESUME_ALL".equalsIgnoreCase(policy)) {
+            context.operationQueueService().resumeRecoveredAllIncludingRunning();
+            return;
+        }
+        if ("ALWAYS_RESUME".equalsIgnoreCase(policy)) {
+            // Safe resume: previously-running operations remain blocked until explicitly allowed.
+            context.operationQueueService().resume();
+            return;
+        }
+        if ("ALWAYS_DISCARD".equalsIgnoreCase(policy)) {
+            context.operationQueueService().discardRecoveredAndClearQueue();
+            return;
+        }
+
+        ButtonType resume = new ButtonType("Resume (safe)");
+        ButtonType resumeQueuedOnly = new ButtonType("Resume queued only");
+        ButtonType resumeAll = new ButtonType("Resume all (unsafe)");
+        ButtonType discard = new ButtonType("Discard");
+        ButtonType keepPaused = new ButtonType("Keep paused");
+
+        int runningRecovered = context.operationQueueService().getRecoveredRunningCount();
+
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Recovered operations");
+        alert.setHeaderText("Recovered " + recovered + " operation" + (recovered == 1 ? "" : "s") + " from the previous session."
+                + (runningRecovered > 0 ? " (" + runningRecovered + " were running)" : ""));
+
+        javafx.scene.control.CheckBox remember = new javafx.scene.control.CheckBox("Remember my choice");
+        javafx.scene.control.Label msg = new javafx.scene.control.Label(
+                "Resume processing now, resume queued-only (skip those that were running), discard the recovered operations, or keep the queue paused.");
+        msg.setWrapText(true);
+        javafx.scene.layout.VBox box = new javafx.scene.layout.VBox(8, msg, remember);
+        alert.getDialogPane().setContent(box);
+        if (runningRecovered > 0) {
+            alert.getButtonTypes().setAll(resume, resumeQueuedOnly, resumeAll, discard, keepPaused);
+        } else {
+            alert.getButtonTypes().setAll(resume, resumeQueuedOnly, discard, keepPaused);
+        }
+        com.fileexplorer.util.DialogTheme.apply(alert, null);
+        ButtonType chosen = alert.showAndWait().orElse(keepPaused);
+        if (chosen == resume) {
+            context.operationQueueService().resume();
+            if (remember.isSelected()) {
+                prefs.put("operations.recoveryPolicy", "ALWAYS_RESUME");
+            }
+        } else if (chosen == resumeQueuedOnly) {
+            context.operationQueueService().resumeRecoveredQueuedOnly();
+            if (remember.isSelected()) {
+                prefs.put("operations.recoveryPolicy", "ALWAYS_RESUME_QUEUED_ONLY");
+            }
+        } else if (chosen == resumeAll) {
+            context.operationQueueService().resumeRecoveredAllIncludingRunning();
+            if (remember.isSelected()) {
+                prefs.put("operations.recoveryPolicy", "ALWAYS_RESUME_ALL");
+            }
+        } else if (chosen == discard) {
+            context.operationQueueService().discardRecoveredAndClearQueue();
+            if (remember.isSelected()) {
+                prefs.put("operations.recoveryPolicy", "ALWAYS_DISCARD");
+            }
+        } else {
+            // Keep paused; user can resume later from the Operations pane.
+            if (remember.isSelected()) {
+                prefs.put("operations.recoveryPolicy", "ASK");
+            }
+        }
+    }
+
+    /**
+     * Phase 6.4.0: Surface startup self-check results.
+     */
+    private static void showSelfCheckDialog(String report) {
+        if (report == null || report.isBlank()) return;
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Startup self-check");
+        alert.setHeaderText("Recovered from on-disk issues");
+        javafx.scene.control.TextArea ta = new javafx.scene.control.TextArea(report);
+        ta.setEditable(false);
+        ta.setWrapText(true);
+        ta.setPrefColumnCount(80);
+        ta.setPrefRowCount(18);
+        alert.getDialogPane().setContent(ta);
+        com.fileexplorer.util.DialogTheme.apply(alert, null);
+        alert.showAndWait();
+    }
+
+    /**
+     * Phase 6.4.0: If a crash snapshot exists, offer a one-click support bundle generation.
+     */
+    private static void showLastCrashDialogIfPresent(ExplorerContext context) {
+        if (context == null) return;
+        try {
+            java.nio.file.Path crash = CrashReportService.lastCrashFile();
+            if (crash == null || !Files.exists(crash)) return;
+
+            ButtonType bundle = new ButtonType("Generate support bundle");
+            ButtonType open = new ButtonType("Open crash report");
+            ButtonType dismiss = new ButtonType("Dismiss", ButtonType.CANCEL.getButtonData());
+
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+            alert.setTitle("Previous crash detected");
+            alert.setHeaderText("A crash report from a previous run was found.");
+            alert.setContentText("You can generate a support bundle that includes the crash snapshot.");
+            alert.getButtonTypes().setAll(bundle, open, dismiss);
+        com.fileexplorer.util.DialogTheme.apply(alert, null);
+        ButtonType chosen = alert.showAndWait().orElse(dismiss);
+            if (chosen == open) {
+                try {
+                    java.awt.Desktop.getDesktop().open(crash.toFile());
+                } catch (Exception ignored) {
+                }
+                return;
+            }
+            if (chosen == bundle) {
+                DiagnosticsBundleService svc = new DiagnosticsBundleService();
+                java.nio.file.Path out = CrashReportService.crashDir().resolve(svc.defaultFileName());
+                try {
+                    svc.generate(context, out);
+                    Alert ok = new Alert(Alert.AlertType.INFORMATION);
+                    ok.setTitle("Support bundle generated");
+                    ok.setHeaderText("Support bundle created");
+                    ok.setContentText(out.toString());
+                    com.fileexplorer.util.DialogTheme.apply(ok, null);
+                    ok.showAndWait();
+                } catch (Exception ex) {
+                    Alert err = new Alert(Alert.AlertType.ERROR);
+                    err.setTitle("Support bundle failed");
+                    err.setHeaderText("Could not generate support bundle");
+                    err.setContentText(String.valueOf(ex));
+                    com.fileexplorer.util.DialogTheme.apply(err, null);
+                    err.showAndWait();
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * Phase 4.5.0: Prompt the user about incomplete transaction journals (crash recovery).
+     */
+    private static void showJournalRecoveryDialog(ExplorerContext context) {
+        if (context == null) return;
+
+        java.util.List<com.fileexplorer.service.ops.journal.OperationJournalService.RecoveryCandidate> candidates =
+                context.operationQueueService().findRecoveryCandidates();
+        if (candidates == null || candidates.isEmpty()) return;
+
+        java.util.prefs.Preferences prefs = java.util.prefs.Preferences.userNodeForPackage(MainApp.class);
+        String policy = prefs.get("journal.recoveryPolicy", "ASK");
+
+        if ("AUTO_RESUME".equalsIgnoreCase(policy)) {
+            for (var c : candidates) {
+                context.operationQueueService().resumeFromJournal(c.operationId(), c.driftPolicy());
+            }
+            return;
+        }
+        if ("AUTO_FAIL".equalsIgnoreCase(policy)) {
+            for (var c : candidates) {
+                context.operationQueueService().markRecoveryFailed(c.operationId());
+            }
+            return;
+        }
+        if ("IGNORE".equalsIgnoreCase(policy)) {
+            return;
+        }
+
+        int n = candidates.size();
+        ButtonType resume = new ButtonType("Resume");
+        ButtonType fail = new ButtonType("Mark failed");
+        ButtonType ignore = new ButtonType("Ignore");
+
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Crash recovery");
+        alert.setHeaderText("Found " + n + " incomplete operation journal" + (n == 1 ? "" : "s") + " from a prior session.");
+
+        StringBuilder detail = new StringBuilder();
+        int show = Math.min(6, n);
+        for (int i = 0; i < show; i++) {
+            var c = candidates.get(i);
+            detail.append("• ").append(c.type()).append(" (").append(c.operationId()).append(")");
+            if (c.previewHash() != null && !c.previewHash().isBlank()) {
+                detail.append(" — previewHash=").append(c.previewHash());
+            }
+            detail.append("\n");
+        }
+        if (n > show) {
+            detail.append("…and ").append(n - show).append(" more");
+        }
+
+        javafx.scene.control.Label msg = new javafx.scene.control.Label(
+                "You can resume these operations (re-run deterministically from the journal plan), mark them failed, or ignore for now.\n\n" + detail);
+        msg.setWrapText(true);
+        javafx.scene.control.CheckBox remember = new javafx.scene.control.CheckBox("Remember my choice");
+
+        javafx.scene.layout.VBox box = new javafx.scene.layout.VBox(10, msg, remember);
+        alert.getDialogPane().setContent(box);
+        alert.getButtonTypes().setAll(resume, fail, ignore);
+        com.fileexplorer.util.DialogTheme.apply(alert, null);
+        ButtonType chosen = alert.showAndWait().orElse(ignore);
+        if (chosen == resume) {
+            for (var c : candidates) {
+                context.operationQueueService().resumeFromJournal(c.operationId(), c.driftPolicy());
+            }
+            if (remember.isSelected()) prefs.put("journal.recoveryPolicy", "AUTO_RESUME");
+        } else if (chosen == fail) {
+            for (var c : candidates) {
+                context.operationQueueService().markRecoveryFailed(c.operationId());
+            }
+            if (remember.isSelected()) prefs.put("journal.recoveryPolicy", "AUTO_FAIL");
+        } else {
+            if (remember.isSelected()) prefs.put("journal.recoveryPolicy", "IGNORE");
+        }
+    }
+
+
+
     private static final class SimpleConsoleFormatter extends Formatter {
         @Override
+/**
+ * format.
+ *
+ * @param record TODO
+ * @return TODO
+ */
         public String format(LogRecord record) {
             LogSupport.enter(LOG, "format");
             return record.getLevel().getName() + " " + record.getLoggerName() + " - " + formatMessage(record)

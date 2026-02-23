@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.geometry.Pos?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.ToolBar?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/25"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.fileexplorer.controller.CommandLogController"
+            fx:id="root">
+
+    <top>
+        <VBox>
+            <children>
+                <ToolBar>
+            <items>
+                <Button text="Refresh" onAction="#onRefresh" focusTraversable="false"/>
+                <Separator orientation="VERTICAL"/>
+                <Label text="Search:"/>
+                <TextField fx:id="searchField" promptText="label, id, kind..." prefWidth="220"/>
+                <CheckBox fx:id="undoableOnlyCheck" text="Undoable only"/>
+                <CheckBox fx:id="batchesOnlyCheck" text="Batches only"/>
+                <Separator orientation="VERTICAL"/>
+                <Button text="Show in History" onAction="#onShowInHistory" focusTraversable="false"/>
+
+                <Separator orientation="VERTICAL"/>
+                <Button text="Show Details" onAction="#onShowDetails" focusTraversable="false"/>
+                <Button text="Copy Command ID" onAction="#onCopyCommandId" focusTraversable="false"/>
+
+                <Separator orientation="VERTICAL"/>
+                <Button text="Export CSV" onAction="#onExportCsv" focusTraversable="false"/>
+                <Button text="Copy Visible" onAction="#onCopyVisible" focusTraversable="false"/>
+                <Separator orientation="VERTICAL"/>
+                <Button text="Clear Redo Stack" onAction="#onClearRedoStack" focusTraversable="false"/>
+                <Button text="Repair Stacks" onAction="#onRepairStacks" focusTraversable="false"/>
+                <Separator orientation="VERTICAL"/>
+                <Label fx:id="statusLabel" text=""/>
+            </items>
+                </ToolBar>
+                <ToolBar>
+                    <items>
+                        <Label text="Analytics:"/>
+                        <Label fx:id="analyticsLabel" text=""/>
+                    </items>
+                </ToolBar>
+            </children>
+        </VBox>
+    </top>
+
+    <center>
+        <TabPane fx:id="tabs">
+            <tabs>
+                <Tab text="Undo Stack" closable="false">
+                    <content>
+                        <TableView fx:id="undoTable">
+                            <columns>
+                                <TableColumn fx:id="undoWhenCol" text="When" prefWidth="170"/>
+                                <TableColumn fx:id="undoKindCol" text="Kind" prefWidth="120"/>
+                                <TableColumn fx:id="undoLabelCol" text="Label" prefWidth="420"/>
+                                <TableColumn fx:id="undoUndoableCol" text="Undoable" prefWidth="90"/>
+                                <TableColumn fx:id="undoIdCol" text="Command ID" prefWidth="260"/>
+                            </columns>
+                        </TableView>
+                    </content>
+                </Tab>
+                <Tab text="Redo Stack" closable="false">
+                    <content>
+                        <TableView fx:id="redoTable">
+                            <columns>
+                                <TableColumn fx:id="redoWhenCol" text="When" prefWidth="170"/>
+                                <TableColumn fx:id="redoKindCol" text="Kind" prefWidth="120"/>
+                                <TableColumn fx:id="redoLabelCol" text="Label" prefWidth="420"/>
+                                <TableColumn fx:id="redoUndoableCol" text="Undoable" prefWidth="90"/>
+                                <TableColumn fx:id="redoIdCol" text="Command ID" prefWidth="260"/>
+                            </columns>
+                        </TableView>
+                    </content>
+                </Tab>
+            </tabs>
+        </TabPane>
+    </center>
+
+    <bottom>
+        <HBox alignment="CENTER_LEFT" spacing="8">
+            <padding>
+                <Insets top="6" right="8" bottom="6" left="8"/>
+            </padding>
+            <children>
+                <Label text="Store:"/>
+                <Label fx:id="storePathLabel" text=""/>
+            </children>
+        </HBox>
+    </bottom>
+
+</BorderPane>

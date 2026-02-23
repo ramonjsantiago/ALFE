@@ -2,3 +2,19 @@
     -fx-font-family: "Segoe UI Variable";
     -fx-font-size: 16px;
 }
+
+
+
+ /* FLAT_BUTTONS_GLOBAL */
+ .button,
+ .toggle-button,
+ .menu-button,
+ .split-menu-button,
+ .combo-box-base,
+ .choice-box,
+ .color-picker,
+ .date-picker {
+     -fx-background-radius: 0;
+     -fx-border-radius: 0;
+ }
+

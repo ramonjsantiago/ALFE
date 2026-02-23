@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx/25"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.fileexplorer.controller.ConflictPolicyEditorController"
+      spacing="10" styleClass="policy-editor-root">
+
+    <padding>
+        <Insets top="12" right="12" bottom="12" left="12"/>
+    </padding>
+
+    <Label text="Conflict Policy" styleClass="policy-editor-title" />
+
+    <GridPane hgap="10" vgap="10">
+        <columnConstraints>
+            <ColumnConstraints percentWidth="30" minWidth="140" />
+            <ColumnConstraints percentWidth="70" />
+        </columnConstraints>
+
+        <Label text="Active profile:" GridPane.rowIndex="0" GridPane.columnIndex="0" />
+        <ComboBox fx:id="profileCombo" prefWidth="280" GridPane.rowIndex="0" GridPane.columnIndex="1" />
+
+        <Label text="CUSTOM default action:" GridPane.rowIndex="1" GridPane.columnIndex="0" />
+        <ComboBox fx:id="customActionCombo" prefWidth="280" GridPane.rowIndex="1" GridPane.columnIndex="1" />
+
+        <Label text="Notes:" GridPane.rowIndex="2" GridPane.columnIndex="0" />
+        <Label fx:id="notesLabel" wrapText="true" GridPane.rowIndex="2" GridPane.columnIndex="1" />
+    </GridPane>
+
+    <Label text="CUSTOM rules (first match wins):" />
+    <TextArea fx:id="rulesArea" prefRowCount="8" wrapText="false" promptText="One rule per line: id|glob:pattern|ACTION  (id optional)
+Examples:
+R1|glob:**/*.tmp|SKIP
+glob:**/Downloads/**|OVERWRITE
+# comments supported" />
+
+    <Separator />
+
+    <HBox spacing="10" alignment="CENTER_RIGHT">
+        <Button fx:id="importButton" text="Import…" />
+        <Button fx:id="exportButton" text="Export…" />
+        <Region HBox.hgrow="ALWAYS" />
+        <Button fx:id="resetButton" text="Reset" />
+        <Button fx:id="closeButton" text="Close" defaultButton="true" />
+    </HBox>
+
+</VBox>

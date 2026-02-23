@@ -1,0 +1,49 @@
+.progress-pane {
+    -fx-background-color: transparent;
+}
+
+.progress-pane-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.active-op-card {
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-padding: 10;
+    -fx-border-color: rgba(0,0,0,0.15);
+    -fx-background-color: rgba(0,0,0,0.04);
+}
+
+.active-op-title {
+    -fx-font-weight: bold;
+}
+
+.active-op-msg {
+    -fx-opacity: 0.85;
+}
+
+.queue-title {
+    -fx-font-weight: bold;
+}
+
+.active-op-row {
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-border-color: rgba(0,0,0,0.10);
+    -fx-background-color: rgba(0,0,0,0.02);
+}
+
+
+.aggregate-label {
+    -fx-opacity: 0.85;
+    -fx-font-size: 11px;
+}
+
+.recovered-bar {
+    -fx-padding: 6;
+    -fx-border-color: rgba(0,0,0,0.15);
+    -fx-background-color: rgba(255, 210, 80, 0.20);
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+}

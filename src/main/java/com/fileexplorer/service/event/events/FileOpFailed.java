@@ -1,16 +1,14 @@
 package com.fileexplorer.service.event.events;
 
-import java.nio.file.Path;
-import java.util.List;
+import java.util.Objects;
 
 /**
- * Published when a file operation fails.
+ * FileOpFailed.
+ * <p>
+ * Auto-generated API documentation for this type.
  */
-public record FileOpFailed(
-        long requestId,
-        String op,
-        List<Path> sources,
-        Path targetDirectory,
-        String message,
-        Throwable error
-) {}
+public record FileOpFailed(long jobId, Throwable error) {
+    public FileOpFailed {
+        Objects.requireNonNull(error, "error");
+    }
+}

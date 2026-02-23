@@ -16,10 +16,20 @@ import java.util.List;
 import java.util.logging.Logger;
 import com.fileexplorer.util.LogSupport;
 
+/**
+ * LayoutGrowUtil.
+ * <p>
+ * Auto-generated API documentation for this type.
+ */
 public final class LayoutGrowUtil {
 
     private static final Logger LOG = Logger.getLogger(LayoutGrowUtil.class.getName());
 
+/**
+ * LayoutGrowUtil.
+ *
+ * @return TODO
+ */
     private LayoutGrowUtil() {
         LogSupport.enter(LOG, "LayoutGrowUtil");
     }
@@ -38,6 +48,12 @@ public final class LayoutGrowUtil {
         makeResizableRecursive(root, null);
     }
 
+/**
+ * makeResizableRecursive.
+ *
+ * @param node TODO
+ * @param parent TODO
+ */
     private static void makeResizableRecursive(Node node, Parent parent) {
         LogSupport.enter(LOG, "makeResizableRecursive");
         if (node instanceof Region region) {
@@ -67,6 +83,12 @@ public final class LayoutGrowUtil {
         }
     }
 
+/**
+ * applyParentRules.
+ *
+ * @param parent TODO
+ * @param child TODO
+ */
     private static void applyParentRules(Parent parent, Node child) {
         LogSupport.enter(LOG, "applyParentRules");
         // VBox/HBox only allocate extra space to children with grow priority.
@@ -108,6 +130,13 @@ public final class LayoutGrowUtil {
         }
     }
 
+/**
+ * setAnchorIfMissing.
+ *
+ * @param node TODO
+ * @param existing TODO
+ * @param side TODO
+ */
     private static void setAnchorIfMissing(Node node, Double existing, Side side) {
         LogSupport.enter(LOG, "setAnchorIfMissing");
         if (existing != null) {

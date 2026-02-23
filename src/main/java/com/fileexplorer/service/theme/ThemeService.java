@@ -7,6 +7,11 @@ import javafx.scene.Scene;
 import java.util.logging.Logger;
 import com.fileexplorer.util.LogSupport;
 
+/**
+ * ThemeService.
+ * <p>
+ * Auto-generated API documentation for this type.
+ */
 public final class ThemeService {
 
     private static final Logger LOG = Logger.getLogger(ThemeService.class.getName());
@@ -30,21 +35,41 @@ public final class ThemeService {
 
     private final Preferences prefs;
 
+/**
+ * ThemeService.
+ *
+ * @return TODO
+ */
     public ThemeService() {
         LogSupport.enter(LOG, "ThemeService");
         this.prefs = Preferences.userRoot().node(PREF_NODE);
     }
 
+/**
+ * isDarkPreferred.
+ *
+ * @return TODO
+ */
     public boolean isDarkPreferred() {
         LogSupport.enter(LOG, "isDarkPreferred");
         return prefs.getBoolean(KEY_DARK, true);
     }
 
+/**
+ * setDarkPreferred.
+ *
+ * @param dark TODO
+ */
     public void setDarkPreferred(boolean dark) {
         LogSupport.enter(LOG, "setDarkPreferred");
         prefs.putBoolean(KEY_DARK, dark);
     }
 
+/**
+ * apply.
+ *
+ * @param scene TODO
+ */
     public void apply(Scene scene) {
         LogSupport.enter(LOG, "apply");
         Objects.requireNonNull(scene, "scene");
@@ -92,6 +117,12 @@ public final class ThemeService {
         scene.getStylesheets().add(override);
     }
 
+/**
+ * toExternalFormRequired.
+ *
+ * @param resourcePath TODO
+ * @return TODO
+ */
     private static String toExternalFormRequired(String resourcePath) {
         LogSupport.enter(LOG, "toExternalFormRequired");
         var url = ThemeService.class.getResource(resourcePath);
@@ -101,6 +132,12 @@ public final class ThemeService {
         return url.toExternalForm();
     }
 
+/**
+ * toExternalFormOptional.
+ *
+ * @param resourcePath TODO
+ * @return TODO
+ */
     private static String toExternalFormOptional(String resourcePath) {
         LogSupport.enter(LOG, "toExternalFormOptional");
         var url = ThemeService.class.getResource(resourcePath);

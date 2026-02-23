@@ -3,6 +3,11 @@ package com.fileexplorer.model;
 import java.nio.file.Path;
 import java.util.Objects;
 
+/**
+ * FileItem.
+ * <p>
+ * Auto-generated API documentation for this type.
+ */
 public final class FileItem {
 
     private final Path path;
@@ -12,6 +17,17 @@ public final class FileItem {
     private final String modified;
     private final FileStatus status;
 
+/**
+ * FileItem.
+ *
+ * @param path TODO
+ * @param name TODO
+ * @param type TODO
+ * @param size TODO
+ * @param modified TODO
+ * @param status TODO
+ * @return TODO
+ */
     public FileItem(Path path, String name, String type, String size, String modified, FileStatus status) {
         this.path = Objects.requireNonNull(path, "path");
         this.name = Objects.requireNonNullElse(name, "");

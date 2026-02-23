@@ -36,6 +36,14 @@ public class IconPathTreeCell extends TreeCell<Path> {
     private final ChangeListener<Boolean> expandedListener = (obs, oldV, newV) -> updateDisclosure();
     private TreeItem<Path> observedTreeItem;
 
+/**
+ * IconPathTreeCell.
+ *
+ * @param fixedCellSize TODO
+ * @param themeService TODO
+ * @param displayService TODO
+ * @return TODO
+ */
     public IconPathTreeCell(double fixedCellSize, ThemeService themeService, TreeBuildService displayService) {
         this.displayService = displayService;
         this.themeService = themeService;
@@ -96,6 +104,12 @@ public class IconPathTreeCell extends TreeCell<Path> {
     }
 
     @Override
+/**
+ * updateItem.
+ *
+ * @param item TODO
+ * @param empty TODO
+ */
     protected void updateItem(Path item, boolean empty) {
         super.updateItem(item, empty);
 
@@ -138,6 +152,10 @@ public class IconPathTreeCell extends TreeCell<Path> {
         updateDisclosure();
     }
 
+/**
+ * detach.
+ *
+ */
     private void detach() {
         if (observedTreeItem != null) {
             observedTreeItem.expandedProperty().removeListener(expandedListener);
@@ -145,6 +163,10 @@ public class IconPathTreeCell extends TreeCell<Path> {
         }
     }
 
+/**
+ * updateDisclosure.
+ *
+ */
     private void updateDisclosure() {
         TreeItem<Path> ti = getTreeItem();
 
@@ -170,12 +192,24 @@ public class IconPathTreeCell extends TreeCell<Path> {
         disclosureChevron.setRotate(ti.isExpanded() ? 90.0 : 0.0);
     }
 
+/**
+ * chevronRight.
+ *
+ * @return TODO
+ */
     private static PathElement[] chevronRight() {
         // A hollow chevron centered in a 16x16 box, matching Windows Explorer-ish proportions.
         // Points: (6,4) -> (10,8) -> (6,12)
         return new PathElement[] {
                 new MoveTo(6.0, 4.0),
                 new LineTo(10.0, 8.0),
+/**
+ * LineTo.
+ *
+ * @param 6.0 TODO
+ * @param 12.0 TODO
+ * @return TODO
+ */
                 new LineTo(6.0, 12.0)
         };
     }

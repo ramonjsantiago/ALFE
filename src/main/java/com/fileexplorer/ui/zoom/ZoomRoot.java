@@ -8,6 +8,11 @@ import javafx.scene.transform.Scale;
 import java.util.logging.Logger;
 import com.fileexplorer.util.LogSupport;
 
+/**
+ * ZoomRoot.
+ * <p>
+ * Auto-generated API documentation for this type.
+ */
 public final class ZoomRoot extends Region {
 
     private static final Logger LOG = Logger.getLogger(ZoomRoot.class.getName());
@@ -17,6 +22,12 @@ public final class ZoomRoot extends Region {
 
     private double zoom;
 
+/**
+ * ZoomRoot.
+ *
+ * @param content TODO
+ * @return TODO
+ */
     public ZoomRoot(Node content) {
         LogSupport.enter(LOG, "ZoomRoot");
         if (content == null) {
@@ -36,16 +47,31 @@ public final class ZoomRoot extends Region {
         setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
     }
 
+/**
+ * getRoot.
+ *
+ * @return TODO
+ */
     public Region getRoot() {
         LogSupport.enter(LOG, "getRoot");
         return this;
     }
 
+/**
+ * getZoom.
+ *
+ * @return TODO
+ */
     public double getZoom() {
         LogSupport.enter(LOG, "getZoom");
         return zoom;
     }
 
+/**
+ * setZoom.
+ *
+ * @param zoom TODO
+ */
     public void setZoom(double zoom) {
         LogSupport.enter(LOG, "setZoom");
         double z = zoom;
@@ -61,6 +87,10 @@ public final class ZoomRoot extends Region {
     }
 
     @Override
+/**
+ * layoutChildren.
+ *
+ */
     protected void layoutChildren() {
         LogSupport.enter(LOG, "layoutChildren");
         double z = zoom;
@@ -83,12 +113,24 @@ public final class ZoomRoot extends Region {
     }
 
     @Override
+/**
+ * computeMinWidth.
+ *
+ * @param height TODO
+ * @return TODO
+ */
     protected double computeMinWidth(double height) {
         LogSupport.enter(LOG, "computeMinWidth");
         return 0.0;
     }
 
     @Override
+/**
+ * computeMinHeight.
+ *
+ * @param width TODO
+ * @return TODO
+ */
     protected double computeMinHeight(double width) {
         LogSupport.enter(LOG, "computeMinHeight");
         return 0.0;

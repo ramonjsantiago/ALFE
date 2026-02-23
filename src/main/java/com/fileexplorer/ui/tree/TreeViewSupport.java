@@ -18,6 +18,11 @@ import javafx.scene.control.TreeItem;
  */
 public final class TreeViewSupport {
 
+/**
+ * TreeViewSupport.
+ *
+ * @return TODO
+ */
     private TreeViewSupport() {
     }
 
@@ -73,6 +78,13 @@ public final class TreeViewSupport {
         }
     }
 
+/**
+ * expandNodeAsync.
+ *
+ * @param node TODO
+ * @param depth TODO
+ * @param maxDepth TODO
+ */
     private static void expandNodeAsync(TreeItem<?> node, int depth, int maxDepth) {
         Objects.requireNonNull(node, "node");
 

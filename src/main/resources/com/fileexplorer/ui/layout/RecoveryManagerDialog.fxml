@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx"
+      xmlns:fx="http://javafx.com/fxml"
+      fx:controller="com.fileexplorer.controller.RecoveryManagerController"
+      spacing="10"
+      styleClass="dialog-root">
+
+    <padding>
+        <Insets top="12" right="12" bottom="12" left="12"/>
+    </padding>
+
+    <Label text="Recovery Manager" styleClass="dialog-title"/>
+
+    <TableView fx:id="table" VBox.vgrow="ALWAYS">
+        <columns>
+            <TableColumn fx:id="colOperationId" text="Operation ID" prefWidth="260" />
+            <TableColumn fx:id="colType" text="Type" prefWidth="120" />
+            <TableColumn fx:id="colPreviewHash" text="Preview Hash" prefWidth="260" />
+            <TableColumn fx:id="colCompleted" text="Done" prefWidth="60" />
+            <TableColumn fx:id="colTotal" text="Total" prefWidth="60" />
+        </columns>
+    </TableView>
+
+    <HBox spacing="8" alignment="CENTER_RIGHT">
+        <Button fx:id="openFolderButton" text="Open folder" />
+        <Region HBox.hgrow="ALWAYS" />
+        <Button fx:id="refreshButton" text="Refresh" />
+        <Button fx:id="resumeButton" text="Resume" defaultButton="true" />
+        <Button fx:id="markFailedButton" text="Mark failed" />
+        <Button fx:id="deleteJournalButton" text="Delete journal" />
+        <Button fx:id="closeButton" text="Close" cancelButton="true" />
+    </HBox>
+
+</VBox>

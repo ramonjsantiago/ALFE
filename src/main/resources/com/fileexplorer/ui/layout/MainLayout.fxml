@@ -33,7 +33,6 @@
 <?import javafx.scene.layout.Region?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
-<?import javafx.scene.control.ProgressBar?>
 
 <BorderPane fx:id="root"
             xmlns="http://javafx.com/javafx/25"
@@ -160,10 +159,10 @@
                             <tooltip><Tooltip text="Sort"/></tooltip>
                             <graphic><Label text="&#xE8CB;" styleClass="fluent-icon"/></graphic>
                             <items>
-                                <MenuItem text="Name"/>
-                                <MenuItem text="Date modified"/>
-                                <MenuItem text="Type"/>
-                                <MenuItem text="Size"/>
+                                <MenuItem text="Name" userData="NAME" onAction="#onSortMenuItem"/>
+                                <MenuItem text="Date modified" userData="MODIFIED" onAction="#onSortMenuItem"/>
+                                <MenuItem text="Type" userData="TYPE" onAction="#onSortMenuItem"/>
+                                <MenuItem text="Size" userData="SIZE" onAction="#onSortMenuItem"/>
                             </items>
                         </MenuButton>
 
@@ -360,7 +359,12 @@
                                                 </HBox>
                                             </content>
                                         </CustomMenuItem>
-                                    </items>
+                                    
+
+<SeparatorMenuItem/>
+<MenuItem text="Operation History..." onAction="#onShowOperationHistory"/>
+<MenuItem text="Command Log..." onAction="#onShowCommandLog"/>
+</items>
                                 </Menu>
 
                                 <SeparatorMenuItem/>
@@ -418,7 +422,16 @@
 
                         <Region HBox.hgrow="ALWAYS"/>
 
-                        <!-- Details (right-most in command bar) -->
+                                                <!-- Operations (queue/progress) -->
+                        <ToggleButton fx:id="operationsToggle"
+                                      text="Operations"
+                                      selected="false"
+                                      focusTraversable="false"
+                                      onAction="#onOperationsToggle">
+                            <tooltip><Tooltip text="Show/Hide Operations"/></tooltip>
+                        </ToggleButton>
+
+<!-- Details (right-most in command bar) -->
                         <ToggleButton fx:id="detailsToggle"
                                       text="Details"
                                       selected="true"
@@ -526,6 +539,13 @@
                                     <TextArea fx:id="detailsText" editable="false" wrapText="true" prefRowCount="10"/>
                                 </children>
                             </VBox>
+                            <!-- Operations / progress pane (Phase 3.6.2) -->
+                            <VBox fx:id="operationsBox" spacing="6" visible="false" managed="false" styleClass="fluent-preview-box">
+                                <children>
+                                    <fx:include source="ProgressPane.fxml" fx:id="progressPane"/>
+                                </children>
+                            </VBox>
+
                         </VBox>
                     </right>
 
@@ -560,7 +580,6 @@
 
             <right>
                 <HBox spacing="6" alignment="CENTER_RIGHT" BorderPane.alignment="CENTER_RIGHT">
-                    <ProgressBar fx:id="statusProgress" prefWidth="140.0" minWidth="140.0" maxWidth="140.0" visible="false" managed="false" />
                     <ToggleButton fx:id="statusDetailsButton"
                                  text="Details"
                                  selected="true"

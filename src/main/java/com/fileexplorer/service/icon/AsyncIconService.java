@@ -23,6 +23,11 @@ public final class AsyncIconService {
 
     private static final AsyncIconService INSTANCE = new AsyncIconService();
 
+/**
+ * getInstance.
+ *
+ * @return TODO
+ */
     public static AsyncIconService getInstance() {
         return INSTANCE;
     }
@@ -32,6 +37,11 @@ public final class AsyncIconService {
     private final ConcurrentHashMap<IconKey, CompletableFuture<Image>> inFlight = new ConcurrentHashMap<>();
     private final ExecutorService executor;
 
+/**
+ * AsyncIconService.
+ *
+ * @return TODO
+ */
     private AsyncIconService() {
         this.executor = Executors.newFixedThreadPool(
                 Math.max(2, Runtime.getRuntime().availableProcessors() / 2),
@@ -62,11 +72,23 @@ public final class AsyncIconService {
         private final String baseName;
         private int n = 1;
 
+/**
+ * DaemonThreadFactory.
+ *
+ * @param baseName TODO
+ * @return TODO
+ */
         private DaemonThreadFactory(String baseName) {
             this.baseName = baseName;
         }
 
         @Override
+/**
+ * newThread.
+ *
+ * @param r TODO
+ * @return TODO
+ */
         public Thread newThread(Runnable r) {
             Thread t = new Thread(r, baseName + "-" + (n++));
             t.setDaemon(true);

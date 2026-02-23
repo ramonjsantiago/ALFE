@@ -13,10 +13,21 @@ public final class FileSizeFormatter {
     private static final String[] UNITS = {"B", "KB", "MB", "GB", "TB", "PB"};
     private static final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("#,##0.#");
 
+/**
+ * FileSizeFormatter.
+ *
+ * @return TODO
+ */
     private FileSizeFormatter() {
         LogSupport.enter(LOG, "FileSizeFormatter");
     }
 
+/**
+ * format.
+ *
+ * @param bytes TODO
+ * @return TODO
+ */
     public static String format(long bytes) {
         LogSupport.enter(LOG, "format");
         if (bytes < 0) {

@@ -21,6 +21,7 @@ import javafx.scene.text.Font;
 
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.Locale;
 import java.util.function.Function;
 
 /**
@@ -71,6 +72,12 @@ public final class TableViewSupport {
                 }
 
                 @Override
+/**
+ * updateItem.
+ *
+ * @param item TODO
+ * @param empty TODO
+ */
                 protected void updateItem(String item, boolean empty) {
                     super.updateItem(item, empty);
 
@@ -117,6 +124,13 @@ public final class TableViewSupport {
                             }));
                 }
 
+/**
+ * computeIdentityNoIo.
+ *
+ * @param p TODO
+ * @param isFolder TODO
+ * @return TODO
+ */
                 private String computeIdentityNoIo(Path p, boolean isFolder) {
                     if (isFolder) return "type:" + IconLoader.IconType.FOLDER.name();
                     if (p == null) return "type:" + IconLoader.IconType.FILE.name();
@@ -144,6 +158,10 @@ public final class TableViewSupport {
             colStatus.setCellFactory(_ -> new TableCell<>() {
                 private Label icon;
 
+/**
+ * syncTint.
+ *
+ */
                 private void syncTint() {
                     if (icon == null) return;
                     TableRow<FileItem> row = getTableRow();
@@ -157,6 +175,12 @@ public final class TableViewSupport {
                 }
 
                 @Override
+/**
+ * updateItem.
+ *
+ * @param item TODO
+ * @param empty TODO
+ */
                 protected void updateItem(Node item, boolean empty) {
                     super.updateItem(item, empty);
                     if (empty) {
@@ -199,8 +223,26 @@ syncTint();
         }
         if (colSize != null) {
             colSize.setCellValueFactory(param -> new javafx.beans.property.ReadOnlyObjectWrapper<>(sizeForPath.apply(param.getValue())));
+
+            // IMPORTANT:
+            // The displayed size is typically a human-readable string (e.g. "1.2 MB").
+            // JavaFX will otherwise sort lexicographically, which breaks numeric ordering.
+            // We keep the column type as String (no API changes) and provide a comparator
+            // that parses the human-readable size into bytes.
+            colSize.setComparator((a, b) -> {
+                long ba = parseHumanSizeToBytes(a);
+                long bb = parseHumanSizeToBytes(b);
+                return Long.compare(ba, bb);
+            });
+
             colSize.setCellFactory(_ -> new TableCell<>() {
                 @Override
+/**
+ * updateItem.
+ *
+ * @param item TODO
+ * @param empty TODO
+ */
                 protected void updateItem(String item, boolean empty) {
                     super.updateItem(item, empty);
                     setText(empty ? null : item);
@@ -211,5 +253,69 @@ syncTint();
         if (colModified != null) {
             colModified.setCellValueFactory(param -> new javafx.beans.property.ReadOnlyObjectWrapper<>(modifiedForPath.apply(param.getValue())));
         }
+    }
+
+    /**
+     * Parses strings like "12 B", "1.2 KB", "5.6 MB", "7 GB", "1.0 TB" into bytes.
+     * Returns -1 for blanks/unknowns (commonly used for folders).
+     */
+    private static long parseHumanSizeToBytes(String s) {
+        if (s == null) return -1L;
+        String t = s.trim();
+        if (t.isEmpty()) return -1L;
+
+        // Common non-values.
+        String tl = t.toLowerCase(Locale.ROOT);
+        if (tl.equals("-") || tl.equals("--") || tl.equals("n/a") || tl.equals("na")) return -1L;
+
+        // Normalize separators.
+        t = t.replace(",", "").trim();
+
+        // Split into number + unit (best effort).
+        String numberPart = null;
+        String unitPart = null;
+        int i = 0;
+        while (i < t.length()) {
+            char c = t.charAt(i);
+            if ((c >= '0' && c <= '9') || c == '.' || c == '-') {
+                i++;
+            } else {
+                break;
+            }
+        }
+        if (i == 0) return -1L;
+        numberPart = t.substring(0, i).trim();
+        unitPart = t.substring(i).trim();
+        if (unitPart.isEmpty()) unitPart = "B";
+
+        final double value;
+        try {
+            value = Double.parseDouble(numberPart);
+        } catch (NumberFormatException ex) {
+            return -1L;
+        }
+
+        String u = unitPart.toLowerCase(Locale.ROOT);
+        // Allow "bytes" or "byte".
+        if (u.equals("byte") || u.equals("bytes")) u = "b";
+
+        // Accept IEC units too.
+        boolean iec = u.contains("i");
+        u = u.replace("bytes", "b").replace("byte", "b");
+        u = u.replaceAll("\\s+", "");
+
+        long multiplier;
+        if (u.equals("b")) multiplier = 1L;
+        else if (u.equals("kb") || u.equals("kib")) multiplier = iec ? (1L << 10) : 1_000L;
+        else if (u.equals("mb") || u.equals("mib")) multiplier = iec ? (1L << 20) : 1_000_000L;
+        else if (u.equals("gb") || u.equals("gib")) multiplier = iec ? (1L << 30) : 1_000_000_000L;
+        else if (u.equals("tb") || u.equals("tib")) multiplier = iec ? (1L << 40) : 1_000_000_000_000L;
+        else if (u.equals("pb") || u.equals("pib")) multiplier = iec ? (1L << 50) : 1_000_000_000_000_000L;
+        else return -1L;
+
+        double bytes = value * (double) multiplier;
+        if (bytes < 0) return -1L;
+        if (bytes > Long.MAX_VALUE) return Long.MAX_VALUE;
+        return (long) bytes;
     }
 }

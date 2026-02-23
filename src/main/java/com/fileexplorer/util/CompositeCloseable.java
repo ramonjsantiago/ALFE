@@ -41,6 +41,10 @@ public final class CompositeCloseable implements AutoCloseable {
      * Safe to call multiple times.
      */
     @Override
+/**
+ * close.
+ *
+ */
     public void close() {
         if (!closed.compareAndSet(false, true)) {
             return;

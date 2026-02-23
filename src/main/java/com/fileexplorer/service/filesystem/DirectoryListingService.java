@@ -13,6 +13,11 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
+/**
+ * DirectoryListingService.
+ * <p>
+ * Auto-generated API documentation for this type.
+ */
 public final class DirectoryListingService {
 
     public record ListingOptions(int maxEntries, boolean includeHidden, boolean foldersFirst) { }
@@ -30,6 +35,13 @@ public final class DirectoryListingService {
     private final Executor ioExecutor;
     private final FileMetadataService metadata;
 
+/**
+ * DirectoryListingService.
+ *
+ * @param ioExecutor TODO
+ * @param metadata TODO
+ * @return TODO
+ */
     public DirectoryListingService(Executor ioExecutor, FileMetadataService metadata) {
         this.ioExecutor = ioExecutor;
         this.metadata = metadata;
@@ -39,6 +51,14 @@ public final class DirectoryListingService {
         return CompletableFuture.supplyAsync(() -> listSync(dir, opts, token), ioExecutor);
     }
 
+/**
+ * listSync.
+ *
+ * @param dir TODO
+ * @param opts TODO
+ * @param token TODO
+ * @return TODO
+ */
     public List<FileItem> listSync(Path dir, ListingOptions opts, CancellationToken token) {
         if (token != null && token.isCancelled()) return List.of();
         if (dir == null || !Files.isDirectory(dir)) return List.of();
@@ -80,6 +100,12 @@ public final class DirectoryListingService {
         return out;
     }
 
+/**
+ * isHiddenSafe.
+ *
+ * @param p TODO
+ * @return TODO
+ */
     private static boolean isHiddenSafe(Path p) {
         try {
             return Files.isHidden(p);

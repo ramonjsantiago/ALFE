@@ -46,6 +46,10 @@ public class BreadcrumbBar {
     private Runnable onBrowseNetwork;
 
     @FXML
+/**
+ * initialize.
+ *
+ */
     private void initialize() {
         LogSupport.enter(LOG, "initialize");
         root.getStyleClass().add("breadcrumb-bar");
@@ -55,6 +59,11 @@ public class BreadcrumbBar {
     // Public API
     // ---------------------------------------------------------------------
 
+/**
+ * setPath.
+ *
+ * @param path TODO
+ */
     public void setPath(Path path) {
         LogSupport.enter(LOG, "setPath");
         if (path == null) {
@@ -89,12 +98,23 @@ public class BreadcrumbBar {
         }
     }
 
+/**
+ * labelFor.
+ *
+ * @param p TODO
+ * @return TODO
+ */
     private String labelFor(Path p) {
         LogSupport.enter(LOG, "labelFor");
         Path name = p.getFileName();
         return (name != null) ? name.toString() : p.toString();
     }
 
+/**
+ * navigateTo.
+ *
+ * @param target TODO
+ */
     private void navigateTo(Path target) {
         LogSupport.enter(LOG, "navigateTo");
         if (onNavigate != null) {
@@ -102,12 +122,24 @@ public class BreadcrumbBar {
         }
     }
 
+/**
+ * showSegmentMenu.
+ *
+ * @param owner TODO
+ * @param base TODO
+ */
     private void showSegmentMenu(Node owner, Path base) {
         LogSupport.enter(LOG, "showSegmentMenu");
         ContextMenu menu = buildContextMenu(base);
         menu.show(owner, Side.BOTTOM, 0, 0);
     }
 
+/**
+ * buildContextMenu.
+ *
+ * @param base TODO
+ * @return TODO
+ */
     private ContextMenu buildContextMenu(Path base) {
         LogSupport.enter(LOG, "buildContextMenu");
         ContextMenu menu = new ContextMenu();
@@ -187,26 +219,51 @@ public class BreadcrumbBar {
     // Callback setters
     // ---------------------------------------------------------------------
 
+/**
+ * setOnNavigate.
+ *
+ * @param onNavigate TODO
+ */
     public void setOnNavigate(java.util.function.Consumer<Path> onNavigate) {
         LogSupport.enter(LOG, "setOnNavigate");
         this.onNavigate = onNavigate;
     }
 
+/**
+ * setOnOpenInNewTab.
+ *
+ * @param onOpenInNewTab TODO
+ */
     public void setOnOpenInNewTab(java.util.function.Consumer<Path> onOpenInNewTab) {
         LogSupport.enter(LOG, "setOnOpenInNewTab");
         this.onOpenInNewTab = onOpenInNewTab;
     }
 
+/**
+ * setOnOpenInNewWindow.
+ *
+ * @param onOpenInNewWindow TODO
+ */
     public void setOnOpenInNewWindow(java.util.function.Consumer<Path> onOpenInNewWindow) {
         LogSupport.enter(LOG, "setOnOpenInNewWindow");
         this.onOpenInNewWindow = onOpenInNewWindow;
     }
 
+/**
+ * setOnCopyAddress.
+ *
+ * @param onCopyAddress TODO
+ */
     public void setOnCopyAddress(java.util.function.Consumer<Path> onCopyAddress) {
         LogSupport.enter(LOG, "setOnCopyAddress");
         this.onCopyAddress = onCopyAddress;
     }
 
+/**
+ * setOnBrowseNetwork.
+ *
+ * @param onBrowseNetwork TODO
+ */
     public void setOnBrowseNetwork(Runnable onBrowseNetwork) {
         LogSupport.enter(LOG, "setOnBrowseNetwork");
         this.onBrowseNetwork = onBrowseNetwork;

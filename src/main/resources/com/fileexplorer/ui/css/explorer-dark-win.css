@@ -20,3 +20,110 @@
 .tree-view, .table-view {
     -fx-background-color: #15181d;
 }
+
+/* NOTE:
+   We intentionally avoid overriding TableRow/TreeCell selection colors here.
+   The project’s core theme stylesheets already define the correct selection +
+   text-contrast rules for TableView/TreeView; overriding them at the row level
+   can lead to invisible text on some platforms/JavaFX skins.
+*/
+
+/* Breadcrumb surface */
+
+.breadcrumb-bar {
+    -fx-background-color: #1c2027;
+    -fx-border-color: #2a303a;
+    -fx-border-width: 1;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+}
+
+/* Context menus */
+
+.context-menu {
+    -fx-background-color: #20242c;
+    -fx-border-color: #2a303a;
+    -fx-border-width: 1;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-padding: 6;
+}
+
+.context-menu .menu-item {
+    -fx-padding: 6 10 6 10;
+}
+
+.context-menu .menu-item:focused {
+    -fx-background-color: #2a4a7a;
+}
+
+/* ---------------------------------------------------------------------
+ * Dialogs (Windows 11 dark)
+ * ------------------------------------------------------------------- */
+
+.dialog-pane {
+    -fx-background-color: #20242c;
+    -fx-border-color: #2a303a;
+    -fx-border-width: 1;
+}
+
+.dialog-pane > .header-panel {
+    -fx-background-color: #20242c;
+}
+
+.dialog-pane > .header-panel .label {
+    -fx-text-fill: #f2f3f5;
+}
+
+.dialog-pane > .content {
+    -fx-background-color: #20242c;
+}
+
+.dialog-pane .label {
+    -fx-text-fill: #e6e8eb;
+}
+
+.dialog-pane .button-bar {
+    -fx-background-color: transparent;
+}
+
+.dialog-pane .button {
+    -fx-text-fill: #e6e8eb;
+    -fx-background-color: #2a303a;
+    -fx-border-color: #343c48;
+    -fx-border-width: 1;
+}
+
+.dialog-pane .button:hover {
+    -fx-background-color: #323b47;
+}
+
+.dialog-pane .button:pressed {
+    -fx-background-color: #1c2027;
+}
+
+.dialog-pane .button.default-button {
+    -fx-background-color: #2a4a7a;
+    -fx-border-color: #2a4a7a;
+}
+
+.dialog-pane .button.default-button:hover {
+    -fx-background-color: #32558f;
+}
+
+.dialog-pane .text-input {
+    -fx-text-fill: #e6e8eb;
+    -fx-prompt-text-fill: #9aa3ad;
+    -fx-background-color: #1c2027;
+    -fx-border-color: #343c48;
+}
+
+.dialog-pane .text-input:focused {
+    -fx-border-color: #2a4a7a;
+}
+
+.dialog-pane .combo-box-base,
+.dialog-pane .spinner {
+    -fx-background-color: #1c2027;
+    -fx-border-color: #343c48;
+}

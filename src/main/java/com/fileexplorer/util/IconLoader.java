@@ -26,6 +26,11 @@ public final class IconLoader {
 
     private static final Logger LOG = Logger.getLogger(IconLoader.class.getName());
 
+/**
+ * IconType.
+ * <p>
+ * Auto-generated API documentation for this type.
+ */
     public enum IconType {
         FOLDER,
         FILE,
@@ -34,9 +39,20 @@ public final class IconLoader {
         ARCHIVE,
         AUDIO,
         VIDEO,
-        PDF
+        PDF,
+        WORD,
+        EXCEL,
+        POWERPOINT,
+        CODE,
+        EXECUTABLE,
+        LINK
     }
 
+/**
+ * IconLoader.
+ *
+ * @return TODO
+ */
     private IconLoader() {
         LogSupport.enter(LOG, "IconLoader");
     }
@@ -124,6 +140,12 @@ public final class IconLoader {
     // Identity -> Type mapping (selection)
     // ---------------------------------------------------------------------
 
+/**
+ * normalizeIdentity.
+ *
+ * @param identity TODO
+ * @return TODO
+ */
     private static String normalizeIdentity(String identity) {
         LogSupport.enter(LOG, "normalizeIdentity");
         if (identity == null || identity.isBlank()) {
@@ -157,6 +179,12 @@ public final class IconLoader {
         return "type:" + IconType.FILE.name();
     }
 
+/**
+ * iconTypeForIdentity.
+ *
+ * @param normalizedIdentity TODO
+ * @return TODO
+ */
     private static IconType iconTypeForIdentity(String normalizedIdentity) {
         LogSupport.enter(LOG, "iconTypeForIdentity");
         if (normalizedIdentity == null || normalizedIdentity.isBlank()) {
@@ -180,6 +208,12 @@ public final class IconLoader {
         return IconType.FILE;
     }
 
+/**
+ * iconTypeForExtension.
+ *
+ * @param extLower TODO
+ * @return TODO
+ */
     private static IconType iconTypeForExtension(String extLower) {
         LogSupport.enter(LOG, "iconTypeForExtension");
         if (extLower == null || extLower.isBlank()) {
@@ -188,13 +222,44 @@ public final class IconLoader {
 
         String e = extLower.toLowerCase(Locale.ROOT);
 
+/**
+ * switch.
+ *
+ * @param e TODO
+ * @return TODO
+ */
         return switch (e) {
             case "pdf" -> IconType.PDF;
+
+            // Microsoft Office
+            case "doc", "docx", "dot", "dotx", "odt" -> IconType.WORD;
+            case "xls", "xlsx", "xlt", "xltx", "ods" -> IconType.EXCEL;
+            case "ppt", "pptx", "pps", "ppsx", "odp" -> IconType.POWERPOINT;
+
+            // Images
             case "png", "jpg", "jpeg", "gif", "bmp", "webp", "tif", "tiff", "svg", "ico" -> IconType.IMAGE;
-            case "txt", "md", "log", "rtf", "ini", "cfg", "csv", "json", "xml", "yaml", "yml" -> IconType.TEXT;
-            case "zip", "7z", "rar", "tar", "gz", "bz2", "xz" -> IconType.ARCHIVE;
+
+            // Text-ish documents
+            case "txt", "md", "log", "rtf", "ini", "cfg", "conf", "csv", "tsv", "json", "xml", "yaml", "yml", "properties" -> IconType.TEXT;
+
+            // Archives
+            case "zip", "7z", "rar", "tar", "gz", "bz2", "xz", "zst" -> IconType.ARCHIVE;
+
+            // Audio/video
             case "mp3", "wav", "flac", "m4a", "ogg", "aac", "wma" -> IconType.AUDIO;
             case "mp4", "mkv", "mov", "avi", "wmv", "webm", "m4v" -> IconType.VIDEO;
+
+            // Code
+            case "java", "kt", "kts", "groovy", "scala", "py", "js", "ts", "tsx", "jsx", "c", "h", "cpp", "hpp",
+                 "cs", "go", "rs", "swift", "php", "rb", "pl", "sh", "bash", "zsh", "ps1", "sql", "html", "htm",
+                 "css", "scss", "less", "vue" -> IconType.CODE;
+
+            // Executables / installers / scripts
+            case "exe", "msi", "bat", "cmd", "com", "jar", "app", "apk" -> IconType.EXECUTABLE;
+
+            // Links / shortcuts
+            case "lnk", "url", "webloc", "desktop" -> IconType.LINK;
+
             default -> IconType.FILE;
         };
 
@@ -204,6 +269,14 @@ public final class IconLoader {
     // Resource loading + placeholders
     // ---------------------------------------------------------------------
 
+/**
+ * loadUncached.
+ *
+ * @param type TODO
+ * @param darkTheme TODO
+ * @param clampedSize TODO
+ * @return TODO
+ */
     private static Image loadUncached(IconType type, boolean darkTheme, int clampedSize) {
         LogSupport.enter(LOG, "loadUncached");
         String resourceName = resourceNameFor(type, darkTheme, clampedSize);
@@ -214,26 +287,46 @@ public final class IconLoader {
         return drawPlaceholder(type, darkTheme, clampedSize);
     }
 
+/**
+ * resourceNameFor.
+ *
+ * @param type TODO
+ * @param darkTheme TODO
+ * @param size TODO
+ * @return TODO
+ */
     private static String resourceNameFor(IconType type, boolean darkTheme, int size) {
         LogSupport.enter(LOG, "resourceNameFor");
         String themeSegment = darkTheme ? "dark" : "light";
 
         String typeSegment;
         switch (type) {
-            case FOLDER  -> typeSegment = "folder";
-            case IMAGE   -> typeSegment = "image";
-            case TEXT    -> typeSegment = "text";
-            case ARCHIVE -> typeSegment = "archive";
-            case AUDIO   -> typeSegment = "audio";
-            case VIDEO   -> typeSegment = "video";
-            case PDF     -> typeSegment = "pdf";
-            case FILE    -> typeSegment = "file";
-            default      -> typeSegment = "file";
+            case FOLDER      -> typeSegment = "folder";
+            case IMAGE       -> typeSegment = "image";
+            case TEXT        -> typeSegment = "text";
+            case ARCHIVE     -> typeSegment = "archive";
+            case AUDIO       -> typeSegment = "audio";
+            case VIDEO       -> typeSegment = "video";
+            case PDF         -> typeSegment = "pdf";
+            case WORD        -> typeSegment = "word";
+            case EXCEL       -> typeSegment = "excel";
+            case POWERPOINT  -> typeSegment = "powerpoint";
+            case CODE        -> typeSegment = "code";
+            case EXECUTABLE  -> typeSegment = "exe";
+            case LINK        -> typeSegment = "link";
+            case FILE        -> typeSegment = "file";
+            default          -> typeSegment = "file";
         }
 
         return "/com/fileexplorer/ui/icons/" + themeSegment + "/" + typeSegment + "-" + size + ".png";
     }
 
+/**
+ * loadFromResource.
+ *
+ * @param resourcePath TODO
+ * @return TODO
+ */
     private static Image loadFromResource(String resourcePath) {
         LogSupport.enter(LOG, "loadFromResource");
         if (resourcePath == null || resourcePath.isBlank()) {
@@ -255,6 +348,14 @@ public final class IconLoader {
         }
     }
 
+/**
+ * drawPlaceholder.
+ *
+ * @param type TODO
+ * @param darkTheme TODO
+ * @param size TODO
+ * @return TODO
+ */
     private static Image drawPlaceholder(IconType type, boolean darkTheme, int size) {
         LogSupport.enter(LOG, "drawPlaceholder");
         WritableImage img = new WritableImage(size, size);
@@ -343,7 +444,72 @@ public final class IconLoader {
                     }
                 }
             }
-            case PDF, FILE -> {
+            case PDF -> {
+                for (int y = gy0; y < gy1; y++) {
+                    for (int x = gx0; x < gx1; x++) {
+                        if ((x - gx0) % 3 == 0 && (y - gy0) % 3 == 0) {
+                            pw.setColor(x, y, glyph);
+                        }
+                    }
+                }
+            }
+            case WORD -> {
+                // vertical stripes
+                for (int y = gy0; y < gy1; y++) {
+                    for (int x = gx0; x < gx1; x++) {
+                        if ((x - gx0) % 3 == 0) pw.setColor(x, y, glyph);
+                    }
+                }
+            }
+            case EXCEL -> {
+                // grid
+                for (int y = gy0; y < gy1; y++) {
+                    for (int x = gx0; x < gx1; x++) {
+                        if ((x - gx0) % 4 == 0 || (y - gy0) % 4 == 0) pw.setColor(x, y, glyph);
+                    }
+                }
+            }
+            case POWERPOINT -> {
+                // diagonal
+                for (int y = gy0; y < gy1; y++) {
+                    for (int x = gx0; x < gx1; x++) {
+                        if (((x - gx0) - (y - gy0)) % 5 == 0) pw.setColor(x, y, glyph);
+                    }
+                }
+            }
+            case CODE -> {
+                // brackets-like pattern
+                for (int y = gy0; y < gy1; y++) {
+                    for (int x = gx0; x < gx1; x++) {
+                        boolean edge = (x == gx0 || x == gx1 - 1);
+                        boolean mid = (y == gy0 || y == gy1 - 1);
+                        if (edge || (mid && ((x - gx0) % 2 == 0))) pw.setColor(x, y, glyph);
+                    }
+                }
+            }
+            case EXECUTABLE -> {
+                // bold X
+                int w2 = gx1 - gx0;
+                int h2 = gy1 - gy0;
+                for (int y = gy0; y < gy1; y++) {
+                    for (int x = gx0; x < gx1; x++) {
+                        int rx = x - gx0;
+                        int ry = y - gy0;
+                        if (Math.abs(rx - ry) <= 1 || Math.abs((w2 - 1 - rx) - ry) <= 1) {
+                            pw.setColor(x, y, glyph);
+                        }
+                    }
+                }
+            }
+            case LINK -> {
+                // chain-ish dots
+                for (int y = gy0; y < gy1; y++) {
+                    for (int x = gx0; x < gx1; x++) {
+                        if (((x + y) % 6) == 0) pw.setColor(x, y, glyph);
+                    }
+                }
+            }
+            case FILE -> {
                 for (int y = gy0; y < gy1; y++) {
                     for (int x = gx0; x < gx1; x++) {
                         if ((x - gx0) % 3 == 0 && (y - gy0) % 3 == 0) {
@@ -360,6 +526,13 @@ public final class IconLoader {
         return img;
     }
 
+/**
+ * backgroundColorFor.
+ *
+ * @param type TODO
+ * @param darkTheme TODO
+ * @return TODO
+ */
     private static Color backgroundColorFor(IconType type, boolean darkTheme) {
         LogSupport.enter(LOG, "backgroundColorFor");
         return switch (type) {
@@ -370,10 +543,22 @@ public final class IconLoader {
             case AUDIO -> darkTheme ? Color.rgb(80, 40, 120) : Color.rgb(220, 190, 250);
             case VIDEO -> darkTheme ? Color.rgb(40, 80, 140) : Color.rgb(190, 220, 250);
             case PDF -> darkTheme ? Color.rgb(140, 40, 40) : Color.rgb(250, 190, 190);
+            case WORD -> darkTheme ? Color.rgb(35, 85, 160) : Color.rgb(190, 220, 255);
+            case EXCEL -> darkTheme ? Color.rgb(30, 120, 70) : Color.rgb(190, 250, 210);
+            case POWERPOINT -> darkTheme ? Color.rgb(170, 70, 20) : Color.rgb(255, 215, 190);
+            case CODE -> darkTheme ? Color.rgb(90, 70, 140) : Color.rgb(220, 210, 255);
+            case EXECUTABLE -> darkTheme ? Color.rgb(100, 100, 100) : Color.rgb(230, 230, 230);
+            case LINK -> darkTheme ? Color.rgb(40, 120, 140) : Color.rgb(190, 240, 250);
             case FILE -> darkTheme ? Color.rgb(90, 90, 90) : Color.rgb(230, 230, 230);
         };
     }
 
+/**
+ * safeIsDirectory.
+ *
+ * @param p TODO
+ * @return TODO
+ */
     private static boolean safeIsDirectory(Path p) {
         LogSupport.enter(LOG, "safeIsDirectory");
         try {
@@ -383,6 +568,12 @@ public final class IconLoader {
         }
     }
 
+/**
+ * fileNameOrPath.
+ *
+ * @param p TODO
+ * @return TODO
+ */
     private static String fileNameOrPath(Path p) {
         LogSupport.enter(LOG, "fileNameOrPath");
         if (p == null) {
@@ -392,6 +583,12 @@ public final class IconLoader {
         return (fn != null) ? fn.toString() : p.toString();
     }
 
+/**
+ * extensionLower.
+ *
+ * @param name TODO
+ * @return TODO
+ */
     private static String extensionLower(String name) {
         LogSupport.enter(LOG, "extensionLower");
         if (name == null || name.isBlank()) {

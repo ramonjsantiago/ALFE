@@ -56,6 +56,10 @@ public final class NavigationPaneController implements Lifecycle {
     private static final Insets TREE_CELL_PADDING = new Insets(0, 8, 0, 8);
 
     @FXML
+/**
+ * initialize.
+ *
+ */
     private void initialize() {
         // Optional: if you later add a glyph system, set it here. For now keep it simple.
         if (seeMoreMenuButton != null && (seeMoreMenuButton.getText() == null || seeMoreMenuButton.getText().isBlank())) {
@@ -120,6 +124,11 @@ public final class NavigationPaneController implements Lifecycle {
         Platform.runLater(this::applyMinWidthRule);
     }
 
+/**
+ * buildRoot.
+ *
+ * @return TODO
+ */
     private TreeItem<NavEntry> buildRoot() {
         TreeItem<NavEntry> root = new TreeItem<>(new NavEntry("Navigation", null));
 
@@ -138,6 +147,13 @@ public final class NavigationPaneController implements Lifecycle {
         return root;
     }
 
+/**
+ * addIfExists.
+ *
+ * @param parent TODO
+ * @param label TODO
+ * @param path TODO
+ */
     private static void addIfExists(TreeItem<NavEntry> parent, String label, Path path) {
         if (path != null && Files.exists(path)) {
             parent.getChildren().add(new TreeItem<>(new NavEntry(label, path)));
@@ -161,6 +177,13 @@ public final class NavigationPaneController implements Lifecycle {
         }
     }
 
+/**
+ * measureTextWidth.
+ *
+ * @param s TODO
+ * @param font TODO
+ * @return TODO
+ */
     private static double measureTextWidth(String s, Font font) {
         Text t = new Text(s);
         t.setFont(font);
@@ -168,10 +191,20 @@ public final class NavigationPaneController implements Lifecycle {
     }
 
     @FXML
+/**
+ * onSeeMore.
+ *
+ * @param e TODO
+ */
     private void onSeeMore(ActionEvent e) {
         // TODO: add context menu/actions as needed
     }
 
+/**
+ * onEntrySelected.
+ *
+ * @param entry TODO
+ */
     private void onEntrySelected(NavEntry entry) {
         // This controller is intentionally self-contained. Wire selection into your app here if needed.
         // Example: publish an event, call a callback, or inject a navigation service.
@@ -195,6 +228,12 @@ public final class NavigationPaneController implements Lifecycle {
         }
 
         @Override
+/**
+ * updateItem.
+ *
+ * @param item TODO
+ * @param empty TODO
+ */
         protected void updateItem(NavEntry item, boolean empty) {
             super.updateItem(item, empty);
 
@@ -227,6 +266,11 @@ public final class NavigationPaneController implements Lifecycle {
     }
 
     @Override
+/**
+ * attach.
+ *
+ * @param context TODO
+ */
     public void attach(ExplorerContext context) {
         this.context = context;
         // Ensure this controller's disposables are closed when the shared context is disposed.
@@ -236,6 +280,10 @@ public final class NavigationPaneController implements Lifecycle {
     }
 
     @Override
+/**
+ * dispose.
+ *
+ */
     public void dispose() {
         try {
             disposables.close();

@@ -20,6 +20,11 @@ import javafx.scene.control.TreeItem;
 import java.util.logging.Logger;
 import com.fileexplorer.util.LogSupport;
 
+/**
+ * TreeBuildService.
+ * <p>
+ * Auto-generated API documentation for this type.
+ */
 public final class TreeBuildService {
 
     /**
@@ -74,20 +79,41 @@ private static final int MAX_TREE_CHILD_DIRS =
 public static final class MessageTreeItem extends TreeItem<Path> {
     private final String message;
 
+/**
+ * MessageTreeItem.
+ *
+ * @param message TODO
+ * @return TODO
+ */
     public MessageTreeItem(String message) {
         super(null);
         this.message = (message == null) ? "" : message;
     }
 
+/**
+ * message.
+ *
+ * @return TODO
+ */
     public String message() {
         return message;
     }
 
     @Override
+/**
+ * isLeaf.
+ *
+ * @return TODO
+ */
     public boolean isLeaf() {
         return true;
     }
 }
+/**
+ * buildComputerRoot.
+ *
+ * @return TODO
+ */
     public TreeItem<Path> buildComputerRoot() {
         LogSupport.enter(LOG, "buildComputerRoot");
         TreeItem<Path> computer = new TreeItem<>(null);
@@ -120,6 +146,13 @@ public static final class MessageTreeItem extends TreeItem<Path> {
     }
 
 
+/**
+ * toDisplayName.
+ *
+ * @param path TODO
+ * @param treeItem TODO
+ * @return TODO
+ */
     public String toDisplayName(Path path, TreeItem<Path> treeItem) {
         LogSupport.enter(LOG, "toDisplayName");
         if (treeItem != null && treeItem.getParent() == null) {
@@ -156,11 +189,23 @@ public static final class MessageTreeItem extends TreeItem<Path> {
         return null;
     }
 
+/**
+ * safeString.
+ *
+ * @param p TODO
+ * @return TODO
+ */
     private static String safeString(Path p) {
         LogSupport.enter(LOG, "safeString");
         return p == null ? "" : p.toString();
     }
 
+/**
+ * describeRoot.
+ *
+ * @param root TODO
+ * @return TODO
+ */
     private static String describeRoot(Path root) {
         LogSupport.enter(LOG, "describeRoot");
         String drive = root.toString();
@@ -193,6 +238,13 @@ public static final class MessageTreeItem extends TreeItem<Path> {
         private volatile boolean childrenLoaded;
         private volatile boolean childrenLoading;
 
+/**
+ * LazyDirTreeItem.
+ *
+ * @param value TODO
+ * @param isRootChild TODO
+ * @return TODO
+ */
         private LazyDirTreeItem(Path value, boolean isRootChild) {
             LogSupport.enter(LOG, "LazyDirTreeItem");
             super(value);
@@ -262,6 +314,11 @@ public static final class MessageTreeItem extends TreeItem<Path> {
         }
 
         @Override
+/**
+ * isLeaf.
+ *
+ * @return TODO
+ */
         public boolean isLeaf() {
             Path v = getValue();
             if (v == null) {
@@ -281,12 +338,21 @@ public static final class MessageTreeItem extends TreeItem<Path> {
         }
 
         @Override
+/**
+ * getChildren.
+ *
+ * @return TODO
+ */
         public ObservableList<TreeItem<Path>> getChildren() {
             // Do NOT enumerate on getChildren(); keep strictly lazy (expand-only).
             return super.getChildren();
         }
 
         @Override
+/**
+ * ensureChildrenLoaded.
+ *
+ */
         public void ensureChildrenLoaded() {
             LogSupport.enter(LOG, "ensureChildrenLoadedAsync");
             if (childrenLoaded || childrenLoading) {
@@ -315,6 +381,11 @@ public static final class MessageTreeItem extends TreeItem<Path> {
         }
 
         @Override
+/**
+ * isChildrenLoaded.
+ *
+ * @return TODO
+ */
         public boolean isChildrenLoaded() {
             return childrenLoaded;
         }
@@ -323,6 +394,10 @@ public static final class MessageTreeItem extends TreeItem<Path> {
 
 
         @Override
+/**
+ * invalidate.
+ *
+ */
                 public void invalidate() {
                     Path v = getValue();
                     // Reset lazy state and re-run the cheap "has any child dir" probe so the disclosure node
@@ -347,6 +422,13 @@ public static final class MessageTreeItem extends TreeItem<Path> {
                     });
                 }
         
+/**
+ * loadChildren.
+ *
+ * @param dir TODO
+ * @param parentIsRootChild TODO
+ * @return TODO
+ */
         private List<TreeItem<Path>> loadChildren(Path dir, boolean parentIsRootChild) {
     LogSupport.enter(LOG, "loadChildren");
     if (dir == null || !Files.isDirectory(dir) || !Files.isReadable(dir)) {
@@ -396,6 +478,13 @@ public static final class MessageTreeItem extends TreeItem<Path> {
     return out;
 }
 
+/**
+ * denyRootNoise.
+ *
+ * @param parentDir TODO
+ * @param child TODO
+ * @return TODO
+ */
         private boolean denyRootNoise(Path parentDir, Path child) {
             LogSupport.enter(LOG, "denyRootNoise");
             if (!isRootChild) {
@@ -412,6 +501,12 @@ public static final class MessageTreeItem extends TreeItem<Path> {
             return ROOT_DENY_NAMES.contains(lower);
         }
 
+/**
+ * isHiddenSafe.
+ *
+ * @param p TODO
+ * @return TODO
+ */
         private static boolean isHiddenSafe(Path p) {
             LogSupport.enter(LOG, "isHiddenSafe");
             try {
@@ -421,6 +516,12 @@ public static final class MessageTreeItem extends TreeItem<Path> {
             }
         }
 
+/**
+ * dirSortKey.
+ *
+ * @param p TODO
+ * @return TODO
+ */
         private static String dirSortKey(Path p) {
             LogSupport.enter(LOG, "dirSortKey");
             Path n = p.getFileName();

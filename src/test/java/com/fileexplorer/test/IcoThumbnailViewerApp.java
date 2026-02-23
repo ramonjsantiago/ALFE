@@ -56,11 +56,21 @@ public final class IcoThumbnailViewerApp extends Application {
 
     private volatile Task<List<IcoFileRow>> currentTask;
 
+/**
+ * main.
+ *
+ * @param args TODO
+ */
     public static void main(String[] args) {
         launch(args);
     }
 
     @Override
+/**
+ * start.
+ *
+ * @param stage TODO
+ */
     public void start(Stage stage) {
         stage.setTitle("ICO Thumbnail Viewer (Test Harness) - one row per file");
 
@@ -117,6 +127,11 @@ public final class IcoThumbnailViewerApp extends Application {
         stage.show();
     }
 
+/**
+ * buildTable.
+ *
+ * @return TODO
+ */
     private TableView<IcoFileRow> buildTable() {
         TableView<IcoFileRow> table = new TableView<>();
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
@@ -137,6 +152,12 @@ public final class IcoThumbnailViewerApp extends Application {
             }
 
             @Override
+/**
+ * updateItem.
+ *
+ * @param item TODO
+ * @param empty TODO
+ */
             protected void updateItem(Image item, boolean empty) {
                 super.updateItem(item, empty);
                 if (empty || item == null) {
@@ -174,6 +195,11 @@ public final class IcoThumbnailViewerApp extends Application {
         private final ScrollPane scroll = new ScrollPane();
         private final FlowPane flow = new FlowPane();
 
+/**
+ * VariantsCell.
+ *
+ * @return TODO
+ */
         private VariantsCell() {
             flow.setHgap(8);
             flow.setVgap(8);
@@ -194,6 +220,12 @@ public final class IcoThumbnailViewerApp extends Application {
         }
 
         @Override
+/**
+ * updateItem.
+ *
+ * @param item TODO
+ * @param empty TODO
+ */
         protected void updateItem(List<IcoVariant> item, boolean empty) {
             super.updateItem(item, empty);
             if (empty || item == null || item.isEmpty()) {
@@ -208,6 +240,12 @@ public final class IcoThumbnailViewerApp extends Application {
             setGraphic(scroll);
         }
 
+/**
+ * buildVariantTile.
+ *
+ * @param v TODO
+ * @return TODO
+ */
         private Region buildVariantTile(IcoVariant v) {
             ImageView iv = new ImageView(v.image());
             iv.setFitWidth(THUMBNAIL_FIT);
@@ -248,6 +286,11 @@ public final class IcoThumbnailViewerApp extends Application {
     }
 
 
+/**
+ * chooseDirectory.
+ *
+ * @param owner TODO
+ */
     private void chooseDirectory(Stage owner) {
         DirectoryChooser chooser = new DirectoryChooser();
         chooser.setTitle("Select a directory to scan for .ico files");
@@ -267,6 +310,10 @@ public final class IcoThumbnailViewerApp extends Application {
         }
     }
 
+/**
+ * scanSelectedDirectory.
+ *
+ */
     private void scanSelectedDirectory() {
         String dir = directoryField.getText();
         if (dir == null || dir.isBlank()) {
@@ -284,6 +331,11 @@ public final class IcoThumbnailViewerApp extends Application {
 
         Task<List<IcoFileRow>> task = new Task<>() {
             @Override
+/**
+ * call.
+ *
+ * @return TODO
+ */
             protected List<IcoFileRow> call() throws Exception {
                 return scanForIcoFiles(root);
             }
@@ -318,6 +370,10 @@ public final class IcoThumbnailViewerApp extends Application {
         t.start();
     }
 
+/**
+ * cancelCurrentTask.
+ *
+ */
     private void cancelCurrentTask() {
         Task<?> t = currentTask;
         if (t != null) {
@@ -326,6 +382,12 @@ public final class IcoThumbnailViewerApp extends Application {
         currentTask = null;
     }
 
+/**
+ * scanForIcoFiles.
+ *
+ * @param root TODO
+ * @return TODO
+ */
     private List<IcoFileRow> scanForIcoFiles(Path root) throws IOException {
         Objects.requireNonNull(root, "root");
 
@@ -366,6 +428,13 @@ public final class IcoThumbnailViewerApp extends Application {
         return out;
     }
 
+/**
+ * decodeIcoFile.
+ *
+ * @param root TODO
+ * @param icoFile TODO
+ * @return TODO
+ */
     private IcoFileRow decodeIcoFile(Path root, Path icoFile) throws IOException {
         // readExt returns ICOImage objects (image + metadata like icon index, width/height, colour depth, pngCompressed)
         List<ICOImage> images = ICODecoder.readExt(icoFile.toFile());
@@ -408,6 +477,12 @@ public final class IcoThumbnailViewerApp extends Application {
         return new IcoFileRow(icoFile, rel, fileName, variants, preview);
     }
 
+/**
+ * pickPreview.
+ *
+ * @param variants TODO
+ * @return TODO
+ */
     private static Image pickPreview(List<IcoVariant> variants) {
         if (variants == null || variants.isEmpty()) {
             return null;
@@ -419,6 +494,11 @@ public final class IcoThumbnailViewerApp extends Application {
                 .orElse(variants.get(0).image());
     }
 
+/**
+ * applyFilter.
+ *
+ * @param raw TODO
+ */
     private void applyFilter(String raw) {
         String q = (raw == null) ? "" : raw.trim().toLowerCase(Locale.ROOT);
 
@@ -441,6 +521,13 @@ public final class IcoThumbnailViewerApp extends Application {
         });
     }
 
+/**
+ * containsIgnoreCase.
+ *
+ * @param haystack TODO
+ * @param needleLower TODO
+ * @return TODO
+ */
     private static boolean containsIgnoreCase(String haystack, String needleLower) {
         if (needleLower == null || needleLower.isBlank()) {
             return true;
@@ -451,6 +538,13 @@ public final class IcoThumbnailViewerApp extends Application {
         return haystack.toLowerCase(Locale.ROOT).contains(needleLower);
     }
 
+/**
+ * safeRelativize.
+ *
+ * @param root TODO
+ * @param file TODO
+ * @return TODO
+ */
     private static String safeRelativize(Path root, Path file) {
         try {
             return root.toAbsolutePath().normalize().relativize(file.toAbsolutePath().normalize()).toString();
@@ -459,12 +553,24 @@ public final class IcoThumbnailViewerApp extends Application {
         }
     }
 
+/**
+ * summaryText.
+ *
+ * @param root TODO
+ * @param rows TODO
+ * @return TODO
+ */
     private static String summaryText(Path root, List<IcoFileRow> rows) {
         int files = rows.size();
         int variants = rows.stream().mapToInt(r -> r.variants().size()).sum();
         return "Scanned: " + root + " | ICO files decoded: " + files + " | total variants: " + variants;
     }
 
+/**
+ * guessDefaultScanDirectory.
+ *
+ * @return TODO
+ */
     private static Path guessDefaultScanDirectory() {
         Path cwd = Paths.get("").toAbsolutePath();
         Path testResources = cwd.resolve("src").resolve("test").resolve("resources");

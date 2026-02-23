@@ -1,14 +1,16 @@
 package com.fileexplorer.service.event.events;
 
-import java.nio.file.Path;
-import java.util.List;
+import com.fileexplorer.service.ops.FileOperationType;
+
+import java.util.Objects;
 
 /**
- * Published when a file operation starts.
+ * FileOpStarted.
+ * <p>
+ * Auto-generated API documentation for this type.
  */
-public record FileOpStarted(
-        long requestId,
-        String op,
-        List<Path> sources,
-        Path targetDirectory
-) {}
+public record FileOpStarted(long jobId, FileOperationType type, int totalItems) {
+    public FileOpStarted {
+        Objects.requireNonNull(type, "type");
+    }
+}

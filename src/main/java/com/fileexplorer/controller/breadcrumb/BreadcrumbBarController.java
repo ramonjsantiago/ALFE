@@ -46,6 +46,10 @@ public class BreadcrumbBarController implements Lifecycle {
     private Path currentPath;
 
     @FXML
+/**
+ * initialize.
+ *
+ */
     private void initialize() {
         LogSupport.enter(LOG, "initialize");
         root.getStyleClass().add("breadcrumb-bar");
@@ -55,11 +59,21 @@ public class BreadcrumbBarController implements Lifecycle {
     // Callbacks wired from MainController
     // ---------------------------------------------------------------------
 
+/**
+ * setOnNavigate.
+ *
+ * @param handler TODO
+ */
     public void setOnNavigate(Consumer<Path> handler) {
         LogSupport.enter(LOG, "setOnNavigate");
         this.onNavigate = handler;
     }
 
+/**
+ * setOnOpenInNewTab.
+ *
+ * @param handler TODO
+ */
     public void setOnOpenInNewTab(Consumer<Path> handler) {
         LogSupport.enter(LOG, "setOnOpenInNewTab");
         this.onOpenInNewTab = handler;
@@ -69,6 +83,11 @@ public class BreadcrumbBarController implements Lifecycle {
     // Public API: update the bar to represent a path
     // ---------------------------------------------------------------------
 
+/**
+ * setPath.
+ *
+ * @param path TODO
+ */
     public void setPath(Path path) {
         LogSupport.enter(LOG, "setPath");
         currentPath = path;
@@ -108,12 +127,23 @@ public class BreadcrumbBarController implements Lifecycle {
         }
     }
 
+/**
+ * labelFor.
+ *
+ * @param p TODO
+ * @return TODO
+ */
     private String labelFor(Path p) {
         LogSupport.enter(LOG, "labelFor");
         Path name = p.getFileName();
         return (name != null) ? name.toString() : p.toString();
     }
 
+/**
+ * navigateTo.
+ *
+ * @param target TODO
+ */
     private void navigateTo(Path target) {
         LogSupport.enter(LOG, "navigateTo");
         if (onNavigate != null) {
@@ -125,6 +155,12 @@ public class BreadcrumbBarController implements Lifecycle {
     // Popup menu for a crumb chevron
     // ---------------------------------------------------------------------
 
+/**
+ * buildSegmentMenu.
+ *
+ * @param base TODO
+ * @return TODO
+ */
     private ContextMenu buildSegmentMenu(Path base) {
         LogSupport.enter(LOG, "buildSegmentMenu");
         ContextMenu menu = new ContextMenu();
@@ -177,6 +213,11 @@ public class BreadcrumbBarController implements Lifecycle {
         return menu;
     }
 
+/**
+ * copyAddressToClipboard.
+ *
+ * @param p TODO
+ */
     private void copyAddressToClipboard(Path p) {
         LogSupport.enter(LOG, "copyAddressToClipboard");
         if (p == null) {
@@ -191,6 +232,11 @@ public class BreadcrumbBarController implements Lifecycle {
     // Open in new window using the persisted theme preference
     // ---------------------------------------------------------------------
 
+/**
+ * openInNewWindow.
+ *
+ * @param folder TODO
+ */
     private void openInNewWindow(Path folder) {
         LogSupport.enter(LOG, "openInNewWindow");
         if (folder == null) {
@@ -206,6 +252,11 @@ public class BreadcrumbBarController implements Lifecycle {
     }
 
     @Override
+/**
+ * attach.
+ *
+ * @param context TODO
+ */
     public void attach(ExplorerContext context) {
         this.context = context;
         // Ensure this controller's disposables are closed when the shared context is disposed.
@@ -215,6 +266,10 @@ public class BreadcrumbBarController implements Lifecycle {
     }
 
     @Override
+/**
+ * dispose.
+ *
+ */
     public void dispose() {
         try {
             disposables.close();

@@ -81,6 +81,10 @@ public final class BreadcrumbController implements Lifecycle {
     private boolean addressMode;
 
     @FXML
+/**
+ * initialize.
+ *
+ */
     private void initialize() {
         LogSupport.enter(LOG, "initialize");
         if (root != null) {
@@ -122,26 +126,51 @@ public final class BreadcrumbController implements Lifecycle {
     // Public API (used by MainController)
     // ---------------------------------------------------------------------
 
+/**
+ * setOnNavigate.
+ *
+ * @param onNavigate TODO
+ */
     public void setOnNavigate(Consumer<Path> onNavigate) {
         LogSupport.enter(LOG, "setOnNavigate");
         this.onNavigate = onNavigate;
     }
 
+/**
+ * setOnOpenInNewWindow.
+ *
+ * @param onOpenInNewWindow TODO
+ */
     public void setOnOpenInNewWindow(Consumer<Path> onOpenInNewWindow) {
         LogSupport.enter(LOG, "setOnOpenInNewWindow");
         this.onOpenInNewWindow = onOpenInNewWindow;
     }
 
+/**
+ * setOnCopyAddress.
+ *
+ * @param onCopyAddress TODO
+ */
     public void setOnCopyAddress(Consumer<Path> onCopyAddress) {
         LogSupport.enter(LOG, "setOnCopyAddress");
         this.onCopyAddress = onCopyAddress;
     }
 
+/**
+ * setOnBrowseNetwork.
+ *
+ * @param onBrowseNetwork TODO
+ */
     public void setOnBrowseNetwork(Runnable onBrowseNetwork) {
         LogSupport.enter(LOG, "setOnBrowseNetwork");
         this.onBrowseNetwork = onBrowseNetwork;
     }
 
+/**
+ * setPath.
+ *
+ * @param path TODO
+ */
     public void setPath(Path path) {
         LogSupport.enter(LOG, "setPath");
         this.currentPath = (path != null) ? path.normalize() : preferredHomeDirectoryPath();
@@ -152,11 +181,19 @@ public final class BreadcrumbController implements Lifecycle {
         }
     }
 
+/**
+ * requestAddressFocus.
+ *
+ */
     public void requestAddressFocus() {
         LogSupport.enter(LOG, "requestAddressFocus");
         enterAddressMode();
     }
 
+/**
+ * exitAddressMode.
+ *
+ */
     public void exitAddressMode() {
         LogSupport.enter(LOG, "exitAddressMode");
         exitAddressMode(false);
@@ -166,6 +203,10 @@ public final class BreadcrumbController implements Lifecycle {
     // Modes
     // ---------------------------------------------------------------------
 
+/**
+ * enterAddressMode.
+ *
+ */
     private void enterAddressMode() {
         LogSupport.enter(LOG, "enterAddressMode");
         if (addressField == null) {
@@ -177,6 +218,11 @@ public final class BreadcrumbController implements Lifecycle {
         addressField.selectAll();
     }
 
+/**
+ * exitAddressMode.
+ *
+ * @param keepFocusInAddress TODO
+ */
     private void exitAddressMode(boolean keepFocusInAddress) {
         LogSupport.enter(LOG, "exitAddressMode");
         setAddressMode(false);
@@ -185,6 +231,11 @@ public final class BreadcrumbController implements Lifecycle {
         }
     }
 
+/**
+ * setAddressMode.
+ *
+ * @param enable TODO
+ */
     private void setAddressMode(boolean enable) {
         LogSupport.enter(LOG, "setAddressMode");
         addressMode = enable;
@@ -213,6 +264,11 @@ public final class BreadcrumbController implements Lifecycle {
     // Address handling
     // ---------------------------------------------------------------------
 
+/**
+ * handleAddressKeys.
+ *
+ * @param evt TODO
+ */
     private void handleAddressKeys(KeyEvent evt) {
         LogSupport.enter(LOG, "handleAddressKeys");
         if (evt == null) {
@@ -231,6 +287,10 @@ public final class BreadcrumbController implements Lifecycle {
         }
     }
 
+/**
+ * commitAddress.
+ *
+ */
     private void commitAddress() {
         LogSupport.enter(LOG, "commitAddress");
         if (addressField == null) {
@@ -254,6 +314,10 @@ public final class BreadcrumbController implements Lifecycle {
         exitAddressMode(false);
     }
 
+/**
+ * syncAddressText.
+ *
+ */
     private void syncAddressText() {
         LogSupport.enter(LOG, "syncAddressText");
         if (addressField == null) {
@@ -267,6 +331,10 @@ public final class BreadcrumbController implements Lifecycle {
         addressField.positionCaret(addressField.getText().length());
     }
 
+/**
+ * markInvalidAndKeepFocus.
+ *
+ */
     private void markInvalidAndKeepFocus() {
         LogSupport.enter(LOG, "markInvalidAndKeepFocus");
         if (addressField == null) {
@@ -279,6 +347,10 @@ public final class BreadcrumbController implements Lifecycle {
         addressField.selectAll();
     }
 
+/**
+ * clearInvalidState.
+ *
+ */
     private void clearInvalidState() {
         LogSupport.enter(LOG, "clearInvalidState");
         if (addressField == null) {
@@ -292,6 +364,10 @@ public final class BreadcrumbController implements Lifecycle {
     // ---------------------------------------------------------------------
 
 
+/**
+ * installCrumbEmptyClickHandler.
+ *
+ */
     private void installCrumbEmptyClickHandler() {
         if (root == null) {
             return;
@@ -324,6 +400,10 @@ public final class BreadcrumbController implements Lifecycle {
         });
     }
 
+/**
+ * ensureCrumbInfrastructure.
+ *
+ */
     private void ensureCrumbInfrastructure() {
         LogSupport.enter(LOG, "ensureCrumbInfrastructure");
         if (crumbContainer == null) {
@@ -343,6 +423,10 @@ public final class BreadcrumbController implements Lifecycle {
         }
     }
 
+/**
+ * rebuildCrumbs.
+ *
+ */
     private void rebuildCrumbs() {
         LogSupport.enter(LOG, "rebuildCrumbs");
         ensureCrumbInfrastructure();
@@ -398,6 +482,10 @@ public final class BreadcrumbController implements Lifecycle {
         }
     }
 
+/**
+ * showOverflowMenu.
+ *
+ */
     private void showOverflowMenu() {
         LogSupport.enter(LOG, "showOverflowMenu");
         if (dropdownButton == null) {
@@ -428,6 +516,14 @@ public final class BreadcrumbController implements Lifecycle {
         menu.show(dropdownButton, Side.BOTTOM, 0, 0);
     }
 
+/**
+ * showItemContextMenu.
+ *
+ * @param owner TODO
+ * @param path TODO
+ * @param screenX TODO
+ * @param screenY TODO
+ */
     private void showItemContextMenu(Button owner, Path path, double screenX, double screenY) {
         LogSupport.enter(LOG, "showItemContextMenu");
         Objects.requireNonNull(owner, "owner");
@@ -470,6 +566,12 @@ public final class BreadcrumbController implements Lifecycle {
         }
         }
 
+/**
+ * resolveUserAddressText.
+ *
+ * @param text TODO
+ * @return TODO
+ */
     private ResolvedAddress resolveUserAddressText(String text) {
         LogSupport.enter(LOG, "resolveUserAddressText");
         String t = stripWrappingQuotes(text);
@@ -498,6 +600,12 @@ public final class BreadcrumbController implements Lifecycle {
         return new ResolvedAddress(p, ok);
     }
 
+/**
+ * resolveTildePath.
+ *
+ * @param t TODO
+ * @return TODO
+ */
     private Path resolveTildePath(String t) {
         LogSupport.enter(LOG, "resolveTildePath");
         if (t == null) {
@@ -521,6 +629,12 @@ public final class BreadcrumbController implements Lifecycle {
         return null;
     }
 
+/**
+ * resolveShellAlias.
+ *
+ * @param raw TODO
+ * @return TODO
+ */
     private Path resolveShellAlias(String raw) {
         LogSupport.enter(LOG, "resolveShellAlias");
         if (raw == null) {
@@ -536,6 +650,12 @@ public final class BreadcrumbController implements Lifecycle {
             return null;
         }
 
+/**
+ * switch.
+ *
+ * @param key TODO
+ * @return TODO
+ */
         return switch (key) {
             case "home" -> preferredHomeDirectoryPath();
             case "root" -> base.getRoot();
@@ -543,6 +663,12 @@ public final class BreadcrumbController implements Lifecycle {
         };
     }
 
+/**
+ * normalizeAliasKey.
+ *
+ * @param raw TODO
+ * @return TODO
+ */
     private static String normalizeAliasKey(String raw) {
         LogSupport.enter(LOG, "normalizeAliasKey");
         String s = raw.trim().toLowerCase(Locale.ROOT);
@@ -554,6 +680,12 @@ public final class BreadcrumbController implements Lifecycle {
         return s;
     }
 
+/**
+ * indexOfFirstSlash.
+ *
+ * @param s TODO
+ * @return TODO
+ */
     private static int indexOfFirstSlash(String s) {
         LogSupport.enter(LOG, "indexOfFirstSlash");
         if (s == null) {
@@ -570,6 +702,11 @@ public final class BreadcrumbController implements Lifecycle {
         return Math.min(a, b);
     }
 
+/**
+ * shellBasePath.
+ *
+ * @return TODO
+ */
     private Path shellBasePath() {
         LogSupport.enter(LOG, "shellBasePath");
         try {
@@ -579,6 +716,12 @@ public final class BreadcrumbController implements Lifecycle {
         }
     }
 
+/**
+ * isDirectory.
+ *
+ * @param p TODO
+ * @return TODO
+ */
     private static boolean isDirectory(Path p) {
         LogSupport.enter(LOG, "isDirectory");
         if (p == null) {
@@ -591,6 +734,11 @@ public final class BreadcrumbController implements Lifecycle {
         }
     }
 
+/**
+ * preferredHomeDirectoryPath.
+ *
+ * @return TODO
+ */
     private static Path preferredHomeDirectoryPath() {
         LogSupport.enter(LOG, "preferredHomeDirectoryPath");
         String home = env("HOME");
@@ -624,6 +772,12 @@ public final class BreadcrumbController implements Lifecycle {
         }
     }
 
+/**
+ * env.
+ *
+ * @param key TODO
+ * @return TODO
+ */
     private static String env(String key) {
         LogSupport.enter(LOG, "env");
         try {
@@ -633,6 +787,12 @@ public final class BreadcrumbController implements Lifecycle {
         }
     }
 
+/**
+ * stripWrappingQuotes.
+ *
+ * @param s TODO
+ * @return TODO
+ */
     private static String stripWrappingQuotes(String s) {
         LogSupport.enter(LOG, "stripWrappingQuotes");
         if (s == null) {
@@ -647,6 +807,12 @@ public final class BreadcrumbController implements Lifecycle {
         return t;
     }
 
+/**
+ * normalizeForDisplay.
+ *
+ * @param p TODO
+ * @return TODO
+ */
     private static String normalizeForDisplay(Path p) {
         LogSupport.enter(LOG, "normalizeForDisplay");
         if (p == null) {
@@ -655,6 +821,12 @@ public final class BreadcrumbController implements Lifecycle {
         return p.toString();
     }
 
+/**
+ * buildSegments.
+ *
+ * @param path TODO
+ * @return TODO
+ */
     private static List<Path> buildSegments(Path path) {
         LogSupport.enter(LOG, "buildSegments");
         List<Path> segments = new ArrayList<>();
@@ -672,6 +844,12 @@ public final class BreadcrumbController implements Lifecycle {
         return segments;
     }
 
+/**
+ * labelFor.
+ *
+ * @param path TODO
+ * @return TODO
+ */
     private static String labelFor(Path path) {
         LogSupport.enter(LOG, "labelFor");
         if (path == null) {
@@ -686,6 +864,11 @@ public final class BreadcrumbController implements Lifecycle {
     }
 
     @Override
+/**
+ * attach.
+ *
+ * @param context TODO
+ */
     public void attach(ExplorerContext context) {
         this.context = context;
         // Ensure this controller's disposables are closed when the shared context is disposed.
@@ -695,6 +878,10 @@ public final class BreadcrumbController implements Lifecycle {
     }
 
     @Override
+/**
+ * dispose.
+ *
+ */
     public void dispose() {
         try {
             disposables.close();

@@ -40,11 +40,23 @@ public final class IconCacheService {
     private final int maxEntries;
     private final LinkedHashMap<IconKey, SoftReference<Image>> lru;
 
+/**
+ * IconCacheService.
+ *
+ * @param maxEntries TODO
+ * @return TODO
+ */
     private IconCacheService(int maxEntries) {
         LogSupport.enter(LOG, "IconCacheService");
         this.maxEntries = clamp(maxEntries, MIN_MAX_ENTRIES, MAX_MAX_ENTRIES);
         this.lru = new LinkedHashMap<>(256, 0.75f, true) {
             @Override
+/**
+ * removeEldestEntry.
+ *
+ * @param eldest TODO
+ * @return TODO
+ */
             protected boolean removeEldestEntry(Map.Entry<IconKey, SoftReference<Image>> eldest) {
                 LogSupport.enter(LOG, "removeEldestEntry");
                 return size() > IconCacheService.this.maxEntries;
@@ -52,11 +64,21 @@ public final class IconCacheService {
         };
     }
 
+/**
+ * getInstance.
+ *
+ * @return TODO
+ */
     public static IconCacheService getInstance() {
         LogSupport.enter(LOG, "getInstance");
         return INSTANCE;
     }
 
+/**
+ * getMaxEntries.
+ *
+ * @return TODO
+ */
     public int getMaxEntries() {
         LogSupport.enter(LOG, "getMaxEntries");
         return maxEntries;
@@ -106,6 +128,10 @@ public final class IconCacheService {
         return created;
     }
 
+/**
+ * clear.
+ *
+ */
     public void clear() {
         LogSupport.enter(LOG, "clear");
         synchronized (lru) {
@@ -123,6 +149,12 @@ public final class IconCacheService {
         }
     }
 
+/**
+ * getIfPresent.
+ *
+ * @param key TODO
+ * @return TODO
+ */
     private Image getIfPresent(IconKey key) {
         LogSupport.enter(LOG, "getIfPresent");
         synchronized (lru) {
@@ -130,6 +162,12 @@ public final class IconCacheService {
         }
     }
 
+/**
+ * getIfPresentUnsafe.
+ *
+ * @param key TODO
+ * @return TODO
+ */
     private Image getIfPresentUnsafe(IconKey key) {
         LogSupport.enter(LOG, "getIfPresentUnsafe");
         SoftReference<Image> ref = lru.get(key);
@@ -143,6 +181,10 @@ public final class IconCacheService {
         return img;
     }
 
+/**
+ * trimStaleUnsafe.
+ *
+ */
     private void trimStaleUnsafe() {
         LogSupport.enter(LOG, "trimStaleUnsafe");
         Iterator<Map.Entry<IconKey, SoftReference<Image>>> it = lru.entrySet().iterator();
@@ -155,6 +197,11 @@ public final class IconCacheService {
         }
     }
 
+/**
+ * readMaxEntries.
+ *
+ * @return TODO
+ */
     private static int readMaxEntries() {
         LogSupport.enter(LOG, "readMaxEntries");
         String raw = System.getProperty(PROP_MAX_ENTRIES);
@@ -168,6 +215,14 @@ public final class IconCacheService {
         }
     }
 
+/**
+ * clamp.
+ *
+ * @param v TODO
+ * @param lo TODO
+ * @param hi TODO
+ * @return TODO
+ */
     private static int clamp(int v, int lo, int hi) {
         LogSupport.enter(LOG, "clamp");
         if (v < lo) {
@@ -183,6 +238,14 @@ public final class IconCacheService {
       * Cache key for icons.
       */
         public record IconKey(String id, boolean dark, int size) {
+/**
+ * IconKey.
+ *
+ * @param id TODO
+ * @param dark TODO
+ * @param size TODO
+ * @return TODO
+ */
             public IconKey(String id, boolean dark, int size) {
                 LogSupport.enter(LOG, "IconKey");
                 this.id = Objects.requireNonNull(id, "id");
@@ -191,24 +254,45 @@ public final class IconCacheService {
             }
 
             @Override
+/**
+ * id.
+ *
+ * @return TODO
+ */
             public String id() {
                 LogSupport.enter(LOG, "getId");
                 return id;
             }
 
             @Override
+/**
+ * dark.
+ *
+ * @return TODO
+ */
             public boolean dark() {
                 LogSupport.enter(LOG, "isDark");
                 return dark;
             }
 
             @Override
+/**
+ * size.
+ *
+ * @return TODO
+ */
             public int size() {
                 LogSupport.enter(LOG, "getSize");
                 return size;
             }
 
             @Override
+/**
+ * equals.
+ *
+ * @param o TODO
+ * @return TODO
+ */
             public boolean equals(Object o) {
                 LogSupport.enter(LOG, "equals");
                 if (this == o) {
@@ -223,6 +307,11 @@ public final class IconCacheService {
             }
 
             @Override
+/**
+ * hashCode.
+ *
+ * @return TODO
+ */
             public int hashCode() {
                 LogSupport.enter(LOG, "hashCode");
                 int result = id.hashCode();
@@ -232,6 +321,11 @@ public final class IconCacheService {
             }
 
             @Override
+/**
+ * toString.
+ *
+ * @return TODO
+ */
             public String toString() {
                 LogSupport.enter(LOG, "toString");
                 return "IconKey{id='" + id + "', dark=" + dark + ", size=" + size + "}";
