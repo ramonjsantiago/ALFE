@@ -57,6 +57,10 @@
     -fx-background-color: #2a4a7a;
 }
 
+.context-menu .explorer-menu-checkmark {
+    -fx-text-fill: #e6e8eb;
+}
+
 /* ---------------------------------------------------------------------
  * Dialogs (Windows 11 dark)
  * ------------------------------------------------------------------- */

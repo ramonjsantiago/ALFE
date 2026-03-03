@@ -149,6 +149,26 @@ public final class IconCacheService {
         }
     }
 
+    /**
+     * Current entry count (after removing cleared {@link SoftReference}s).
+     */
+    public int size() {
+        synchronized (lru) {
+            trimStaleUnsafe();
+            return lru.size();
+        }
+    }
+
+    /**
+     * Lightweight diagnostics for perf HUD.
+     */
+    public String debugString() {
+        synchronized (lru) {
+            trimStaleUnsafe();
+            return "entries=" + lru.size() + " maxEntries=" + maxEntries;
+        }
+    }
+
 /**
  * getIfPresent.
  *

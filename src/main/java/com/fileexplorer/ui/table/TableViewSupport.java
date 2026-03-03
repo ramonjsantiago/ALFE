@@ -4,7 +4,9 @@ import com.fileexplorer.app.ExplorerContext;
 import com.fileexplorer.model.FileItem;
 import com.fileexplorer.model.FileStatus;
 import com.fileexplorer.service.icon.AsyncIconService;
+import com.fileexplorer.service.icon.AsyncThumbnailService;
 import com.fileexplorer.util.IconLoader;
+import com.fileexplorer.util.ImageSupport;
 import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -51,6 +53,9 @@ public final class TableViewSupport {
     ) {
         if (fileTable == null) return;
 
+        // Phase 4A.2: visibility-driven thumbnailing to avoid wasted decode during fast scroll.
+        final VisibleThumbnailManager thumbMgr = ensureThumbManager(fileTable, ctx);
+
         if (colName != null) {
             colName.setCellValueFactory(param -> new javafx.beans.property.ReadOnlyObjectWrapper<>(displayNameForTable.apply(param.getValue())));
 
@@ -62,6 +67,8 @@ public final class TableViewSupport {
                 // Guards against stale async completions updating a recycled cell.
                 private String lastIdentity = null;
                 private Path lastPath = null;
+
+                private java.util.concurrent.CompletableFuture<javafx.scene.image.Image> pendingThumb = null;
 
                 {
                     box.setAlignment(Pos.CENTER_LEFT);
@@ -80,6 +87,12 @@ public final class TableViewSupport {
  */
                 protected void updateItem(String item, boolean empty) {
                     super.updateItem(item, empty);
+
+                    // Cancel any pending thumbnail work for the previous item (cell reuse/virtualization).
+                    if (pendingThumb != null) {
+                        pendingThumb.cancel(false);
+                        pendingThumb = null;
+                    }
 
                     if (empty || item == null) {
                         lastIdentity = null;
@@ -122,6 +135,12 @@ public final class TableViewSupport {
                                 if (img == null) return;
                                 iconView.setImage(img);
                             }));
+
+                    // If this is a supported image file, lazily replace the placeholder with a scaled thumbnail.
+                    if (!isFolder && p != null && ImageSupport.isThumbCandidate(p)) {
+                        // Register with the viewport-aware manager; it will request only after scroll-idle.
+                        thumbMgr.register(this, p, iconPx, identity, iconView::setImage);
+                    }
                 }
 
 /**
@@ -317,5 +336,16 @@ syncTint();
         if (bytes < 0) return -1L;
         if (bytes > Long.MAX_VALUE) return Long.MAX_VALUE;
         return (long) bytes;
+    }
+
+    private static VisibleThumbnailManager ensureThumbManager(TableView<FileItem> table, ExplorerContext ctx) {
+        final String key = "fileexplorer.visibleThumbMgr";
+        Object existing = table.getProperties().get(key);
+        if (existing instanceof VisibleThumbnailManager m) {
+            return m;
+        }
+        VisibleThumbnailManager created = new VisibleThumbnailManager(table, ctx);
+        table.getProperties().put(key, created);
+        return created;
     }
 }

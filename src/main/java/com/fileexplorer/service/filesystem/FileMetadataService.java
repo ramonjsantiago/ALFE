@@ -206,17 +206,25 @@ private boolean isHiddenSafe(Path p) {
             return ext.toUpperCase(Locale.ROOT) + " File";
         }
 
-        // Fallback for display only.
-        try {
-            String mime = Files.probeContentType(p);
-            if (mime != null && !mime.isBlank()) {
-                return mime;
+        // Fallback for display only (optional; disabled by default for low CPU).
+        if (isMimeProbeEnabled()) {
+            try {
+                String mime = Files.probeContentType(p);
+                if (mime != null && !mime.isBlank()) {
+                    return mime;
+                }
+            } catch (IOException ex) {
+                // ignore
             }
-        } catch (IOException ex) {
-            // ignore
         }
 
         return "File";
+    }
+
+    private static boolean isMimeProbeEnabled() {
+        String v = System.getProperty("fileexplorer.metadata.mimeProbe");
+        if (v == null || v.isBlank()) return false;
+        return Boolean.parseBoolean(v.trim());
     }
 
 /**
@@ -240,6 +248,32 @@ private boolean isHiddenSafe(Path p) {
             return "";
         }
     }
+
+    /**
+     * humanReadableSizeForTable.
+     *
+     * Windows Explorer-like: show sizes in KB minimum. 0 bytes -> "0 KB";
+     * otherwise minimum displayed is "1 KB".
+     *
+     * @param p path
+     * @return formatted size for the Details/Table size column
+     */
+    public String humanReadableSizeForTable(Path p) {
+        LogSupport.enter(LOG, "humanReadableSizeForTable");
+        if (p == null) {
+            return "";
+        }
+        try {
+            if (Files.isDirectory(p)) {
+                return "";
+            }
+            long size = Files.size(p);
+            return formatBytesForTable(size);
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
 
 /**
  * lastModifiedLocalString.
@@ -360,12 +394,14 @@ private boolean isHiddenSafe(Path p) {
             return iconTypeForExtension(ext);
         }
 
-        // Fallback: MIME only when extension is missing.
+        // Fallback: MIME only when extension is missing (optional; disabled by default for low CPU).
         String mime = null;
-        try {
-            mime = Files.probeContentType(p);
-        } catch (IOException ex) {
-            // ignore
+        if (isMimeProbeEnabled()) {
+            try {
+                mime = Files.probeContentType(p);
+            } catch (IOException ex) {
+                // ignore
+            }
         }
 
         if (mime != null && !mime.isBlank()) {
@@ -480,6 +516,40 @@ private boolean isHiddenSafe(Path p) {
  * @param bytes TODO
  * @return TODO
  */
+
+    /**
+     * formatBytesForTable.
+     *
+     * For the Table/Details Size column: minimum is 1 KB unless size is 0,
+     * in which case show 0 KB.
+     */
+    private static String formatBytesForTable(long bytes) {
+        LogSupport.enter(LOG, "formatBytesForTable");
+        if (bytes < 0) {
+            return "";
+        }
+        if (bytes == 0) {
+            return "0 KB";
+        }
+        if (bytes < 1024) {
+            return "1 KB";
+        }
+
+        double v = bytes;
+        String[] units = new String[]{"B", "KB", "MB", "GB", "TB", "PB"};
+        int u = 0;
+        while (v >= 1024.0 && u < units.length - 1) {
+            v /= 1024.0;
+            u++;
+        }
+        // Never show bytes in the Table/Details column.
+        if (u == 0) {
+            u = 1;
+            v = bytes / 1024.0;
+        }
+        return SIZE_FMT.format(v) + " " + units[u];
+    }
+
     private static String formatBytes(long bytes) {
         LogSupport.enter(LOG, "formatBytes");
         if (bytes < 0) {

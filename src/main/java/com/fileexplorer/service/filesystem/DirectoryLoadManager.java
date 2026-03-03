@@ -155,4 +155,59 @@ public final class DirectoryLoadManager {
         if (v == null || v.isBlank()) return def;
         return Boolean.parseBoolean(v.trim());
     }
+
+
+/**
+ * Phase 4A: Progressive load for fast first render.
+ * Emits batches on the IO executor thread (caller should marshal to FX thread).
+ */
+public void loadProgressive(
+        Path dir,
+        boolean includeHidden,
+        int batchSize,
+        java.util.function.Consumer<java.util.List<FileItem>> onBatch,
+        Runnable onDone,
+        java.util.function.Consumer<Throwable> onFailure
+) {
+if (dir == null) {
+    // Defensive: some selection paths can briefly pass null during TreeView initialization.
+    // Treat as a no-op and complete immediately to avoid surfacing an exception dialog.
+    try {
+        onDone.run();
+    } catch (Exception ignored) {
+    }
+    return;
+}
+    Objects.requireNonNull(onBatch, "onBatch");
+    Objects.requireNonNull(onDone, "onDone");
+    Objects.requireNonNull(onFailure, "onFailure");
+
+    cancelActive();
+    activeDir = dir;
+    DirectoryListingService.CancellationSource cancel = new DirectoryListingService.CancellationSource();
+    activeCancel = cancel;
+
+    DirectoryListingService.ListingOptions opts = buildListingOptions(includeHidden);
+
+    ioExecutor.execute(() -> {
+        try {
+            // ignore stale start
+            if (!Objects.equals(activeDir, dir) || activeCancel != cancel) return;
+
+            listingService.listProgressiveSync(dir, opts, cancel.token(), batchSize, batch -> {
+                // stop if cancelled/stale
+                if (cancel.token().isCancelled()) return;
+                if (!Objects.equals(activeDir, dir) || activeCancel != cancel) return;
+                onBatch.accept(batch);
+            });
+
+            if (!Objects.equals(activeDir, dir) || activeCancel != cancel) return;
+            onDone.run();
+        } catch (Throwable t) {
+            if (!Objects.equals(activeDir, dir) || activeCancel != cancel) return;
+            onFailure.accept(t);
+        }
+    });
+}
+
 }

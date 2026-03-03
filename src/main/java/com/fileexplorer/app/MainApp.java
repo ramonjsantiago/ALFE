@@ -31,6 +31,9 @@ import javafx.geometry.Rectangle2D;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.layout.StackPane;
+import javafx.geometry.Pos;
+import javafx.geometry.Insets;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.control.Alert;
@@ -39,6 +42,7 @@ import javafx.scene.text.Font;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import com.fileexplorer.util.LogSupport;
+import com.fileexplorer.util.StartupTrace;
 import javafx.geometry.Insets;
 import java.util.concurrent.atomic.AtomicReference;
 import com.fileexplorer.lifecycle.Lifecycle;
@@ -202,30 +206,61 @@ private static final Set<String> LOGGED_RESOURCES = ConcurrentHashMap.newKeySet(
  * @param stage TODO
  */
     public void start(Stage stage) throws Exception {
+StartupTrace.mark("MainApp.start enter");
 
-        // Crash snapshot: capture any uncaught exceptions best-effort.
-        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
-            try {
-                CrashReportService.writeCrashReport(t, e);
-            } catch (Throwable ignored) {
-            }
-        });
+// Crash snapshot: capture any uncaught exceptions best-effort.
+Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+    try {
+        CrashReportService.writeCrashReport(t, e);
+    } catch (Throwable ignored) {
+    }
+});
 
-        try {
-            java.nio.file.Files.createDirectories(java.nio.file.Path.of("heapdumps"));
-        } catch (Exception ignore) {
+// Show *something* ASAP. Anything non-trivial (CSS conversion, theme prefs, self-checks)
+// is deferred until after the first window paint.
+final Path initialFolder;
+{
+    java.nio.file.Path home = null;
+    try {
+        String userHome = System.getProperty("user.home");
+        if (userHome != null && !userHome.isBlank()) {
+            home = java.nio.file.Path.of(userHome);
         }
+    } catch (Exception ignored) {}
 
-        LogSupport.enter(LOG, "start");
-        // Replace Modena user-agent stylesheet with a minimal UA CSS (data URL) to avoid JavaFX 25 Linux CSS conversion warnings.
-        javafx.application.Application.setUserAgentStylesheet("data:text/css,.scroll-bar%20.increment-arrow,%20.scroll-bar%20.decrement-arrow%20{%20-fx-effect:%20null;%20}%20.scroll-bar%20.increment-button,%20.scroll-bar%20.decrement-button%20{%20-fx-effect:%20null;%20}%20.scroll-bar%20.thumb,%20.scroll-bar%20.track%20{%20-fx-effect:%20null;%20}%20.table-view%20.column-header-background,%20.table-view%20.filler,%20.table-view%20.show-hide-columns-button,%20.table-view%20.show-hide-column-image,%20.table-view%20.column-drag-header,%20.table-view%20.column-resize-line,%20.tree-view%20.corner,%20.table-view%20.corner,%20.scroll-pane%20.corner,%20.tree-view%20.virtual-flow%20.corner,%20.table-view%20.virtual-flow%20.corner,%20.scroll-pane%20>%20.corner,%20.scroll-pane%20>%20.viewport%20{%20-fx-background-color:%20transparent;%20-fx-effect:%20null;%20}");
+    initialFolder = (home != null) ? home : java.nio.file.Path.of(".").toAbsolutePath().normalize();
+}
+
+
+// Minimal stage content is built inside configureExplorerStage (loading scene),
+// which calls stage.show() immediately.
+configureExplorerStage(stage, initialFolder, /*darkHint*/ true);
+
+// Defer heavier/optional startup work to avoid impacting first paint.
+Platform.runLater(() -> {
+    // UA stylesheet override can trigger CSS parsing/conversion; do it after first paint.
+    try {
+        javafx.application.Application.setUserAgentStylesheet(
+                "data:text/css,.scroll-bar%20.increment-arrow,%20.scroll-bar%20.decrement-arrow%20{%20-fx-effect:%20null;%20}%20.scroll-bar%20.increment-button,%20.scroll-bar%20.decrement-button%20{%20-fx-effect:%20null;%20}%20.scroll-bar%20.thumb,%20.scroll-bar%20.track%20{%20-fx-effect:%20null;%20}%20.table-view%20.column-header-background,%20.table-view%20.filler,%20.table-view%20.show-hide-columns-button,%20.table-view%20.show-hide-column-image,%20.table-view%20.column-drag-header,%20.table-view%20.column-resize-line,%20.tree-view%20.corner,%20.table-view%20.corner,%20.scroll-pane%20.corner,%20.tree-view%20.virtual-flow%20.corner,%20.table-view%20.virtual-flow%20.corner,%20.scroll-pane%20>%20.corner,%20.scroll-pane%20>%20.viewport%20{%20-fx-background-color:%20transparent;%20-fx-effect:%20null;%20}"
+        );
+    } catch (Exception ignored) {
+    }
+
+    try {
         configureResourceLoggerIfNeeded();
-        Path initialFolder = null;
-        ThemeService themeService = new ThemeService();
-        themeService.setDarkPreferred(true);
-        boolean dark = themeService.isDarkPreferred();
-        configureExplorerStage(stage, initialFolder, dark);
-        LogSupport.enter(LOG, "end");
+    } catch (Exception ignored) {
+    }
+
+    try {
+        java.nio.file.Files.createDirectories(java.nio.file.Path.of("heapdumps"));
+    } catch (Exception ignore) {
+    }
+
+    StartupTrace.mark("post-first-paint deferred startup finished");
+});
+
+StartupTrace.mark("MainApp.start exit");
+
     }
 
 /**
@@ -315,43 +350,49 @@ if (stage == null) {
 // Build a visible window immediately (fast) and defer FXML/controller wiring by a single pulse.
 // This prevents "nothing appears" when FXMLLoader/controller initialization takes time.
 stage.setTitle("FileExplorer");
-try {
-    stage.getIcons().add(new Image(MainApp.class.getResourceAsStream("/icons/app.png")));
-} catch (Exception ignored) {
-    // icon is optional
-}
 
+        // App icon is optional; defer until after first paint.
 stage.setMinWidth(DEFAULT_MIN_WIDTH);
 stage.setMinHeight(DEFAULT_MIN_HEIGHT);
 
-// Lightweight loading UI
-javafx.scene.control.ProgressIndicator pi = new javafx.scene.control.ProgressIndicator();
-pi.setMaxSize(64, 64);
-javafx.scene.control.Label lbl = new javafx.scene.control.Label("Loading...");
-lbl.setStyle("-fx-font-size: 14px;");
-javafx.scene.layout.VBox loadingBox = new javafx.scene.layout.VBox(12, pi, lbl);
-loadingBox.setStyle("-fx-alignment: center; -fx-padding: 24;");
-javafx.scene.layout.StackPane loadingRoot = new javafx.scene.layout.StackPane(loadingBox);
-loadingRoot.getStyleClass().add("explorer-root");
+// Ultra-light loading UI (no Controls) to avoid Modena/CSS/skin initialization before first paint.
+javafx.scene.text.Text lbl = new javafx.scene.text.Text("Loading…");
+lbl.setStyle("-fx-font-size: 16px;");
+
+javafx.scene.shape.Rectangle bg = new javafx.scene.shape.Rectangle();
+bg.setManaged(false);
+bg.setFill(javafx.scene.paint.Color.web(dark ? "#1e1e1e" : "#ffffff"));
+
+javafx.scene.layout.StackPane loadingRoot = new javafx.scene.layout.StackPane(bg, lbl);
+loadingRoot.setPadding(new Insets(24));
+loadingRoot.widthProperty().addListener((obs, ov, nv) -> bg.setWidth(nv.doubleValue()));
+loadingRoot.heightProperty().addListener((obs, ov, nv) -> bg.setHeight(nv.doubleValue()));
 
 Scene loadingScene = new Scene(loadingRoot, DEFAULT_WIDTH, DEFAULT_HEIGHT);
+loadingScene.setFill(javafx.scene.paint.Color.TRANSPARENT);
 
-// Base styles early so at least the loading screen looks correct.
-String baseCss = MainApp.class.getResource("/com/fileexplorer/ui/css/explorer-base.css") != null
-        ? MainApp.class.getResource("/com/fileexplorer/ui/css/explorer-base.css").toExternalForm()
-        : null;
-if (baseCss != null) {
-    loadingScene.getStylesheets().add(baseCss);
-}
 
 // User-agent overrides are optional; we keep the default MODENA UA stylesheet.
 
 stage.setScene(loadingScene);
 stage.show();
+        StartupTrace.mark("stage.show (loading scene)");
+        Platform.runLater(() -> {
+            try {
+                stage.getIcons().add(new Image(MainApp.class.getResourceAsStream("/icons/app.png")));
+            } catch (Exception ignored) {
+            }
+        });
+
+        // Approximate first paint: first FX pulse after stage.show
+        Platform.runLater(() -> StartupTrace.mark("FX pulse after show (runLater1)"));
+
 
 // Phase 3.4: allow deterministic controller teardown on window close.
 final AtomicReference<MainController> mainControllerRef = new AtomicReference<>();
 AtomicReference<ExplorerContext> contextRef = new AtomicReference<>();
+AtomicReference<com.fileexplorer.util.HeapPressureService> heapPressureRef = new AtomicReference<>();
+AtomicReference<com.fileexplorer.util.SoakNavigator> soakRef = new AtomicReference<>();
 stage.setOnCloseRequest(e -> {
     MainController c = mainControllerRef.get();
     if (c != null) {
@@ -359,6 +400,14 @@ stage.setOnCloseRequest(e -> {
             c.dispose();
         } catch (Exception ignored) {
         }
+    }
+    com.fileexplorer.util.SoakNavigator sn = soakRef.get();
+    if (sn != null) {
+        try { sn.close(); } catch (Exception ignored) {}
+    }
+    com.fileexplorer.util.HeapPressureService hps = heapPressureRef.get();
+    if (hps != null) {
+        try { hps.close(); } catch (Exception ignored) {}
     }
     ExplorerContext ctx = contextRef.get();
     if (ctx != null) {
@@ -369,10 +418,11 @@ stage.setOnCloseRequest(e -> {
     }
 });
 // Defer the heavy FXML load so the window can paint at least once.
-javafx.animation.PauseTransition delay = new javafx.animation.PauseTransition(javafx.util.Duration.millis(75));
-delay.setOnFinished(evt -> {
+        // We use a double runLater instead of a fixed delay so it's pulse-driven.
+        Platform.runLater(() -> Platform.runLater(() -> {
     try {
-        java.net.URL fxmlUrl = MainApp.class.getResource("/com/fileexplorer/ui/layout/MainLayout.fxml");
+        StartupTrace.mark("begin FXML load");
+            java.net.URL fxmlUrl = MainApp.class.getResource("/com/fileexplorer/ui/layout/MainLayout.fxml");
         if (fxmlUrl == null) {
             throw new IllegalStateException("Missing FXML resource: /com/fileexplorer/ui/layout/MainLayout.fxml");
         }
@@ -381,6 +431,17 @@ delay.setOnFinished(evt -> {
 
         // Phase 3.4.4: MainApp owns the ExplorerContext (single instance).
         ThemeService themeService = new ThemeService();
+        // Resolve preferred theme lazily (after first paint)
+        try {
+            themeService.setDarkPreferred(true);
+        } catch (Exception ignored) {
+        }
+        boolean darkActual = false;
+        try {
+            darkActual = themeService.isDarkPreferred();
+        } catch (Exception ignored) {
+        }
+
         FileMetadataService fileMetadataService = new FileMetadataService();
         TreeBuildService treeBuildService = new TreeBuildService();
         EventBus eventBus = new EventBus();
@@ -394,16 +455,16 @@ delay.setOnFinished(evt -> {
         );
         contextRef.set(context);
         ZoomRoot zoomRoot = new ZoomRoot(root);
-        Scene scene = new Scene(zoomRoot.getRoot(), DEFAULT_WIDTH, DEFAULT_HEIGHT);
 
-        if (baseCss != null) {
-            scene.getStylesheets().add(baseCss);
-        }
-        addStylesheet(scene, dark ? "/com/fileexplorer/ui/css/explorer-dark-win.css" : "/com/fileexplorer/ui/css/explorer-light-win.css");
+        // Phase 4C.1: wrap UI root in a StackPane so we can host an optional perf HUD overlay.
+        StackPane overlayRoot = new StackPane(zoomRoot.getRoot());
+        Scene scene = new Scene(overlayRoot, DEFAULT_WIDTH, DEFAULT_HEIGHT);
+
+        addStylesheet(scene, darkActual ? "/com/fileexplorer/ui/css/explorer-dark-win.css" : "/com/fileexplorer/ui/css/explorer-light-win.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-win.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-table.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/ui_fixes.css");
-        addStylesheet(scene, dark ? "/com/fileexplorer/ui/css/fluent-dark.css" : "/com/fileexplorer/ui/css/fluent-light.css");
+        addStylesheet(scene, darkActual ? "/com/fileexplorer/ui/css/fluent-dark.css" : "/com/fileexplorer/ui/css/fluent-light.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/fluent-explorer.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-override-everything.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/progress_pane.css");
@@ -419,61 +480,137 @@ delay.setOnFinished(evt -> {
             Object ppcObj = loader.getNamespace().get("progressPaneController");
             if (ppcObj instanceof ProgressPaneController ppc) {
                 ppc.attach(context);
-
-                // Phase 6.4.0: Startup self-check + quarantine (best-effort).
-                try {
-                    StartupSelfCheckService.SelfCheckResult r = new StartupSelfCheckService().run(context);
-                    if (r != null && r.hadIssues()) {
-                        javafx.application.Platform.runLater(() -> showSelfCheckDialog(r.report()));
-                    }
-                } catch (Exception ignored) {
-                }
-
-                // Phase 3.6.7: restore any persisted operations from prior session.
-                // Phase 6.4.0: Safe mode disables auto-recovery re-enqueue.
-                if (!isSafeMode()) {
-                    int recovered = context.operationQueueService().restoreSavedQueue();
-                    if (recovered > 0) {
-                        // Phase 3.6.7.1: Prompt the user to Resume or Discard recovered operations.
-                        javafx.application.Platform.runLater(() -> showRecoveredOpsDialog(context, recovered));
-                    }
-                }
-
-                // Phase 3.6.10: scan for orphan atomic-copy temp files (best-effort).
-                context.operationQueueService().scanForOrphanTempFiles();
-
-                // Phase 4.5.0: scan for incomplete transaction journals (crash recovery).
-                javafx.application.Platform.runLater(() -> showJournalRecoveryDialog(context));
             }
 
+            // Keep scene wiring minimal for fast first paint.
             controller.setScene(scene);
+        }
 
-            if (Boolean.getBoolean("fileexplorer.safeMode")) {
-                controller.enterSafeMode();
-            }
+        // Optional perf HUD.
+        // Enabled via -Dfileexplorer.perfHud=true.
+        // Also auto-enabled during soak runs unless explicitly disabled with -Dfileexplorer.perfHud=false.
+        final String perfHudProp = System.getProperty("fileexplorer.perfHud");
+        final boolean soakEnabled = Boolean.getBoolean("fileexplorer.soak.enabled");
+        final boolean perfHudEnabled =
+                (perfHudProp == null ? false : Boolean.parseBoolean(perfHudProp))
+                        || (soakEnabled && !"false".equalsIgnoreCase(perfHudProp));
 
-            if (initialFolder != null) {
-                controller.openInitialFolder(initialFolder);
+        if (perfHudEnabled) {
+            try {
+                com.fileexplorer.ui.perf.PerfHudPane hud = new com.fileexplorer.ui.perf.PerfHudPane(
+                        com.fileexplorer.service.icon.AsyncThumbnailService.getInstance(),
+                        com.fileexplorer.service.icon.IconCacheService.getInstance(),
+                        controller != null ? controller.getMetadataBudgetService() : null
+                );
+                overlayRoot.getChildren().add(hud);
+                StackPane.setAlignment(hud, Pos.TOP_RIGHT);
+                StackPane.setMargin(hud, new Insets(10));
+                StartupTrace.mark("Perf HUD enabled");
+            } catch (Throwable ignored) {
             }
+        } else {
+            StartupTrace.mark("Perf HUD disabled");
         }
 
         stage.setScene(scene);
 
-        // Phase 6.4.0: if there is a prior crash snapshot, surface it and offer a one-click bundle.
-        javafx.application.Platform.runLater(() -> showLastCrashDialogIfPresent(context));
+        StartupTrace.mark("stage.setScene (main UI)");
 
-        // Give controller a chance to release any startup guards after the first real scene is installed.
-        if (controller != null) {
-            javafx.application.Platform.runLater(controller::releaseStartupVirtualizationGuards);
+        // Phase 4A.2: centralize post-scene startup scheduling.
+        final com.fileexplorer.util.StartupWorkQueue workQueue = new com.fileexplorer.util.StartupWorkQueue();
+        workQueue.attachToScene(scene);
+        workQueue.markUiReady();
+
+        // Enable thumbnail decoding after first full UI render (avoid startup slowdown).
+        workQueue.runAfterUiReady(() -> Platform.runLater(() ->
+                com.fileexplorer.service.icon.AsyncThumbnailService.getInstance().setEnabled(true)
+        ));
+
+        // Phase 4C.1: heap pressure monitor (best-effort) to trim caches and prevent long-run creep.
+        final com.fileexplorer.util.HeapPressureService heapPressure = new com.fileexplorer.util.HeapPressureService(
+                Double.parseDouble(System.getProperty("fileexplorer.heapPressure.threshold", "0.85")),
+                Long.parseLong(System.getProperty("fileexplorer.heapPressure.intervalMs", "2500")),
+                usedFrac -> {
+                    try { com.fileexplorer.service.icon.IconCacheService.getInstance().trimStale(); } catch (Throwable ignored) {}
+                    try { com.fileexplorer.service.icon.AsyncThumbnailService.getInstance().trimCacheUnderPressure(); } catch (Throwable ignored) {}
+                }
+        );
+        workQueue.runAfterUiReady(() -> {
+            try { heapPressure.start(); } catch (Throwable ignored) {}
+        });
+        // Ensure monitor stops on close (integrated into the existing close handler).
+        heapPressureRef.set(heapPressure);
+
+        // Open the initial folder (defaults to user.home) right after the first UI render.
+        // This keeps startup paint fast while ensuring the user lands in a useful location.
+        if (controller != null && initialFolder != null) {
+            workQueue.runAfterUiReady(() -> Platform.runLater(() -> controller.openInitialFolder(initialFolder)));
         }
+
+        // Phase 4C.1: optional successive-folder navigation soak runner.
+        if (controller != null && Boolean.getBoolean("fileexplorer.soak.enabled")) {
+            workQueue.runAfterUiReady(() -> {
+                try {
+                    com.fileexplorer.util.SoakNavigator sn = new com.fileexplorer.util.SoakNavigator(controller);
+                    soakRef.set(sn);
+                    sn.start();
+                } catch (Throwable ignored) {}
+            });
+        }
+
+        // Defer heavy startup tasks until the user is idle (does not block interaction).
+        workQueue.runIdle(() -> {
+            try {
+                Object ppcObj2 = loader.getNamespace().get("progressPaneController");
+                if (ppcObj2 instanceof ProgressPaneController ppc2) {
+                    // Phase 6.4.0: Startup self-check + quarantine (best-effort).
+                    try {
+                        StartupSelfCheckService.SelfCheckResult r = new StartupSelfCheckService().run(context);
+                        if (r != null && r.hadIssues()) {
+                            Platform.runLater(() -> showSelfCheckDialog(r.report()));
+                        }
+                    } catch (Exception ignored) {
+                    }
+
+                    // Phase 3.6.7: restore any persisted operations from prior session.
+                    // Phase 6.4.0: Safe mode disables auto-recovery re-enqueue.
+                    if (!isSafeMode()) {
+                        int recovered = context.operationQueueService().restoreSavedQueue();
+                        if (recovered > 0) {
+                            Platform.runLater(() -> showRecoveredOpsDialog(context, recovered));
+                        }
+                    }
+
+                    // Phase 3.6.10: scan for orphan atomic-copy temp files (best-effort).
+                    context.operationQueueService().scanForOrphanTempFiles();
+
+                    // Phase 4.5.0: scan for incomplete transaction journals (crash recovery).
+                    Platform.runLater(() -> showJournalRecoveryDialog(context));
+                }
+
+                if (controller != null && Boolean.getBoolean("fileexplorer.safeMode")) {
+                    Platform.runLater(controller::enterSafeMode);
+                }
+
+                // Phase 6.4.0: if there is a prior crash snapshot, surface it and offer a one-click bundle.
+                Platform.runLater(() -> showLastCrashDialogIfPresent(context));
+
+                // Give controller a chance to release any startup guards after the first real scene is installed.
+                if (controller != null) {
+                    Platform.runLater(controller::releaseStartupVirtualizationGuards);
+                }
+            } finally {
+                CrashReportService.writeSuccessMarker();
+                StartupTrace.mark("deferred heavy startup tasks done");
+            }
+        });
     } catch (Exception ex) {
         // Keep the loading scene visible and surface the error.
         ex.printStackTrace();
         lbl.setText("Failed to load UI (see console)."
         );
     }
-});
-delay.play();
+}));
     }
 
 /**
@@ -1913,9 +2050,46 @@ loadFontsFromResources(List.of(
      */
     private static void showLastCrashDialogIfPresent(ExplorerContext context) {
         if (context == null) return;
+
+        // Policy:
+        //   -Dfileexplorer.crashDialog=false   => never show
+        //   -Dfileexplorer.crashDialog=always => always show if file exists
+        //   default / "fresh"                 => show only if crash is newer than last-success marker AND within N hours
+        String policy = System.getProperty("fileexplorer.crashDialog", "fresh").trim().toLowerCase();
+
+        if ("false".equals(policy) || "0".equals(policy) || "off".equals(policy) || "never".equals(policy)) {
+            return;
+        }
+
         try {
             java.nio.file.Path crash = CrashReportService.lastCrashFile();
             if (crash == null || !Files.exists(crash)) return;
+
+            if (!"always".equals(policy)) {
+                // Freshness window
+                long freshHours = 24;
+                try {
+                    freshHours = Long.parseLong(System.getProperty("fileexplorer.crashDialog.freshHours", "24"));
+                } catch (Exception ignored) {
+                }
+                if (freshHours < 1) freshHours = 1;
+
+                // Only show if crash happened since last successful startup
+                java.nio.file.Path success = CrashReportService.lastSuccessFile();
+                java.time.Instant crashTime = Files.getLastModifiedTime(crash).toInstant();
+
+                if (Files.exists(success)) {
+                    java.time.Instant successTime = Files.getLastModifiedTime(success).toInstant();
+                    if (!crashTime.isAfter(successTime)) {
+                        return; // crash is older than a successful run
+                    }
+                }
+
+                java.time.Instant cutoff = java.time.Instant.now().minus(java.time.Duration.ofHours(freshHours));
+                if (crashTime.isBefore(cutoff)) {
+                    return; // crash is too old to bother the user
+                }
+            }
 
             ButtonType bundle = new ButtonType("Generate support bundle");
             ButtonType open = new ButtonType("Open crash report");
@@ -1926,8 +2100,9 @@ loadFontsFromResources(List.of(
             alert.setHeaderText("A crash report from a previous run was found.");
             alert.setContentText("You can generate a support bundle that includes the crash snapshot.");
             alert.getButtonTypes().setAll(bundle, open, dismiss);
-        com.fileexplorer.util.DialogTheme.apply(alert, null);
-        ButtonType chosen = alert.showAndWait().orElse(dismiss);
+            com.fileexplorer.util.DialogTheme.apply(alert, null);
+            ButtonType chosen = alert.showAndWait().orElse(dismiss);
+
             if (chosen == open) {
                 try {
                     java.awt.Desktop.getDesktop().open(crash.toFile());
@@ -1958,6 +2133,7 @@ loadFontsFromResources(List.of(
         } catch (Exception ignored) {
         }
     }
+
 
     /**
      * Phase 4.5.0: Prompt the user about incomplete transaction journals (crash recovery).

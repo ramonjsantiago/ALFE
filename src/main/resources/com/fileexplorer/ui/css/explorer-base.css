@@ -65,6 +65,11 @@
     -fx-text-fill: #e6e8eb;
 }
 
+/* Menu item icon spacing (used by the "See more" menu items) */
+.menuitem-icon-gap {
+    -fx-padding: 0 10 0 0;
+}
+
 /* Toolbars (flat) */
 .tool-bar {
     -fx-background-insets: 0;
@@ -140,4 +145,65 @@
 .table-row-cell:filled:selected,
 .table-row-cell:filled:selected:focused {
     -fx-background-color: -fx-selection-bar;
+}
+
+
+/* Ensure CheckMenuItem marks are visible in dark theme context menus */
+.context-menu {
+    -fx-mark-color: #e6e8eb;
+}
+.context-menu .check-menu-item:checked > .left-container > .check,
+.context-menu .radio-menu-item:checked > .left-container > .radio {
+    -fx-background-color: -fx-mark-color;
+}
+
+
+/* header menu mark fix (JavaFX 25 skins vary) */
+.context-menu .check-menu-item:checked .mark,
+.context-menu .radio-menu-item:checked .dot,
+.context-menu .check-menu-item:checked .check,
+.context-menu .radio-menu-item:checked .radio {
+    -fx-background-color: -fx-mark-color;
+}
+
+/* Explorer-like check column used by the table header details menu */
+.context-menu .explorer-menu-checkrow {
+    -fx-alignment: center-left;
+}
+.context-menu .explorer-menu-checkmark {
+    -fx-alignment: center;
+    -fx-text-fill: -fx-text-base-color;
+}
+
+
+/* Phase 4B.2 UI: toolbar buttons are borderless */
+.tool-bar .button,
+.tool-bar .toggle-button,
+.tool-bar .menu-button {
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-background-insets: 0;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+    -fx-background-color: transparent;
+    -fx-background-radius: 0;
+}
+
+
+
+/* Toolbar buttons: flat (no gradients) */
+.tool-bar .button:hover,
+.tool-bar .toggle-button:hover,
+.tool-bar .menu-button:hover {
+    -fx-background-color: rgba(255,255,255,0.08);
+}
+
+.tool-bar .button:armed,
+.tool-bar .toggle-button:armed,
+.tool-bar .menu-button:armed {
+    -fx-background-color: rgba(255,255,255,0.14);
+}
+
+.tool-bar .toggle-button:selected {
+    -fx-background-color: rgba(255,255,255,0.12);
 }

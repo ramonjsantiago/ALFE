@@ -1,0 +1,186 @@
+package com.fileexplorer.ui.table;
+
+import com.fileexplorer.app.ExplorerContext;
+import com.fileexplorer.model.FileItem;
+import com.fileexplorer.service.icon.AsyncThumbnailService;
+import com.fileexplorer.util.ImageSupport;
+import javafx.animation.PauseTransition;
+import javafx.application.Platform;
+import javafx.collections.ListChangeListener;
+import javafx.scene.Node;
+import javafx.scene.control.TableCell;
+import javafx.scene.control.TableRow;
+import javafx.scene.control.TableView;
+import javafx.scene.input.ScrollEvent;
+import javafx.util.Duration;
+
+import java.nio.file.Path;
+import java.util.Map;
+import java.util.Objects;
+import java.util.WeakHashMap;
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * Phase 4A.2: Visibility-driven thumbnailing.
+ *
+ * <p>Problem: decoding thumbnails during fast scroll causes wasted work and UI jank.
+ *
+ * <p>Solution: when a cell binds to an image candidate, we register it, but only
+ * start the decode after a short scroll-idle debounce. Pending work for cells that
+ * scroll out of view is cancelled best-effort.</p>
+ */
+public final class VisibleThumbnailManager {
+
+    private final TableView<FileItem> table;
+    private final ExplorerContext ctx;
+
+    private final PauseTransition idleDebounce;
+
+    private final Map<TableCell<FileItem, ?>, Registration> regs = new WeakHashMap<>();
+
+    private static final class Registration {
+        Path path;
+        int size;
+        String identity;
+        java.util.function.Consumer<javafx.scene.image.Image> apply;
+        CompletableFuture<javafx.scene.image.Image> future;
+    }
+
+    public VisibleThumbnailManager(TableView<FileItem> table, ExplorerContext ctx) {
+        this.table = Objects.requireNonNull(table, "table");
+        this.ctx = Objects.requireNonNull(ctx, "ctx");
+
+        long ms = longProp("fileexplorer.thumb.scrollIdleMs", 140L);
+        this.idleDebounce = new PauseTransition(Duration.millis(Math.max(30, ms)));
+        this.idleDebounce.setOnFinished(_ -> pumpVisible());
+
+        // Any scroll event resets debounce.
+        table.addEventFilter(ScrollEvent.ANY, e -> {
+            cancelNonVisible();
+            idleDebounce.stop();
+            idleDebounce.playFromStart();
+        });
+
+        // Also react to keyboard navigation (selection changes) to hydrate visible thumbs.
+        try {
+            table.getSelectionModel().getSelectedIndices().addListener((ListChangeListener<? super Integer>) _ -> {
+                idleDebounce.stop();
+                idleDebounce.playFromStart();
+            });
+        } catch (Exception ignored) {
+        }
+
+        // First pump after skin is ready.
+        Platform.runLater(() -> {
+            idleDebounce.stop();
+            idleDebounce.playFromStart();
+        });
+    }
+
+    /** Register an image candidate cell. Does not necessarily start decoding immediately. */
+    public void register(TableCell<FileItem, ?> cell, Path path, int sizePx, String identity,
+                         java.util.function.Consumer<javafx.scene.image.Image> apply) {
+        if (cell == null || path == null || apply == null) return;
+        if (!ImageSupport.isThumbCandidate(path)) return;
+
+        Registration r = regs.computeIfAbsent(cell, _ -> new Registration());
+        // Cancel old work if binding changed.
+        if (r.future != null && (!Objects.equals(r.path, path) || r.size != sizePx)) {
+            r.future.cancel(false);
+            r.future = null;
+        }
+        r.path = path;
+        r.size = sizePx;
+        r.identity = identity;
+        r.apply = apply;
+
+        // Debounce: user may still be scrolling.
+        idleDebounce.stop();
+        idleDebounce.playFromStart();
+    }
+
+    /** Best-effort cancel all pending thumbnail work (e.g., when directory changes). */
+    public void cancelAll() {
+        regs.values().forEach(r -> {
+            if (r.future != null) {
+                r.future.cancel(false);
+                r.future = null;
+            }
+        });
+    }
+
+    private void pumpVisible() {
+        if (!Platform.isFxApplicationThread()) {
+            Platform.runLater(this::pumpVisible);
+            return;
+        }
+
+        // If thumbnails are still gated off, do nothing.
+        if (!AsyncThumbnailService.getInstance().isEnabled()) {
+            return;
+        }
+
+        // Start requests for visible registered cells.
+        for (Map.Entry<TableCell<FileItem, ?>, Registration> e : regs.entrySet()) {
+            TableCell<FileItem, ?> cell = e.getKey();
+            Registration r = e.getValue();
+            if (cell == null || r == null || r.path == null || r.apply == null) continue;
+
+            if (!isCellVisible(cell)) {
+                // Cancel non-visible to avoid wasted decode.
+                if (r.future != null) {
+                    r.future.cancel(false);
+                    r.future = null;
+                }
+                continue;
+            }
+
+            // Already requested.
+            if (r.future != null) continue;
+
+            final Path p = r.path;
+            final int size = r.size;
+            final String id = r.identity;
+
+            r.future = AsyncThumbnailService.getInstance().request(p, size, AsyncThumbnailService.RequestPriority.VISIBLE);
+            final CompletableFuture<javafx.scene.image.Image> fut = r.future;
+            fut.thenAccept(img -> Platform.runLater(() -> {
+                if (fut.isCancelled()) return;
+                // Ensure still bound to same file.
+                Registration cur = regs.get(cell);
+                if (cur == null) return;
+                if (!Objects.equals(cur.path, p)) return;
+                if (!Objects.equals(cur.identity, id)) return;
+                if (img == null) return;
+                cur.apply.accept(img);
+            }));
+        }
+    }
+
+    private void cancelNonVisible() {
+        for (Registration r : regs.values()) {
+            if (r == null || r.future == null) continue;
+            // We can only cancel by checking the cell during pump, but on scroll we don't have it.
+            // Best effort: leave running; pumpVisible will cancel when it detects non-visible.
+        }
+    }
+
+    private static boolean isCellVisible(TableCell<FileItem, ?> cell) {
+        if (cell == null || !cell.isVisible()) return false;
+        TableRow<FileItem> row = cell.getTableRow();
+        if (row == null || !row.isVisible()) return false;
+        if (row.getItem() == null) return false;
+        // If layout bounds are zero, it isn't actually rendered.
+        return row.getLayoutBounds().getHeight() > 0 && row.getLayoutBounds().getWidth() > 0;
+    }
+
+    private static long longProp(String key, long def) {
+        String v = System.getProperty(key);
+        if (v == null || v.isBlank()) return def;
+        try {
+            return Long.parseLong(v.trim());
+        } catch (NumberFormatException e) {
+            return def;
+        }
+    }
+}

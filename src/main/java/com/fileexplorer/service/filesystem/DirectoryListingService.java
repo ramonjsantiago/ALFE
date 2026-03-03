@@ -78,9 +78,11 @@ public final class DirectoryListingService {
                 }
 
                 String name = (p.getFileName() != null) ? p.getFileName().toString() : p.toString();
+                boolean lazy = lazyMetadata();
+
                 String type = metadata.detectFileType(p);
-                String size = metadata.humanReadableSize(p);
-                String mod = metadata.lastModifiedLocalString(p);
+                String size = lazy ? "" : metadata.humanReadableSize(p);
+                String mod  = lazy ? "" : metadata.lastModifiedLocalString(p);
 
                 // Phase 1: placeholder status (A)
                 out.add(new FileItem(p, name, type, size, mod, FileStatus.NONE));
@@ -113,4 +115,70 @@ public final class DirectoryListingService {
             return false;
         }
     }
+
+    private static boolean lazyMetadata() {
+        String v = System.getProperty("fileexplorer.metadata.lazy");
+        if (v == null || v.isBlank()) return true;
+        return Boolean.parseBoolean(v.trim());
+    }
+
+
+/**
+ * Progressive directory listing: emits batches as entries are discovered.
+ * Runs on the caller's thread; intended to be invoked from an IO executor.
+ */
+public void listProgressiveSync(
+        Path dir,
+        ListingOptions opts,
+        CancellationToken token,
+        int batchSize,
+        java.util.function.Consumer<java.util.List<FileItem>> onBatch
+) {
+    if (onBatch == null) return;
+    if (token != null && token.isCancelled()) return;
+    if (dir == null || !Files.isDirectory(dir)) return;
+
+    int limit = Math.max(1, opts.maxEntries());
+    boolean includeHidden = opts.includeHidden();
+    boolean foldersFirst = opts.foldersFirst();
+
+    int effectiveBatch = Math.max(25, batchSize);
+
+    java.util.List<FileItem> batch = new java.util.ArrayList<>(effectiveBatch);
+    int emitted = 0;
+
+    try (DirectoryStream<Path> ds = Files.newDirectoryStream(dir)) {
+        for (Path p : ds) {
+            if (token != null && token.isCancelled()) return;
+            if (emitted >= limit) break;
+
+            if (!includeHidden && isHiddenSafe(p)) {
+                continue;
+            }
+
+            String name = (p.getFileName() != null) ? p.getFileName().toString() : p.toString();
+            boolean lazy = lazyMetadata();
+
+            String type = metadata.detectFileType(p);
+            String size = lazy ? "" : metadata.humanReadableSize(p);
+            String mod  = lazy ? "" : metadata.lastModifiedLocalString(p);
+
+            batch.add(new FileItem(p, name, type, size, mod, FileStatus.NONE));
+            emitted++;
+
+            if (batch.size() >= effectiveBatch) {
+                onBatch.accept(java.util.List.copyOf(batch));
+                batch.clear();
+            }
+        }
+    } catch (Exception ex) {
+        // Bubble as unchecked; caller decides how to report.
+        throw new RuntimeException(ex);
+    }
+
+    if (!batch.isEmpty()) {
+        onBatch.accept(java.util.List.copyOf(batch));
+    }
+}
+
 }

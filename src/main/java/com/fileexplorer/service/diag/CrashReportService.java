@@ -33,7 +33,26 @@ public final class CrashReportService {
         return crashDir().resolve(LAST_CRASH);
     }
 
-    /**
+    
+
+    private static final String LAST_SUCCESS = "last-success.txt";
+
+    /** Marker file written after a successful startup. */
+    public static Path lastSuccessFile() {
+        return crashDir().resolve(LAST_SUCCESS);
+    }
+
+    /** Write/refresh the successful-startup marker. Best-effort. */
+    public static void writeSuccessMarker() {
+        try {
+            Files.createDirectories(crashDir());
+            String payload = "Last success: " + Instant.now().toString() + System.lineSeparator();
+            Files.writeString(lastSuccessFile(), payload, StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+        } catch (Exception ignored) {
+        }
+    }
+/**
      * Write a crash report.
      *
      * @param thread thread where the exception was uncaught

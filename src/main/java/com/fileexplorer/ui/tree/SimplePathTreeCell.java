@@ -31,6 +31,16 @@ public class SimplePathTreeCell extends TreeCell<Path> {
     private final ChangeListener<Boolean> expandedListener = (obs, oldV, newV) -> updateDisclosure();
     private TreeItem<Path> observedTreeItem;
 
+    private final ChangeListener<TreeItem<Path>> treeItemListener = (obs, oldTi, newTi) -> {
+        // Virtualized controls can re-use cells and swap TreeItems; keep disclosure spacing stable.
+        detach();
+        observedTreeItem = newTi;
+        if (observedTreeItem != null) {
+            observedTreeItem.expandedProperty().addListener(expandedListener);
+        }
+        updateDisclosure();
+    };
+
 /**
  * SimplePathTreeCell.
  *
@@ -48,8 +58,10 @@ public class SimplePathTreeCell extends TreeCell<Path> {
         }
 
         setContentDisplay(ContentDisplay.LEFT);
+        setAlignment(Pos.CENTER_LEFT);
         setGraphicTextGap(5.0);
-        setPadding(new Insets(0, 8, 0, 8));
+        // Match Explorer's left edge: reduce left inset by 1px to avoid subtle over-indent.
+        setPadding(new Insets(0, 8, 0, 6));
 
         // Hollow chevron (stroke-only). Right-pointing base; rotate 90° for expanded.
         disclosureChevron.getElements().setAll(chevronRight());
@@ -60,9 +72,11 @@ public class SimplePathTreeCell extends TreeCell<Path> {
         disclosureChevron.strokeProperty().bind(textFillProperty());
 
         disclosureContainer.setAlignment(Pos.CENTER);
-        disclosureContainer.setMinSize(16.0, 16.0);
-        disclosureContainer.setPrefSize(16.0, 16.0);
-        disclosureContainer.setMaxSize(16.0, 16.0);
+        disclosureContainer.setMinSize(18.0, 18.0);
+        disclosureContainer.setPrefSize(18.0, 18.0);
+        disclosureContainer.setMaxSize(18.0, 18.0);
+        // Increase spacing between chevron and the following content.
+        disclosureContainer.setPadding(new Insets(0, 2, 0, 0));
         disclosureContainer.getChildren().add(disclosureChevron);
 
         disclosureContainer.setMouseTransparent(false);
@@ -87,6 +101,9 @@ public class SimplePathTreeCell extends TreeCell<Path> {
         });
 
         setDisclosureNode(disclosureContainer);
+
+        // Ensure disclosure spacing remains consistent even if the TreeItem is swapped after updateItem.
+        treeItemProperty().addListener(treeItemListener);
     }
 
     @Override
@@ -109,12 +126,17 @@ public class SimplePathTreeCell extends TreeCell<Path> {
             return;
         }
 
+        // Always reserve disclosure space for non-empty rows (Explorer-like alignment).
+        disclosureContainer.setVisible(true);
+        disclosureContainer.setManaged(true);
+
         // Placeholder child (lazy loading): show a visible row so expansion isn't confusing.
         if (item == null && getTreeItem() != null && getTreeItem().getParent() != null) {
             setDisable(true);
             setText("Loading...");
-            disclosureContainer.setVisible(false);
-            disclosureContainer.setManaged(false);
+            // Keep disclosure spacing so "Loading..." aligns with normal rows.
+            disclosureContainer.setOpacity(0.0);
+            disclosureContainer.setMouseTransparent(true);
             return;
         }
 

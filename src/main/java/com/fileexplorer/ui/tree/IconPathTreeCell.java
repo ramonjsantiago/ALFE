@@ -27,6 +27,7 @@ import javafx.scene.shape.StrokeLineJoin;
 public class IconPathTreeCell extends TreeCell<Path> {
 
     private final ImageView iconView = new ImageView();
+    private final StackPane iconContainer = new StackPane();
     private final ThemeService themeService;
     private final TreeBuildService displayService;
 
@@ -35,6 +36,16 @@ public class IconPathTreeCell extends TreeCell<Path> {
 
     private final ChangeListener<Boolean> expandedListener = (obs, oldV, newV) -> updateDisclosure();
     private TreeItem<Path> observedTreeItem;
+
+    private final ChangeListener<TreeItem<Path>> treeItemListener = (obs, oldTi, newTi) -> {
+        // Virtualized controls can re-use cells and swap TreeItems; keep disclosure spacing stable.
+        detach();
+        observedTreeItem = newTi;
+        if (observedTreeItem != null) {
+            observedTreeItem.expandedProperty().addListener(expandedListener);
+        }
+        updateDisclosure();
+    };
 
 /**
  * IconPathTreeCell.
@@ -49,8 +60,10 @@ public class IconPathTreeCell extends TreeCell<Path> {
         this.themeService = themeService;
 
         setContentDisplay(ContentDisplay.LEFT);
+        setAlignment(Pos.CENTER_LEFT);
         setGraphicTextGap(5.0);
-        setPadding(new Insets(0, 8, 0, 8));
+        // Match Explorer's left edge: reduce left inset by 1px to avoid subtle over-indent.
+        setPadding(new Insets(0, 8, 0, 6));
 
         if (Double.isFinite(fixedCellSize) && fixedCellSize > 0) {
             setMinHeight(fixedCellSize);
@@ -61,7 +74,14 @@ public class IconPathTreeCell extends TreeCell<Path> {
         iconView.setFitWidth(16.0);
         iconView.setFitHeight(16.0);
         iconView.setPreserveRatio(true);
-        setGraphic(iconView);
+
+        // Fixed-size graphic box ensures all icons align vertically across rows.
+        iconContainer.setAlignment(Pos.CENTER);
+        iconContainer.setMinSize(18.0, 18.0);
+        iconContainer.setPrefSize(18.0, 18.0);
+        iconContainer.setMaxSize(18.0, 18.0);
+        iconContainer.getChildren().setAll(iconView);
+        setGraphic(iconContainer);
 
         // Hollow chevron (stroke-only). The shape is a right-pointing chevron; we rotate it 90° for expanded.
         disclosureChevron.getElements().setAll(chevronRight());
@@ -74,9 +94,11 @@ public class IconPathTreeCell extends TreeCell<Path> {
 
         // Reserve a fixed area for the disclosure control so text/icons align like Explorer.
         disclosureContainer.setAlignment(Pos.CENTER);
-        disclosureContainer.setMinSize(16.0, 16.0);
-        disclosureContainer.setPrefSize(16.0, 16.0);
-        disclosureContainer.setMaxSize(16.0, 16.0);
+        disclosureContainer.setMinSize(18.0, 18.0);
+        disclosureContainer.setPrefSize(18.0, 18.0);
+        disclosureContainer.setMaxSize(18.0, 18.0);
+        // Increase spacing between chevron and icon (Explorer-like).
+        disclosureContainer.setPadding(new Insets(0, 2, 0, 0));
         disclosureContainer.getChildren().add(disclosureChevron);
 
         disclosureContainer.setMouseTransparent(false);
@@ -91,6 +113,9 @@ public class IconPathTreeCell extends TreeCell<Path> {
         });
 
         setDisclosureNode(disclosureContainer);
+
+        // Ensure disclosure spacing remains consistent even if the TreeItem is swapped after updateItem.
+        treeItemProperty().addListener(treeItemListener);
 
         setOnMouseClicked(e -> {
             if (e.getClickCount() == 2) {
@@ -123,13 +148,18 @@ public class IconPathTreeCell extends TreeCell<Path> {
             return;
         }
 
+        // Always reserve disclosure space for non-empty rows (Explorer-like alignment).
+        disclosureContainer.setVisible(true);
+        disclosureContainer.setManaged(true);
+
         // Placeholder child (lazy loading): show a visible row so expansion isn't confusing.
         if (item == null && getTreeItem() != null && getTreeItem().getParent() != null) {
             setDisable(true);
             setText("Loading...");
             iconView.setImage(null);
-            disclosureContainer.setVisible(false);
-            disclosureContainer.setManaged(false);
+            // Keep disclosure spacing so "Loading..." aligns with normal rows.
+            disclosureContainer.setOpacity(0.0);
+            disclosureContainer.setMouseTransparent(true);
             return;
         }
 

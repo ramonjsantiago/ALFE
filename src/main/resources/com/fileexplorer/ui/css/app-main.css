@@ -477,3 +477,27 @@
 .theme-dark .separator .line {
     -fx-background-color: #3a3a3a;
 }
+
+
+/* View menu alignment */
+.view-menu-checkbox {
+    -fx-min-width: 20px;
+    -fx-pref-width: 20px;
+    -fx-max-width: 20px;
+}
+.view-menu-radio {
+    -fx-min-width: 20px;
+    -fx-pref-width: 20px;
+    -fx-max-width: 20px;
+}
+.view-menu-icon {
+    -fx-min-width: 24px;
+    -fx-pref-width: 24px;
+    -fx-max-width: 24px;
+}
+
+
+/* See More menu spacing */
+.see-more-menuitem {
+    -fx-graphic-text-gap: 10px;
+}

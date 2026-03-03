@@ -174,8 +174,8 @@
                                 <ToggleGroup fx:id="viewModeToggleGroup"/>
                             </fx:define>
                             <items>
-                                <CustomMenuItem hideOnClick="true">
-                                    <content>
+                                <CustomMenuItem fx:id="viewExtraLargeIconsItem" hideOnClick="true" userData="EXTRA_LARGE_ICONS" onAction="#onViewModeRowAction">
+                                            <content>
                                         <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
                                             <RadioButton fx:id="viewExtraLargeIcons" toggleGroup="$viewModeToggleGroup"
                                                          userData="EXTRA_LARGE_ICONS" onAction="#onViewModeRadio"
@@ -186,8 +186,8 @@
                                     </content>
                                 </CustomMenuItem>
 
-                                <CustomMenuItem hideOnClick="true">
-                                    <content>
+                                <CustomMenuItem fx:id="viewLargeIconsItem" hideOnClick="true" userData="LARGE_ICONS" onAction="#onViewModeRowAction">
+                                            <content>
                                         <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
                                             <RadioButton fx:id="viewLargeIcons" toggleGroup="$viewModeToggleGroup"
                                                          userData="LARGE_ICONS" onAction="#onViewModeRadio"
@@ -198,7 +198,7 @@
                                     </content>
                                 </CustomMenuItem>
 
-                                <CustomMenuItem hideOnClick="true">
+                                <CustomMenuItem fx:id="viewMediumIconsItem" hideOnClick="true" userData="MEDIUM_ICONS" onAction="#onViewModeRowAction">
                                     <content>
                                         <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
                                             <RadioButton fx:id="viewMediumIcons" toggleGroup="$viewModeToggleGroup"
@@ -210,7 +210,7 @@
                                     </content>
                                 </CustomMenuItem>
 
-                                <CustomMenuItem hideOnClick="true">
+                                <CustomMenuItem fx:id="viewSmallIconsItem" hideOnClick="true" userData="SMALL_ICONS" onAction="#onViewModeRowAction">
                                     <content>
                                         <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
                                             <RadioButton fx:id="viewSmallIcons" toggleGroup="$viewModeToggleGroup"
@@ -222,7 +222,7 @@
                                     </content>
                                 </CustomMenuItem>
 
-                                <CustomMenuItem hideOnClick="true">
+                                <CustomMenuItem fx:id="viewListItem" hideOnClick="true" userData="LIST" onAction="#onViewModeRowAction">
                                     <content>
                                         <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
                                             <RadioButton fx:id="viewList" toggleGroup="$viewModeToggleGroup"
@@ -234,7 +234,7 @@
                                     </content>
                                 </CustomMenuItem>
 
-                                <CustomMenuItem hideOnClick="true">
+                                <CustomMenuItem fx:id="viewDetailsItem" hideOnClick="true" userData="DETAILS" onAction="#onViewModeRowAction">
                                     <content>
                                         <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
                                             <RadioButton fx:id="viewDetails" toggleGroup="$viewModeToggleGroup" selected="true"
@@ -246,7 +246,7 @@
                                     </content>
                                 </CustomMenuItem>
 
-                                <CustomMenuItem hideOnClick="true">
+                                <CustomMenuItem fx:id="viewTilesItem" hideOnClick="true" userData="TILES" onAction="#onViewModeRowAction">
                                     <content>
                                         <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
                                             <RadioButton fx:id="viewTiles" toggleGroup="$viewModeToggleGroup"
@@ -258,7 +258,7 @@
                                     </content>
                                 </CustomMenuItem>
 
-                                <CustomMenuItem hideOnClick="true">
+                                <CustomMenuItem fx:id="viewContentItem" hideOnClick="true" userData="CONTENT" onAction="#onViewModeRowAction">
                                     <content>
                                         <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
                                             <RadioButton fx:id="viewContent" toggleGroup="$viewModeToggleGroup"
@@ -269,8 +269,10 @@
                                         </HBox>
                                     </content>
                                 </CustomMenuItem>
+                                        <SeparatorMenuItem/>
 
-                                <SeparatorMenuItem/>
+                                        <!-- Sort submenu (native Menu skin already reserves a left "check" column; do NOT add an extra graphic indentation) -->
+<SeparatorMenuItem/>
 
                                 <CustomMenuItem hideOnClick="false">
                                     <content>
@@ -298,7 +300,14 @@
 
                                 <SeparatorMenuItem/>
 
-                                <Menu text="Show">
+                                <Menu fx:id="viewShowMenu" text="">
+                                    <graphic>
+                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                            <CheckBox opacity="0.0" disable="true" focusTraversable="false" styleClass="view-menu-checkbox"/>
+                                            <Label text="&#xE8A7;" opacity="0.0" styleClass="fluent-icon view-menu-icon"/>
+                                            <Label text="Show" styleClass="view-menu-text"/>
+                                        </HBox>
+                                    </graphic>
                                     <items>
                                         <CustomMenuItem hideOnClick="false">
                                             <content>
@@ -361,19 +370,32 @@
                                         </CustomMenuItem>
                                     
 
-<SeparatorMenuItem/>
-<MenuItem text="Operation History..." onAction="#onShowOperationHistory"/>
-<MenuItem text="Command Log..." onAction="#onShowCommandLog"/>
-</items>
-                                </Menu>
+                                        <SeparatorMenuItem/>
 
-                                <SeparatorMenuItem/>
-                                <CustomMenuItem hideOnClick="false">
-                                    <content>
-                                        <ToggleButton fx:id="themeToggle" text="Light" focusTraversable="false"/>
-                                    </content>
-                                </CustomMenuItem>
-                            </items>
+                                        <!-- Indented to align text with checkbox+icon rows above -->
+                                        <CustomMenuItem hideOnClick="true" onAction="#onShowOperationHistory">
+                                            <content>
+                                                <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                                    <RadioButton opacity="0.0" disable="true" focusTraversable="false" styleClass="view-menu-radio"/>
+                                                    <Label text="&#xE8A7;" opacity="0.0" styleClass="fluent-icon view-menu-icon"/>
+                                                    <Label text="Operation History..." styleClass="view-menu-text"/>
+                                                </HBox>
+                                            </content>
+                                        </CustomMenuItem>
+
+                                        <CustomMenuItem hideOnClick="true" onAction="#onShowCommandLog">
+                                            <content>
+                                                <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
+                                                    <RadioButton opacity="0.0" disable="true" focusTraversable="false" styleClass="view-menu-radio"/>
+                                                    <Label text="&#xE8A7;" opacity="0.0" styleClass="fluent-icon view-menu-icon"/>
+                                                    <Label text="Command Log..." styleClass="view-menu-text"/>
+                                                </HBox>
+                                            </content>
+                                        </CustomMenuItem>
+
+                                    </items>
+                                </Menu>
+</items>
                         </MenuButton>
 
                         <!-- See more menu -->
@@ -381,41 +403,41 @@
                             <tooltip><Tooltip text="See more"/></tooltip>
                             <graphic><Label text="&#xE712;" styleClass="fluent-icon"/></graphic>
                             <items>
-                                <MenuItem text="Undo">
-                                    <graphic><Label text="&#xE7A7;" styleClass="fluent-icon"/></graphic>
+                                <MenuItem text="Undo" styleClass="see-more-menuitem">
+	                                    <graphic><Label text="&#xE7A7;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
                                 </MenuItem>
 
                                 <SeparatorMenuItem/>
 
-                                <MenuItem text="Compress to ZIP file">
-                                    <graphic><Label text="&#xF012;" styleClass="fluent-icon"/></graphic>
+                                <MenuItem text="Compress to ZIP file" styleClass="see-more-menuitem">
+	                                    <graphic><Label text="&#xF012;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
                                 </MenuItem>
-                                <MenuItem text="Add to Favorites">
-                                    <graphic><Label text="&#xE734;" styleClass="fluent-icon"/></graphic>
+                                <MenuItem text="Add to Favorites" styleClass="see-more-menuitem">
+	                                    <graphic><Label text="&#xE734;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
                                 </MenuItem>
-                                <MenuItem text="Copy path">
-                                    <graphic><Label text="&#xE8C8;" styleClass="fluent-icon"/></graphic>
-                                </MenuItem>
-
-                                <SeparatorMenuItem/>
-
-                                <MenuItem text="Select all">
-                                    <graphic><Label text="&#xE8B3;" styleClass="fluent-icon"/></graphic>
-                                </MenuItem>
-                                <MenuItem text="Select none">
-                                    <graphic><Label text="&#xE8C5;" styleClass="fluent-icon"/></graphic>
-                                </MenuItem>
-                                <MenuItem text="Invert selection">
-                                    <graphic><Label text="&#xE8D4;" styleClass="fluent-icon"/></graphic>
+                                <MenuItem text="Copy path" styleClass="see-more-menuitem">
+	                                    <graphic><Label text="&#xE8C8;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
                                 </MenuItem>
 
                                 <SeparatorMenuItem/>
 
-                                <MenuItem text="Properties">
-                                    <graphic><Label text="&#xE946;" styleClass="fluent-icon"/></graphic>
+                                <MenuItem text="Select all" styleClass="see-more-menuitem">
+	                                    <graphic><Label text="&#xE8B3;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
                                 </MenuItem>
-                                <MenuItem text="Options:">
-                                    <graphic><Label text="&#xE713;" styleClass="fluent-icon"/></graphic>
+                                <MenuItem text="Select none" styleClass="see-more-menuitem">
+	                                    <graphic><Label text="&#xE8C5;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Invert selection" styleClass="see-more-menuitem">
+	                                    <graphic><Label text="&#xE8D4;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
+                                </MenuItem>
+
+                                <SeparatorMenuItem/>
+
+                                <MenuItem text="Properties" styleClass="see-more-menuitem">
+	                                    <graphic><Label text="&#xE946;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
+                                </MenuItem>
+                                <MenuItem text="Options:" styleClass="see-more-menuitem">
+	                                    <graphic><Label text="&#xE713;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
                                 </MenuItem>
                             </items>
                         </MenuButton>
@@ -434,10 +456,10 @@
 <!-- Details (right-most in command bar) -->
                         <ToggleButton fx:id="detailsToggle"
                                       text="Details"
-                                      selected="true"
+                                      selected="false"
                                       focusTraversable="false"
                                       onAction="#onDetailsToggle">
-                            <tooltip><Tooltip text="Details view"/></tooltip>
+                            <tooltip><Tooltip text="Show/Hide Details pane"/></tooltip>
                             <graphic>
                                 <Label text="&#xE8A7;" styleClass="fluent-icon"/>
                             </graphic>
@@ -476,11 +498,15 @@
                     </contextMenu>
                 </TreeView>
 
-                <!-- Right: content and side panes -->
+                <!-- Right: content host + collapsible Details split (right defaults to 0px width) -->
                 <BorderPane fx:id="contentPane">
 
                     <center>
-                        <StackPane fx:id="viewHost">
+                        <SplitPane fx:id="contentSplitPane" dividerPositions="1.0">
+
+                            <items>
+                                <!-- Left: main views (table / icons) -->
+                                <StackPane fx:id="viewHost">
 
                             <!-- Details (table) view -->
                             <TableView fx:id="fileTable" prefWidth="Infinity" prefHeight="Infinity" maxWidth="Infinity" maxHeight="Infinity">
@@ -512,16 +538,14 @@
                                     </FlowPane>
                                 </content>
                             </ScrollPane>
+                                </StackPane>
 
-                        </StackPane>
-                    </center>
-
-                    <!-- Side panes (preview + details) -->
-                    <right>
-                        <VBox fx:id="sidePane" prefWidth="320" spacing="10" alignment="TOP_LEFT">
-                            <padding>
-                                <Insets top="10" right="10" bottom="10" left="10"/>
-                            </padding>
+                                <!-- Right: side panes container (Details toggle controls this split item) -->
+                                <VBox fx:id="sidePane" minWidth="0.0" prefWidth="320" spacing="10" alignment="TOP_LEFT"
+                                      visible="false" managed="false">
+                                    <padding>
+                                        <Insets top="10" right="10" bottom="10" left="10"/>
+                                    </padding>
 
                             <!-- Preview pane (initially hidden) -->
                             <VBox fx:id="previewBox" spacing="6" visible="false" managed="false" styleClass="fluent-preview-box">
@@ -546,8 +570,11 @@
                                 </children>
                             </VBox>
 
-                        </VBox>
-                    </right>
+                                </VBox>
+                            </items>
+
+                        </SplitPane>
+                    </center>
 
                 </BorderPane>
             </items>
