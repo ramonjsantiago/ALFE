@@ -1,7 +1,9 @@
 /* ui_fixes.css (DARK LITERAL SAFE) */
 
 .tree-view-fixed .tree-cell {
-    -fx-padding: 0 8 0 8;
+    -fx-padding: 4 8 4 8;
+    -fx-alignment: CENTER-LEFT;
+    -fx-cell-size: 39px;
 }
 
 /* Ensure TreeCell text is readable */
@@ -37,8 +39,8 @@
     -fx-background-color: derive(#1c2027, 14%);
 }
 
-/* Table header hover */
+/* Table header hover: flatter, lower-contrast Win11-like treatment */
 .table-view .column-header:hover,
 .table-view .column-header-background .filler:hover {
-    -fx-background-color: derive(#1c2027, 10%);
+    -fx-background-color: derive(#181c22, 4%);
 }

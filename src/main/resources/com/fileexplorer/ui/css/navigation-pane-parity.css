@@ -1,0 +1,141 @@
+/* Phase 4D - Navigation pane fidelity */
+
+.navigation-pane-shell {
+    -fx-padding: 8 6 8 6;
+}
+
+.theme-dark .navigation-pane-shell {
+    -fx-background-color: linear-gradient(to bottom, rgba(20,24,31,0.98), rgba(15,19,25,0.98));
+    -fx-border-color: transparent rgba(255,255,255,0.065) transparent transparent;
+    -fx-border-width: 0 1 0 0;
+}
+
+.theme-light .navigation-pane-shell {
+    -fx-background-color: linear-gradient(to bottom, #f8f8f8, #f4f4f4);
+    -fx-border-color: transparent rgba(0,0,0,0.08) transparent transparent;
+    -fx-border-width: 0 1 0 0;
+}
+
+.explorer-main-split {
+    -fx-background-color: transparent;
+}
+
+.explorer-main-split > .split-pane-divider {
+    -fx-padding: 0 1 0 0;
+    -fx-background-color: transparent;
+}
+
+.theme-dark .explorer-main-split > .split-pane-divider:hover {
+    -fx-background-color: rgba(255,255,255,0.05);
+}
+
+.theme-light .explorer-main-split > .split-pane-divider:hover {
+    -fx-background-color: rgba(0,0,0,0.05);
+}
+
+.explorer-navigation-pane {
+    -fx-background-color: transparent;
+    -fx-control-inner-background: transparent;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+    -fx-indent: 14px;
+    -fx-fixed-cell-size: 40px;
+}
+
+.explorer-navigation-pane .virtual-flow,
+.explorer-navigation-pane .clipped-container,
+.explorer-navigation-pane .sheet,
+.explorer-navigation-pane .viewport,
+.explorer-navigation-pane > .virtual-flow > .corner {
+    -fx-background-color: transparent;
+}
+
+.explorer-navigation-pane .scroll-bar:vertical,
+.explorer-navigation-pane .scroll-bar:horizontal {
+    -fx-background-color: transparent;
+}
+
+.explorer-navigation-pane .scroll-bar .track {
+    -fx-background-color: transparent;
+}
+
+.explorer-navigation-pane .scroll-bar .thumb {
+    -fx-background-radius: 999;
+}
+
+.theme-dark .explorer-navigation-pane .scroll-bar .thumb {
+    -fx-background-color: rgba(255,255,255,0.16);
+}
+
+.theme-light .explorer-navigation-pane .scroll-bar .thumb {
+    -fx-background-color: rgba(0,0,0,0.14);
+}
+
+.explorer-navigation-pane .tree-cell,
+.explorer-navigation-pane .tree-cell.explorer-nav-cell {
+    -fx-background-insets: 2 4 2 4;
+    -fx-background-radius: 8;
+    -fx-padding: 5 10 5 8;
+    -fx-font-size: 13px;
+    -fx-graphic-text-gap: 8px;
+}
+
+.explorer-navigation-pane .tree-cell:top-level,
+.explorer-navigation-pane .tree-cell:root-drive,
+.explorer-navigation-pane .tree-cell:special-folder {
+    -fx-font-weight: 600;
+}
+
+.theme-dark .explorer-navigation-pane .tree-cell {
+    -fx-text-fill: #eef1f5;
+}
+
+.theme-light .explorer-navigation-pane .tree-cell {
+    -fx-text-fill: #1b1b1b;
+}
+
+.theme-dark .explorer-navigation-pane .tree-cell:filled:hover {
+    -fx-background-color: rgba(255,255,255,0.055);
+}
+
+.theme-light .explorer-navigation-pane .tree-cell:filled:hover {
+    -fx-background-color: rgba(0,0,0,0.05);
+}
+
+.theme-dark .explorer-navigation-pane .tree-cell:selected {
+    -fx-background-color: rgba(255,255,255,0.085);
+    -fx-text-fill: #ffffff;
+}
+
+.theme-dark .explorer-navigation-pane:focused .tree-cell:selected {
+    -fx-background-color: rgba(113,162,255,0.26);
+}
+
+.theme-dark .explorer-navigation-pane:focused .tree-cell:selected:hover {
+    -fx-background-color: rgba(113,162,255,0.30);
+}
+
+.theme-light .explorer-navigation-pane .tree-cell:selected {
+    -fx-background-color: rgba(33,99,214,0.10);
+    -fx-text-fill: #101010;
+}
+
+.theme-light .explorer-navigation-pane:focused .tree-cell:selected {
+    -fx-background-color: rgba(33,99,214,0.15);
+}
+
+.explorer-navigation-pane .tree-cell:leaf-item > .tree-disclosure-node {
+    -fx-opacity: 0.0;
+}
+
+.explorer-navigation-pane .tree-cell > .tree-disclosure-node {
+    -fx-padding: 0 8 0 0;
+}
+
+.explorer-navigation-pane .tree-cell > .tree-disclosure-node .arrow {
+    -fx-background-color: transparent;
+}
+
+.explorer-navigation-pane .tree-cell .text {
+    -fx-font-smoothing-type: lcd;
+}

@@ -18,6 +18,9 @@ import java.util.logging.Logger;
 import java.net.MalformedURLException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Formatter;
 import java.util.logging.Handler;
@@ -32,12 +35,19 @@ import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.VBox;
 import javafx.geometry.Pos;
 import javafx.geometry.Insets;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
+import javafx.scene.shape.Rectangle;
+import javafx.scene.paint.Color;
+import javafx.scene.text.Text;
 import javafx.scene.text.Font;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
@@ -114,6 +124,25 @@ private static final Set<String> LOGGED_RESOURCES = ConcurrentHashMap.newKeySet(
     private static volatile boolean fontsBootstrapped;
     private static volatile String resolvedUiFamily = SYSTEM_FONT_FAMILY_KEYWORD;
     private static volatile String resolvedSystemFamily = SYSTEM_FONT_FAMILY_KEYWORD;
+
+    private enum BootstrapState {
+        NOT_STARTED,
+        SHELL_VISIBLE,
+        MAIN_FXML_LOADED,
+        MAIN_UI_ATTACHED,
+        STARTUP_COMPLETE,
+        FAILED,
+        DISPOSED
+    }
+
+    private static final String STAGE_BOOTSTRAP_STATE_KEY = "fileexplorer.bootstrap.state";
+    private static final String STAGE_BOOTSTRAP_ID_KEY = "fileexplorer.bootstrap.id";
+    private static final String STAGE_BOOTSTRAP_REASON_KEY = "fileexplorer.bootstrap.reason";
+    private static final String STAGE_BOOTSTRAP_KIND_KEY = "fileexplorer.bootstrap.kind";
+    private static final String STAGE_INITIAL_FOLDER_OPENED_KEY = "fileexplorer.bootstrap.initialFolderOpened";
+    private static final AtomicLong BOOTSTRAP_SEQUENCE = new AtomicLong(0L);
+    private static final AtomicBoolean PRIMARY_STAGE_BOOTSTRAPPED = new AtomicBoolean(false);
+    private static final AtomicReference<Stage> PRIMARY_STAGE_REF = new AtomicReference<>();
 
 /**
  * isSafeMode.
@@ -234,7 +263,7 @@ final Path initialFolder;
 
 // Minimal stage content is built inside configureExplorerStage (loading scene),
 // which calls stage.show() immediately.
-configureExplorerStage(stage, initialFolder, /*darkHint*/ true);
+configureExplorerStage(stage, initialFolder, /*darkHint*/ true, "app.start.primary");
 
 // Defer heavier/optional startup work to avoid impacting first paint.
 Platform.runLater(() -> {
@@ -330,7 +359,7 @@ StartupTrace.mark("MainApp.start exit");
         ThemeService themeService = new ThemeService();
         themeService.setDarkPreferred(true);
         boolean dark = themeService.isDarkPreferred();
-        configureExplorerStage(stage, initialFolder, dark);
+        configureExplorerStage(stage, initialFolder, dark, "external.unspecified");
         LogSupport.enter(LOG, "end");
     }
 
@@ -342,51 +371,122 @@ StartupTrace.mark("MainApp.start exit");
  * @param dark TODO
  */
     public static void configureExplorerStage(Stage stage, Path initialFolder, boolean dark) throws IOException {
+        configureExplorerStage(stage, initialFolder, dark, "external.unspecified");
+    }
+
+    public static void configureExplorerStage(Stage stage, Path initialFolder, String bootstrapReason) throws IOException {
+        ThemeService themeService = new ThemeService();
+        themeService.setDarkPreferred(true);
+        boolean dark = themeService.isDarkPreferred();
+        configureExplorerStage(stage, initialFolder, dark, bootstrapReason);
+    }
+
+    public static void configureExplorerStage(Stage stage, Path initialFolder, boolean dark, String bootstrapReason) throws IOException {
 
 if (stage == null) {
     throw new IllegalArgumentException("stage must not be null");
 }
+
+final String normalizedReason = normalizeBootstrapReason(bootstrapReason);
+logBootstrapRequest(stage, initialFolder, normalizedReason);
+if (!claimBootstrap(stage, normalizedReason)) {
+    StartupTrace.mark("configureExplorerStage suppressed reason=" + normalizedReason + " caller=" + summarizeBootstrapCaller());
+    return;
+}
+
+StartupTrace.mark("configureExplorerStage enter");
 
 // Build a visible window immediately (fast) and defer FXML/controller wiring by a single pulse.
 // This prevents "nothing appears" when FXMLLoader/controller initialization takes time.
 stage.setTitle("FileExplorer");
 
         // App icon is optional; defer until after first paint.
-stage.setMinWidth(DEFAULT_MIN_WIDTH);
-stage.setMinHeight(DEFAULT_MIN_HEIGHT);
-
-// Ultra-light loading UI (no Controls) to avoid Modena/CSS/skin initialization before first paint.
-javafx.scene.text.Text lbl = new javafx.scene.text.Text("Loading…");
-lbl.setStyle("-fx-font-size: 16px;");
-
-javafx.scene.shape.Rectangle bg = new javafx.scene.shape.Rectangle();
-bg.setManaged(false);
-bg.setFill(javafx.scene.paint.Color.web(dark ? "#1e1e1e" : "#ffffff"));
-
-javafx.scene.layout.StackPane loadingRoot = new javafx.scene.layout.StackPane(bg, lbl);
-loadingRoot.setPadding(new Insets(24));
-loadingRoot.widthProperty().addListener((obs, ov, nv) -> bg.setWidth(nv.doubleValue()));
-loadingRoot.heightProperty().addListener((obs, ov, nv) -> bg.setHeight(nv.doubleValue()));
-
-Scene loadingScene = new Scene(loadingRoot, DEFAULT_WIDTH, DEFAULT_HEIGHT);
-loadingScene.setFill(javafx.scene.paint.Color.TRANSPARENT);
+// Defer min-size constraints until after the first visible frame.
+// This can shave time off the initial stage.show() on some platforms.
 
 
-// User-agent overrides are optional; we keep the default MODENA UA stylesheet.
+// Phase 4A.3+: show an ultra-minimal scene FIRST, then install the shell root on the next pulse.
+// This reduces work inside stage.show() and improves time-to-visible.
+final StackPane preShowRoot = new StackPane();
+preShowRoot.setStyle("-fx-background-color: #121212;");
+final Scene shellScene = new Scene(preShowRoot, DEFAULT_WIDTH, DEFAULT_HEIGHT);
+stage.setScene(shellScene);
+StartupTrace.mark("stage.setScene (shell scene)");
+if (!stage.isShowing()) {
+    stage.show();
+}
+StartupTrace.mark("stage.show (shell scene)");
+markBootstrapState(stage, BootstrapState.SHELL_VISIBLE);
 
-stage.setScene(loadingScene);
-stage.show();
-        StartupTrace.mark("stage.show (loading scene)");
-        Platform.runLater(() -> {
-            try {
-                stage.getIcons().add(new Image(MainApp.class.getResourceAsStream("/icons/app.png")));
-            } catch (Exception ignored) {
+// Install the richer shell placeholder AFTER the first window is visible.
+Platform.runLater(() -> {
+    try {
+        StartupTrace.mark("buildShellRoot begin");
+        final Parent shellRoot = buildShellRoot();
+        StartupTrace.mark("buildShellRoot end");
+        shellScene.setRoot(shellRoot);
+        StartupTrace.mark("shellScene.setRoot (shell root)");
+
+        // Apply min-size constraints after first paint.
+        try {
+            stage.setMinWidth(DEFAULT_MIN_WIDTH);
+            stage.setMinHeight(DEFAULT_MIN_HEIGHT);
+        } catch (Throwable ignored2) {
+        }
+    } catch (Throwable ignored) {
+    }
+});
+
+// Phase 4A.3: first user input signal (useful for real TTI measurement).
+try {
+    final java.util.concurrent.atomic.AtomicBoolean firstInput = new java.util.concurrent.atomic.AtomicBoolean(false);
+    final java.util.concurrent.atomic.AtomicReference<javafx.event.EventHandler<javafx.scene.input.InputEvent>> hRef =
+            new java.util.concurrent.atomic.AtomicReference<>();
+    javafx.event.EventHandler<javafx.scene.input.InputEvent> h = e -> {
+        if (firstInput.compareAndSet(false, true)) {
+            StartupTrace.mark("first input event (shell)");
+            javafx.event.EventHandler<javafx.scene.input.InputEvent> hh = hRef.get();
+            if (hh != null) {
+                shellScene.removeEventFilter(javafx.scene.input.InputEvent.ANY, hh);
             }
-        });
+        }
+    };
+    hRef.set(h);
+    shellScene.addEventFilter(javafx.scene.input.InputEvent.ANY, h);
+} catch (Throwable ignored) {
+}
 
-        // Approximate first paint: first FX pulse after stage.show
-        Platform.runLater(() -> StartupTrace.mark("FX pulse after show (runLater1)"));
+// App icon is optional; defer until after first paint.
+Platform.runLater(() -> {
+    try {
+        stage.getIcons().add(new Image(MainApp.class.getResourceAsStream("/icons/app.png")));
+    } catch (Exception ignored) {
+    }
+});
 
+// Approximate first paint: first FX pulse after stage.show
+Platform.runLater(() -> StartupTrace.mark("FX pulse after show (runLater1)"));
+
+// Phase 4A.2: FX-thread stall detector (opt-in).
+final java.util.concurrent.atomic.AtomicReference<com.fileexplorer.perf.FxThreadStallDetector> fxStallDetectorRef = new java.util.concurrent.atomic.AtomicReference<>();
+final java.util.concurrent.atomic.AtomicReference<com.fileexplorer.perf.FxHeartbeat> fxHeartbeatRef = new java.util.concurrent.atomic.AtomicReference<>();
+final boolean fxStallEnabled = Boolean.getBoolean("fileexplorer.perf.fxStallDetector");
+if (fxStallEnabled) {
+    try {
+        long pollMs = Long.parseLong(System.getProperty("fileexplorer.perf.fxStallPollMs", "10"));
+        long stallMs = Long.parseLong(System.getProperty("fileexplorer.perf.fxStallMs", "100"));
+        com.fileexplorer.perf.FxThreadStallDetector det =
+                new com.fileexplorer.perf.FxThreadStallDetector(Thread.currentThread(),
+                        java.time.Duration.ofMillis(pollMs),
+                        java.time.Duration.ofMillis(stallMs));
+        com.fileexplorer.perf.FxHeartbeat hb = new com.fileexplorer.perf.FxHeartbeat(det);
+        det.start();
+        hb.start();
+        fxStallDetectorRef.set(det);
+        fxHeartbeatRef.set(hb);
+    } catch (Throwable ignored) {
+    }
+}
 
 // Phase 3.4: allow deterministic controller teardown on window close.
 final AtomicReference<MainController> mainControllerRef = new AtomicReference<>();
@@ -394,6 +494,16 @@ AtomicReference<ExplorerContext> contextRef = new AtomicReference<>();
 AtomicReference<com.fileexplorer.util.HeapPressureService> heapPressureRef = new AtomicReference<>();
 AtomicReference<com.fileexplorer.util.SoakNavigator> soakRef = new AtomicReference<>();
 stage.setOnCloseRequest(e -> {
+    markBootstrapState(stage, BootstrapState.DISPOSED);
+    com.fileexplorer.perf.FxHeartbeat hb = fxHeartbeatRef.get();
+    if (hb != null) {
+        try { hb.stop(); } catch (Exception ignored) {}
+    }
+    com.fileexplorer.perf.FxThreadStallDetector det = fxStallDetectorRef.get();
+    if (det != null) {
+        try { det.stop(); } catch (Exception ignored) {}
+    }
+
     MainController c = mainControllerRef.get();
     if (c != null) {
         try {
@@ -423,11 +533,16 @@ stage.setOnCloseRequest(e -> {
     try {
         StartupTrace.mark("begin FXML load");
             java.net.URL fxmlUrl = MainApp.class.getResource("/com/fileexplorer/ui/layout/MainLayout.fxml");
+        StartupTrace.mark("FXML url resolved");
         if (fxmlUrl == null) {
             throw new IllegalStateException("Missing FXML resource: /com/fileexplorer/ui/layout/MainLayout.fxml");
         }
+        StartupTrace.mark("FXMLLoader created");
         FXMLLoader loader = new FXMLLoader(fxmlUrl);
+        StartupTrace.mark("FXML load enter");
         Parent root = loader.load();
+        StartupTrace.mark("FXML load exit");
+        markBootstrapState(stage, BootstrapState.MAIN_FXML_LOADED);
 
         // Phase 3.4.4: MainApp owns the ExplorerContext (single instance).
         ThemeService themeService = new ThemeService();
@@ -440,6 +555,20 @@ stage.setOnCloseRequest(e -> {
         try {
             darkActual = themeService.isDarkPreferred();
         } catch (Exception ignored) {
+        }
+
+        // Phase 4A.3: ensure root has theme classes early so deferred CSS can apply predictably.
+        try {
+            if (root != null) {
+                java.util.List<String> sc = root.getStyleClass();
+                if (!sc.contains("explorer-root")) {
+                    sc.add("explorer-root");
+                }
+                sc.remove("theme-dark");
+                sc.remove("theme-light");
+                sc.add(darkActual ? "theme-dark" : "theme-light");
+            }
+        } catch (Throwable ignored) {
         }
 
         FileMetadataService fileMetadataService = new FileMetadataService();
@@ -456,33 +585,68 @@ stage.setOnCloseRequest(e -> {
         contextRef.set(context);
         ZoomRoot zoomRoot = new ZoomRoot(root);
 
-        // Phase 4C.1: wrap UI root in a StackPane so we can host an optional perf HUD overlay.
-        StackPane overlayRoot = new StackPane(zoomRoot.getRoot());
-        Scene scene = new Scene(overlayRoot, DEFAULT_WIDTH, DEFAULT_HEIGHT);
 
-        addStylesheet(scene, darkActual ? "/com/fileexplorer/ui/css/explorer-dark-win.css" : "/com/fileexplorer/ui/css/explorer-light-win.css");
-        addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-win.css");
-        addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-table.css");
-        addStylesheet(scene, "/com/fileexplorer/ui/css/ui_fixes.css");
-        addStylesheet(scene, darkActual ? "/com/fileexplorer/ui/css/fluent-dark.css" : "/com/fileexplorer/ui/css/fluent-light.css");
-        addStylesheet(scene, "/com/fileexplorer/ui/css/fluent-explorer.css");
-        addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-override-everything.css");
-        addStylesheet(scene, "/com/fileexplorer/ui/css/progress_pane.css");
+// Phase 4C.1: wrap UI root in a StackPane so we can host an optional perf HUD overlay.
+StackPane overlayRoot = new StackPane(zoomRoot.getRoot());
+	Scene scene = shellScene;
+
+	// Phase 4A.2: variables captured by deferred lambdas must be effectively final.
+	final Scene sceneForCss = scene;
+	final boolean darkActualForCss = darkActual;
+
+// Phase 4A.2 / Phase 4M: centralize post-scene startup scheduling (CSS staging, idle work budget, bounded deferral).
+final com.fileexplorer.util.StartupWorkQueue workQueue = new com.fileexplorer.util.StartupWorkQueue();
+workQueue.attachToScene(scene);
+
+// Swap root in-place (single Scene) to avoid Scene churn during startup.
+scene.setRoot(overlayRoot);
+StartupTrace.mark("shellScene.setRoot (main root)");
+markBootstrapState(stage, BootstrapState.MAIN_UI_ATTACHED);
+
+// Mark UI ready once the main root is installed; critical startup work can now drain promptly.
+workQueue.markUiReady();
+
+// Phase 4M: optionally defer stylesheet attachment, but keep the critical layer on a bounded next-pulse queue
+// so it does not drift behind user interaction by seconds.
+final boolean deferCss = Boolean.parseBoolean(System.getProperty("fileexplorer.startup.deferCss", "true"));
+if (!deferCss) {
+    StartupTrace.mark("stylesheets attach (immediate) begin");
+    attachCriticalStylesheets(scene, darkActual);
+    attachDeferredStylesheets(scene);
+    StartupTrace.mark("stylesheets attach (immediate) end");
+} else {
+    workQueue.runCritical(() -> {
+        StartupTrace.mark("stylesheets attach (critical deferred) begin");
+        attachCriticalStylesheets(sceneForCss, darkActualForCss);
+        StartupTrace.mark("stylesheets attach (critical deferred) end");
+    });
+
+    workQueue.runIdle(() -> {
+        StartupTrace.mark("stylesheets attach (idle deferred) begin");
+        attachDeferredStylesheets(sceneForCss);
+        StartupTrace.mark("stylesheets attach (idle deferred) end");
+    });
+}
 
         // Wire controller
         MainController controller = loader.getController();
+        ProgressPaneController progressPaneController = null;
         if (controller != null) {
             mainControllerRef.set(controller);
             // Phase 3.4.4: Attach shared ExplorerContext before any scene-dependent work.
+            StartupTrace.mark("controller.attach enter");
             controller.attach(context);
+            StartupTrace.mark("controller.attach exit");
 
             // Phase 3.6.2: attach included controllers (e.g., ProgressPane)
             Object ppcObj = loader.getNamespace().get("progressPaneController");
-            if (ppcObj instanceof ProgressPaneController ppc) {
-                ppc.attach(context);
+            progressPaneController = ppcObj instanceof ProgressPaneController ppc ? ppc : null;
+            if (progressPaneController != null) {
+                progressPaneController.attach(context);
             }
 
             // Keep scene wiring minimal for fast first paint.
+            StartupTrace.mark("controller.setScene");
             controller.setScene(scene);
         }
 
@@ -512,19 +676,13 @@ stage.setOnCloseRequest(e -> {
             StartupTrace.mark("Perf HUD disabled");
         }
 
-        stage.setScene(scene);
+        // Swap root in-place (single Scene) to avoid Scene churn during startup.
+        StartupTrace.mark("shellScene.setRoot (main UI)");
 
-        StartupTrace.mark("stage.setScene (main UI)");
-
-        // Phase 4A.2: centralize post-scene startup scheduling.
-        final com.fileexplorer.util.StartupWorkQueue workQueue = new com.fileexplorer.util.StartupWorkQueue();
-        workQueue.attachToScene(scene);
-        workQueue.markUiReady();
-
-        // Enable thumbnail decoding after first full UI render (avoid startup slowdown).
-        workQueue.runAfterUiReady(() -> Platform.runLater(() ->
+        // Phase 4M: enable thumbnail decoding on the idle queue instead of immediately after root swap.
+        workQueue.runIdle(() ->
                 com.fileexplorer.service.icon.AsyncThumbnailService.getInstance().setEnabled(true)
-        ));
+        );
 
         // Phase 4C.1: heap pressure monitor (best-effort) to trim caches and prevent long-run creep.
         final com.fileexplorer.util.HeapPressureService heapPressure = new com.fileexplorer.util.HeapPressureService(
@@ -535,21 +693,20 @@ stage.setOnCloseRequest(e -> {
                     try { com.fileexplorer.service.icon.AsyncThumbnailService.getInstance().trimCacheUnderPressure(); } catch (Throwable ignored) {}
                 }
         );
-        workQueue.runAfterUiReady(() -> {
+        workQueue.runIdle(() -> {
             try { heapPressure.start(); } catch (Throwable ignored) {}
         });
         // Ensure monitor stops on close (integrated into the existing close handler).
         heapPressureRef.set(heapPressure);
 
-        // Open the initial folder (defaults to user.home) right after the first UI render.
-        // This keeps startup paint fast while ensuring the user lands in a useful location.
-        if (controller != null && initialFolder != null) {
-            workQueue.runAfterUiReady(() -> Platform.runLater(() -> controller.openInitialFolder(initialFolder)));
+        // Open the initial folder on the critical queue so the shell-to-content handoff is predictable.
+        if (controller != null && initialFolder != null && claimInitialFolderOpen(stage)) {
+            workQueue.runCritical(() -> controller.openInitialFolder(initialFolder));
         }
 
         // Phase 4C.1: optional successive-folder navigation soak runner.
         if (controller != null && Boolean.getBoolean("fileexplorer.soak.enabled")) {
-            workQueue.runAfterUiReady(() -> {
+            workQueue.runIdle(() -> {
                 try {
                     com.fileexplorer.util.SoakNavigator sn = new com.fileexplorer.util.SoakNavigator(controller);
                     soakRef.set(sn);
@@ -558,60 +715,221 @@ stage.setOnCloseRequest(e -> {
             });
         }
 
-        // Defer heavy startup tasks until the user is idle (does not block interaction).
-        workQueue.runIdle(() -> {
+        // Phase 4M: run heavy startup maintenance off the FX thread, and let the idle queue enforce a maximum deferral.
+        final ProgressPaneController progressPaneControllerForStartup = progressPaneController;
+        workQueue.runIdle(() -> runDeferredHeavyStartupTasksAsync(stage, context, controller, progressPaneControllerForStartup));
+    } catch (Exception ex) {
+        markBootstrapState(stage, BootstrapState.FAILED);
+        // Keep the loading scene visible and surface the error.
+        ex.printStackTrace();
+        try {
+            javafx.scene.Node n = shellScene.lookup("#shellStatus");
+            if (n instanceof javafx.scene.text.Text t) {
+                t.setText("Failed to load UI (see console). ");
+            }
+        } catch (Exception ignored) {}
+}
+}));
+    }
+
+    private static String normalizeBootstrapReason(String bootstrapReason) {
+        if (bootstrapReason == null) {
+            return "external.unspecified";
+        }
+        String normalized = bootstrapReason.trim();
+        return normalized.isEmpty() ? "external.unspecified" : normalized;
+    }
+
+    private static void logBootstrapRequest(Stage stage, Path initialFolder, String bootstrapReason) {
+        String folderText = initialFolder != null ? initialFolder.toString() : "<null>";
+        StartupTrace.mark("configureExplorerStage request reason=" + bootstrapReason + " folder=" + folderText + " caller=" + summarizeBootstrapCaller());
+    }
+
+    private static boolean claimBootstrap(Stage stage, String bootstrapReason) {
+        BootstrapState existingState = getBootstrapState(stage);
+        if (existingState != BootstrapState.NOT_STARTED) {
+            return false;
+        }
+
+        Stage primaryStage = PRIMARY_STAGE_REF.get();
+        if (primaryStage == null) {
+            PRIMARY_STAGE_REF.compareAndSet(null, stage);
+            primaryStage = PRIMARY_STAGE_REF.get();
+        }
+
+        final boolean isPrimaryStage = primaryStage == stage;
+        final String bootstrapKind;
+        if (isPrimaryStage) {
+            if (!PRIMARY_STAGE_BOOTSTRAPPED.compareAndSet(false, true)) {
+                return false;
+            }
+            bootstrapKind = "primary";
+        } else if (isExplicitSecondaryBootstrapReason(bootstrapReason)) {
+            bootstrapKind = "secondary";
+        } else {
+            return false;
+        }
+
+        stage.getProperties().put(STAGE_BOOTSTRAP_ID_KEY, Long.valueOf(BOOTSTRAP_SEQUENCE.incrementAndGet()));
+        stage.getProperties().put(STAGE_BOOTSTRAP_REASON_KEY, bootstrapReason);
+        stage.getProperties().put(STAGE_BOOTSTRAP_KIND_KEY, bootstrapKind);
+        markBootstrapState(stage, BootstrapState.NOT_STARTED);
+        return true;
+    }
+
+    private static boolean isExplicitSecondaryBootstrapReason(String bootstrapReason) {
+        return bootstrapReason.startsWith("user.")
+                || bootstrapReason.startsWith("window.")
+                || bootstrapReason.startsWith("breadcrumb.")
+                || bootstrapReason.startsWith("controller.")
+                || bootstrapReason.startsWith("ui.");
+    }
+
+    private static BootstrapState getBootstrapState(Stage stage) {
+        if (stage == null) {
+            return BootstrapState.NOT_STARTED;
+        }
+        Object value = stage.getProperties().get(STAGE_BOOTSTRAP_STATE_KEY);
+        if (value instanceof BootstrapState state) {
+            return state;
+        }
+        return BootstrapState.NOT_STARTED;
+    }
+
+    private static void markBootstrapState(Stage stage, BootstrapState state) {
+        if (stage != null && state != null) {
+            stage.getProperties().put(STAGE_BOOTSTRAP_STATE_KEY, state);
+        }
+    }
+
+    private static boolean claimInitialFolderOpen(Stage stage) {
+        if (stage == null) {
+            return true;
+        }
+        Object existing = stage.getProperties().get(STAGE_INITIAL_FOLDER_OPENED_KEY);
+        if (Boolean.TRUE.equals(existing)) {
+            StartupTrace.mark("initial directory load suppressed duplicate");
+            return false;
+        }
+        stage.getProperties().put(STAGE_INITIAL_FOLDER_OPENED_KEY, Boolean.TRUE);
+        return true;
+    }
+
+    private static String summarizeBootstrapCaller() {
+        StackTraceElement[] trace = Thread.currentThread().getStackTrace();
+        for (StackTraceElement element : trace) {
+            if (element == null) {
+                continue;
+            }
+            String className = element.getClassName();
+            if (className == null
+                    || className.equals(Thread.class.getName())
+                    || className.equals(MainApp.class.getName())
+                    || className.startsWith("javafx.application.Platform")
+                    || className.startsWith("com.sun.javafx")
+                    || className.startsWith("jdk.internal.reflect")
+                    || className.startsWith("java.lang.reflect")) {
+                continue;
+            }
+            return className + "#" + element.getMethodName() + ":" + element.getLineNumber();
+        }
+        return "unknown";
+    }
+
+
+
+    private static void attachCriticalStylesheets(Scene scene, boolean darkActual) {
+        addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-base.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-win11.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-fluent.css");
+        addStylesheet(scene, darkActual ? "/com/fileexplorer/ui/css/explorer-dark-win.css" : "/com/fileexplorer/ui/css/explorer-light-win.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-win.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/ui_fixes.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/fluent-explorer.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-override-everything.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/window-chrome-parity.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/address-command-parity.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/navigation-pane-parity.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/selection-state-tokens.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/details-view-parity.css");
+    }
+
+    private static void attachDeferredStylesheets(Scene scene) {
+        addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-table.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/progress_pane.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/side-pane-parity.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/context-menu-parity.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/home-tabs-parity.css");
+    }
+
+    private static void runDeferredHeavyStartupTasksAsync(
+            Stage stage,
+            ExplorerContext context,
+            MainController controller,
+            ProgressPaneController progressPaneController
+    ) {
+        CompletableFuture.runAsync(() -> {
+            StartupTrace.mark("deferred heavy startup background begin");
+
+            String selfCheckReport = null;
+            Integer recoveredOps = null;
+
             try {
-                Object ppcObj2 = loader.getNamespace().get("progressPaneController");
-                if (ppcObj2 instanceof ProgressPaneController ppc2) {
-                    // Phase 6.4.0: Startup self-check + quarantine (best-effort).
+                if (progressPaneController != null) {
                     try {
-                        StartupSelfCheckService.SelfCheckResult r = new StartupSelfCheckService().run(context);
-                        if (r != null && r.hadIssues()) {
-                            Platform.runLater(() -> showSelfCheckDialog(r.report()));
+                        StartupSelfCheckService.SelfCheckResult result = new StartupSelfCheckService().run(context);
+                        if (result != null && result.hadIssues()) {
+                            selfCheckReport = result.report();
                         }
                     } catch (Exception ignored) {
                     }
 
-                    // Phase 3.6.7: restore any persisted operations from prior session.
-                    // Phase 6.4.0: Safe mode disables auto-recovery re-enqueue.
                     if (!isSafeMode()) {
-                        int recovered = context.operationQueueService().restoreSavedQueue();
-                        if (recovered > 0) {
-                            Platform.runLater(() -> showRecoveredOpsDialog(context, recovered));
+                        try {
+                            int recovered = context.operationQueueService().restoreSavedQueue();
+                            if (recovered > 0) {
+                                recoveredOps = recovered;
+                            }
+                        } catch (Exception ignored) {
                         }
                     }
 
-                    // Phase 3.6.10: scan for orphan atomic-copy temp files (best-effort).
-                    context.operationQueueService().scanForOrphanTempFiles();
-
-                    // Phase 4.5.0: scan for incomplete transaction journals (crash recovery).
-                    Platform.runLater(() -> showJournalRecoveryDialog(context));
-                }
-
-                if (controller != null && Boolean.getBoolean("fileexplorer.safeMode")) {
-                    Platform.runLater(controller::enterSafeMode);
-                }
-
-                // Phase 6.4.0: if there is a prior crash snapshot, surface it and offer a one-click bundle.
-                Platform.runLater(() -> showLastCrashDialogIfPresent(context));
-
-                // Give controller a chance to release any startup guards after the first real scene is installed.
-                if (controller != null) {
-                    Platform.runLater(controller::releaseStartupVirtualizationGuards);
+                    try {
+                        context.operationQueueService().scanForOrphanTempFiles();
+                    } catch (Exception ignored) {
+                    }
                 }
             } finally {
-                CrashReportService.writeSuccessMarker();
-                StartupTrace.mark("deferred heavy startup tasks done");
+                final String selfCheckReportFinal = selfCheckReport;
+                final Integer recoveredOpsFinal = recoveredOps;
+                Platform.runLater(() -> {
+                    try {
+                        if (selfCheckReportFinal != null && !selfCheckReportFinal.isBlank()) {
+                            showSelfCheckDialog(selfCheckReportFinal);
+                        }
+                        if (recoveredOpsFinal != null) {
+                            showRecoveredOpsDialog(context, recoveredOpsFinal.intValue());
+                        }
+                        if (progressPaneController != null) {
+                            showJournalRecoveryDialog(context);
+                        }
+                        if (controller != null && Boolean.getBoolean("fileexplorer.safeMode")) {
+                            controller.enterSafeMode();
+                        }
+                        showLastCrashDialogIfPresent(context);
+                        if (controller != null) {
+                            controller.releaseStartupVirtualizationGuards();
+                        }
+                    } finally {
+                        CrashReportService.writeSuccessMarker();
+                        markBootstrapState(stage, BootstrapState.STARTUP_COMPLETE);
+                        StartupTrace.mark("deferred heavy startup tasks done");
+                    }
+                });
             }
         });
-    } catch (Exception ex) {
-        // Keep the loading scene visible and surface the error.
-        ex.printStackTrace();
-        lbl.setText("Failed to load UI (see console)."
-        );
     }
-}));
-    }
+
 
 /**
  * bootstrapFonts.
@@ -1099,6 +1417,233 @@ loadFontsFromResources(List.of(
             boolean safe2) {
         LogSupport.enter(LOG, "getTargetVisualBoundsForStageSafeIfNull");
         return getTargetVisualBoundsForStageSafeIfNull(stage, fallback, safe && safe2);
+    }
+
+    /**
+     * Builds a lightweight placeholder UI that is safe to show while the full FXML UI is loading.
+     *
+     * IMPORTANT: This intentionally avoids JavaFX Controls/Skins and avoids attaching the main
+     * stylesheet stack. We only use shapes/text to minimize additional initialization work.
+     */
+    private static Parent buildShellRoot() {
+        BorderPane root = new BorderPane();
+        root.setPadding(new Insets(10));
+        root.setStyle("-fx-background-color: linear-gradient(to bottom, #242424, #181818);");
+
+        VBox shell = new VBox(8);
+        shell.setFillWidth(true);
+        root.setCenter(shell);
+
+        HBox titleStrip = new HBox(8);
+        titleStrip.setAlignment(Pos.CENTER_LEFT);
+        titleStrip.setPadding(new Insets(2, 4, 0, 4));
+
+        StackPane appBadge = new StackPane();
+        Rectangle appBadgeBg = new Rectangle(18, 18);
+        appBadgeBg.setArcWidth(5);
+        appBadgeBg.setArcHeight(5);
+        appBadgeBg.setFill(Color.web("#e7b64b"));
+        Text appBadgeGlyph = new Text("⌂");
+        appBadgeGlyph.setFill(Color.web("#1d1d1d"));
+        appBadgeGlyph.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
+        appBadge.getChildren().addAll(appBadgeBg, appBadgeGlyph);
+
+        Text title = new Text("FileExplorer");
+        title.setFill(Color.web("#e4e4e4"));
+        title.setStyle("-fx-font-size: 13px;");
+
+        Region titleSpacer = new Region();
+        HBox.setHgrow(titleSpacer, javafx.scene.layout.Priority.ALWAYS);
+
+        HBox captions = new HBox(0);
+        captions.setAlignment(Pos.CENTER_RIGHT);
+        captions.getChildren().addAll(
+                buildShellCaptionButton(42, 28, "#2a2a2a", "—", "#d5d5d5"),
+                buildShellCaptionButton(42, 28, "#2a2a2a", "▢", "#d5d5d5"),
+                buildShellCaptionButton(48, 28, "#c42b1c", "×", "#ffffff")
+        );
+
+        titleStrip.getChildren().addAll(appBadge, title, titleSpacer, captions);
+
+        VBox topChrome = new VBox(0);
+        topChrome.setStyle("-fx-background-color: linear-gradient(to bottom, #2b2b2b, #1b1b1b);"
+                + "-fx-background-radius: 12; -fx-border-radius: 12;"
+                + "-fx-border-color: #3a3a3a; -fx-border-width: 1;");
+
+        BorderPane addressRow = new BorderPane();
+        addressRow.setMinHeight(52);
+        addressRow.setPrefHeight(52);
+        addressRow.setPadding(new Insets(8, 10, 2, 10));
+
+        HBox nav = new HBox(6);
+        nav.setAlignment(Pos.CENTER_LEFT);
+        nav.getChildren().addAll(
+                buildShellGlyphButton("←"),
+                buildShellGlyphButton("→"),
+                buildShellGlyphButton("↑"),
+                buildShellGlyphButton("↻")
+        );
+
+        HBox pathHost = new HBox(6);
+        pathHost.setAlignment(Pos.CENTER_LEFT);
+        pathHost.getChildren().addAll(
+                buildShellPill(76, 32, "#242424", "#3b3b3b", "Home", "#d9d9d9"),
+                buildShellChevron(),
+                buildShellPill(92, 32, "#242424", "#3b3b3b", "Documents", "#d9d9d9")
+        );
+
+        StackPane searchHost = new StackPane();
+        Rectangle searchBg = new Rectangle(250, 36);
+        searchBg.setArcWidth(18);
+        searchBg.setArcHeight(18);
+        searchBg.setFill(Color.web("#111111"));
+        searchBg.setStroke(Color.web("#3a3a3a"));
+        Text searchText = new Text("Search");
+        searchText.setFill(Color.web("#8a8a8a"));
+        searchText.setStyle("-fx-font-size: 12px;");
+        StackPane.setAlignment(searchText, Pos.CENTER_LEFT);
+        searchHost.setPadding(new Insets(0, 0, 0, 14));
+        searchHost.getChildren().addAll(searchBg, searchText);
+
+        addressRow.setLeft(nav);
+        addressRow.setCenter(pathHost);
+        addressRow.setRight(searchHost);
+
+        Rectangle chromeDivider = new Rectangle();
+        chromeDivider.setHeight(1);
+        chromeDivider.setFill(Color.web("#343434"));
+        chromeDivider.widthProperty().bind(topChrome.widthProperty().subtract(2));
+
+        HBox commandRow = new HBox(8);
+        commandRow.setAlignment(Pos.CENTER_LEFT);
+        commandRow.setPadding(new Insets(6, 10, 8, 10));
+        commandRow.getChildren().addAll(
+                buildShellPill(74, 34, "#2a2a2a", "#404040", "New", "#ebebeb"),
+                buildShellCommandDivider(),
+                buildShellPill(62, 34, "#202020", "#2d2d2d", "Cut", "#d6d6d6"),
+                buildShellPill(66, 34, "#202020", "#2d2d2d", "Copy", "#d6d6d6"),
+                buildShellPill(68, 34, "#202020", "#2d2d2d", "Paste", "#d6d6d6"),
+                buildShellCommandDivider(),
+                buildShellPill(68, 34, "#202020", "#2d2d2d", "View", "#d6d6d6")
+        );
+
+        topChrome.getChildren().addAll(addressRow, chromeDivider, commandRow);
+
+        BorderPane contentSurface = new BorderPane();
+        contentSurface.setStyle("-fx-background-color: linear-gradient(to bottom, #1c1c1c, #171717);"
+                + "-fx-background-radius: 12; -fx-border-radius: 12;"
+                + "-fx-border-color: #333333; -fx-border-width: 1;");
+        contentSurface.setPadding(new Insets(1));
+
+        HBox content = new HBox(8);
+        content.setPadding(new Insets(0));
+
+        Rectangle leftPane = new Rectangle(272, 520);
+        leftPane.setArcWidth(12);
+        leftPane.setArcHeight(12);
+        leftPane.setFill(Color.web("#161616"));
+        leftPane.setStroke(Color.web("#2d2d2d"));
+
+        VBox rightPane = new VBox(8);
+        rightPane.setPadding(new Insets(0));
+        Rectangle headerPane = new Rectangle(780, 34);
+        headerPane.setArcWidth(10);
+        headerPane.setArcHeight(10);
+        headerPane.setFill(Color.web("#202020"));
+        headerPane.setStroke(Color.web("#313131"));
+        Rectangle bodyPane = new Rectangle(780, 476);
+        bodyPane.setArcWidth(12);
+        bodyPane.setArcHeight(12);
+        bodyPane.setFill(Color.web("#151515"));
+        bodyPane.setStroke(Color.web("#2d2d2d"));
+        rightPane.getChildren().addAll(headerPane, bodyPane);
+        HBox.setHgrow(rightPane, javafx.scene.layout.Priority.ALWAYS);
+
+        content.getChildren().addAll(leftPane, rightPane);
+        contentSurface.setCenter(content);
+
+        BorderPane statusBar = new BorderPane();
+        statusBar.setMinHeight(52);
+        statusBar.setPrefHeight(52);
+        statusBar.setPadding(new Insets(6, 12, 6, 12));
+        statusBar.setStyle("-fx-background-color: linear-gradient(to bottom, #1c1c1c, #171717);"
+                + "-fx-background-radius: 10; -fx-border-radius: 10;"
+                + "-fx-border-color: #323232; -fx-border-width: 1;");
+
+        Text status = new Text("Loading file explorer UI…");
+        status.setId("shellStatus");
+        status.setFill(Color.web("#d5d5d5"));
+        status.setStyle("-fx-font-size: 12px;");
+        statusBar.setLeft(status);
+
+        HBox statusRight = new HBox(6);
+        statusRight.setAlignment(Pos.CENTER_RIGHT);
+        statusRight.getChildren().addAll(
+                buildShellPill(66, 30, "#202020", "#303030", "Details", "#d6d6d6"),
+                buildShellPill(56, 30, "#202020", "#303030", "Large", "#d6d6d6")
+        );
+        statusBar.setRight(statusRight);
+
+        shell.getChildren().addAll(titleStrip, topChrome, contentSurface, statusBar);
+        return root;
+    }
+
+    private static StackPane buildShellGlyphButton(String glyph) {
+        StackPane button = new StackPane();
+        Rectangle bg = new Rectangle(34, 34);
+        bg.setArcWidth(8);
+        bg.setArcHeight(8);
+        bg.setFill(Color.web("#242424"));
+        bg.setStroke(Color.web("#343434"));
+        Text text = new Text(glyph);
+        text.setFill(Color.web("#e5e5e5"));
+        text.setStyle("-fx-font-size: 13px;");
+        button.getChildren().addAll(bg, text);
+        return button;
+    }
+
+    private static StackPane buildShellPill(double width, double height, String fill, String stroke, String label, String textFill) {
+        StackPane pill = new StackPane();
+        Rectangle bg = new Rectangle(width, height);
+        bg.setArcWidth(Math.min(height, 18));
+        bg.setArcHeight(Math.min(height, 18));
+        bg.setFill(Color.web(fill));
+        bg.setStroke(Color.web(stroke));
+        Text text = new Text(label);
+        text.setFill(Color.web(textFill));
+        text.setStyle("-fx-font-size: 12px;");
+        pill.getChildren().addAll(bg, text);
+        return pill;
+    }
+
+    private static StackPane buildShellChevron() {
+        StackPane chevron = new StackPane();
+        chevron.setMinSize(10, 32);
+        Text text = new Text("›");
+        text.setFill(Color.web("#8f8f8f"));
+        text.setStyle("-fx-font-size: 12px;");
+        chevron.getChildren().add(text);
+        return chevron;
+    }
+
+    private static Region buildShellCommandDivider() {
+        Region divider = new Region();
+        divider.setMinSize(1, 22);
+        divider.setPrefSize(1, 22);
+        divider.setMaxSize(1, 22);
+        divider.setStyle("-fx-background-color: #343434;");
+        return divider;
+    }
+
+    private static StackPane buildShellCaptionButton(double width, double height, String fill, String glyph, String textFill) {
+        StackPane button = new StackPane();
+        Rectangle bg = new Rectangle(width, height);
+        bg.setFill(Color.web(fill));
+        Text text = new Text(glyph);
+        text.setFill(Color.web(textFill));
+        text.setStyle("-fx-font-size: 12px;");
+        button.getChildren().addAll(bg, text);
+        return button;
     }
 
     // ---------------------------------------------------------------------

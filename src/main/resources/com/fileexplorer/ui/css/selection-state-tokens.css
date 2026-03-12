@@ -1,0 +1,220 @@
+/* Phase 4K.1 - selection state design tokens
+ * Centralized Explorer selection + hover tokens shared by details rows,
+ * navigation tree rows, and icon/tile containers.
+ */
+
+.theme-dark.explorer-root {
+    -fx-explorer-selection-hover-bg: rgba(255,255,255,0.050);
+    -fx-explorer-selection-active-bg: rgba(113,162,255,0.260);
+    -fx-explorer-selection-active-bg-strong: rgba(113,162,255,0.305);
+    -fx-explorer-selection-inactive-bg: rgba(255,255,255,0.088);
+    -fx-explorer-selection-active-border: rgba(113,162,255,0.360);
+    -fx-explorer-selection-inactive-border: rgba(255,255,255,0.095);
+    -fx-explorer-selection-text-selected: #ffffff;
+    -fx-explorer-selection-focus-ring: rgba(165,201,255,0.56);
+}
+
+.theme-light.explorer-root {
+    -fx-explorer-selection-hover-bg: rgba(0,0,0,0.042);
+    -fx-explorer-selection-active-bg: rgba(33,99,214,0.158);
+    -fx-explorer-selection-active-bg-strong: rgba(33,99,214,0.188);
+    -fx-explorer-selection-inactive-bg: rgba(33,99,214,0.102);
+    -fx-explorer-selection-active-border: rgba(33,99,214,0.205);
+    -fx-explorer-selection-inactive-border: rgba(33,99,214,0.135);
+    -fx-explorer-selection-text-selected: #111111;
+    -fx-explorer-selection-focus-ring: rgba(33,99,214,0.42);
+}
+
+.theme-dark.explorer-root.window-inactive {
+    -fx-explorer-selection-active-bg: rgba(255,255,255,0.092);
+    -fx-explorer-selection-active-bg-strong: rgba(255,255,255,0.105);
+    -fx-explorer-selection-active-border: rgba(255,255,255,0.100);
+}
+
+.theme-light.explorer-root.window-inactive {
+    -fx-explorer-selection-active-bg: rgba(0,0,0,0.060);
+    -fx-explorer-selection-active-bg-strong: rgba(0,0,0,0.074);
+    -fx-explorer-selection-active-border: rgba(0,0,0,0.090);
+}
+
+/* Phase 4K.2: details-row visuals now live in details-view-parity.css.
+   Keep this file focused on shared tokens plus cross-view icon/tile/tree states. */
+
+.theme-dark .explorer-navigation-pane .tree-cell:filled:hover,
+.theme-light .explorer-navigation-pane .tree-cell:filled:hover {
+    -fx-background-color: -fx-explorer-selection-hover-bg;
+}
+
+.explorer-navigation-pane .tree-cell:selected {
+    -fx-background-color: -fx-explorer-selection-inactive-bg;
+    -fx-text-fill: -fx-explorer-selection-text-selected;
+}
+
+.explorer-navigation-pane:focused .tree-cell:selected {
+    -fx-background-color: -fx-explorer-selection-active-bg;
+}
+
+.explorer-navigation-pane:focused .tree-cell:selected:hover {
+    -fx-background-color: -fx-explorer-selection-active-bg-strong;
+}
+
+.root.window-inactive .explorer-navigation-pane:focused .tree-cell:selected,
+.root.window-inactive .explorer-navigation-pane .tree-cell:selected {
+    -fx-background-color: -fx-explorer-selection-inactive-bg;
+}
+
+.explorer-icon-tile {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-background-insets: 0;
+    -fx-border-width: 1;
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+}
+
+.explorer-icon-tile-grid {
+    -fx-padding: 8 10 8 10;
+}
+
+.explorer-icon-tile-row {
+    -fx-padding: 8 10 8 10;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+}
+
+.explorer-icon-tile-xl {
+    -fx-background-radius: 14;
+    -fx-border-radius: 14;
+}
+
+.explorer-icon-tile-large {
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+}
+
+.explorer-icon-tile-small {
+    -fx-background-radius: 9;
+    -fx-border-radius: 9;
+}
+
+.explorer-icon-tile-tiles,
+.explorer-icon-tile-content {
+    -fx-alignment: center-left;
+}
+
+.explorer-icon-tile.explorer-hover {
+    -fx-background-color: -fx-explorer-selection-hover-bg;
+}
+
+.explorer-icon-tile.explorer-selected {
+    -fx-background-color: -fx-explorer-selection-inactive-bg;
+    -fx-border-color: -fx-explorer-selection-inactive-border;
+}
+
+.icon-flow:focused .explorer-icon-tile.explorer-selected,
+.icon-virtual-grid:focused .explorer-icon-tile.explorer-selected,
+.icon-virtual-list:focused .explorer-icon-tile.explorer-selected {
+    -fx-background-color: -fx-explorer-selection-active-bg;
+    -fx-border-color: -fx-explorer-selection-active-border;
+}
+
+.icon-flow:focused .explorer-icon-tile.explorer-selected.explorer-hover,
+.icon-virtual-grid:focused .explorer-icon-tile.explorer-selected.explorer-hover,
+.icon-virtual-list:focused .explorer-icon-tile.explorer-selected.explorer-hover {
+    -fx-background-color: -fx-explorer-selection-active-bg-strong;
+}
+
+.root.window-inactive .explorer-icon-tile.explorer-selected {
+    -fx-background-color: -fx-explorer-selection-inactive-bg;
+    -fx-border-color: -fx-explorer-selection-inactive-border;
+}
+
+.theme-dark .explorer-icon-tile .label {
+    -fx-text-fill: #eef2f7;
+}
+
+.theme-light .explorer-icon-tile .label {
+    -fx-text-fill: #1b1b1b;
+}
+
+.theme-dark .explorer-icon-meta-label {
+    -fx-text-fill: rgba(255,255,255,0.66);
+}
+
+.theme-light .explorer-icon-meta-label {
+    -fx-text-fill: rgba(0,0,0,0.62);
+}
+
+.explorer-icon-name-label {
+    -fx-font-size: 12px;
+    -fx-alignment: top-center;
+    -fx-text-alignment: center;
+}
+
+.explorer-icon-tile-row .explorer-icon-name-label {
+    -fx-alignment: center-left;
+    -fx-text-alignment: left;
+}
+
+.explorer-icon-meta-label {
+    -fx-font-size: 11px;
+}
+
+.explorer-tile-text-column {
+    -fx-fill-width: true;
+}
+
+.explorer-icon-tile.explorer-selected .label {
+    -fx-text-fill: -fx-explorer-selection-text-selected;
+}
+
+.explorer-icon-flow-xl .explorer-icon-tile-grid {
+    -fx-padding: 12 12 10 12;
+}
+
+.explorer-icon-flow-large .explorer-icon-tile-grid {
+    -fx-padding: 10 10 8 10;
+}
+
+.explorer-icon-flow-medium .explorer-icon-tile-grid {
+    -fx-padding: 8 8 6 8;
+}
+
+.explorer-icon-flow-small .explorer-icon-tile-grid {
+    -fx-padding: 6 6 4 6;
+}
+
+.explorer-icon-flow-xl .explorer-icon-name-label {
+    -fx-font-size: 12px;
+    -fx-wrap-text: true;
+}
+
+.explorer-icon-flow-large .explorer-icon-name-label,
+.explorer-icon-flow-medium .explorer-icon-name-label {
+    -fx-font-size: 11px;
+}
+
+.explorer-icon-flow-small .explorer-icon-name-label {
+    -fx-font-size: 10px;
+}
+
+.explorer-icon-flow-list .explorer-icon-tile-row {
+    -fx-padding: 4 10 4 10;
+}
+
+.explorer-icon-flow-list .explorer-icon-name-label {
+    -fx-font-size: 12px;
+}
+
+.explorer-icon-flow-tiles .explorer-icon-tile-row {
+    -fx-padding: 8 12 8 12;
+}
+
+.explorer-icon-flow-content .explorer-icon-tile-row {
+    -fx-padding: 8 12 8 12;
+}
+
+.explorer-inline-rename-field:focused {
+    -fx-border-color: -fx-explorer-selection-focus-ring;
+}
+

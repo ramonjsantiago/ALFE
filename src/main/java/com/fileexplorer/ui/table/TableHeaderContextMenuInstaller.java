@@ -12,6 +12,7 @@ import javafx.scene.layout.Region;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * Installs an Explorer-like header context menu on a JavaFX TableView.
@@ -29,19 +30,23 @@ public final class TableHeaderContextMenuInstaller {
             Map<String, TableColumn<?, ?>> detailsColumns,
             Runnable showChooseDetailsDialog
     ) {
-        Objects.requireNonNull(table, "table");
         Objects.requireNonNull(detailsColumns, "detailsColumns");
+        install(table, () -> detailsColumns, showChooseDetailsDialog);
+    }
+
+    public static void install(
+            TableView<?> table,
+            Supplier<Map<String, TableColumn<?, ?>>> detailsColumnsSupplier,
+            Runnable showChooseDetailsDialog
+    ) {
+        Objects.requireNonNull(table, "table");
+        Objects.requireNonNull(detailsColumnsSupplier, "detailsColumnsSupplier");
         Objects.requireNonNull(showChooseDetailsDialog, "showChooseDetailsDialog");
 
         // One shared menu instance per TableView, always hide before re-showing.
         final Holder<TableColumn<?, ?>> currentClickedColumn = new Holder<>();
 
         Platform.runLater(() -> {
-            final ContextMenu headerMenu = buildMenu(table, currentClickedColumn, detailsColumns, showChooseDetailsDialog);
-
-            // Expose for coordination with the row/file ops menu.
-            table.getProperties().put(PROP_HEADER_MENU, headerMenu);
-
             // Capture phase on the standard ContextMenuEvent (fires on release). This avoids header nodes
             // consuming mouse events and makes behavior consistent across skins.
             table.addEventFilter(ContextMenuEvent.CONTEXT_MENU_REQUESTED, evt -> {
@@ -56,7 +61,14 @@ public final class TableHeaderContextMenuInstaller {
                 Object other = table.getProperties().get(PROP_FILEOPS_MENU);
                 if (other instanceof ContextMenu cm) cm.hide();
 
-                headerMenu.hide();
+                Object existing = table.getProperties().get(PROP_HEADER_MENU);
+                if (existing instanceof ContextMenu cm) {
+                    cm.hide();
+                }
+
+                Map<String, TableColumn<?, ?>> currentColumns = detailsColumnsSupplier.get();
+                final ContextMenu headerMenu = buildMenu(table, currentClickedColumn, currentColumns, showChooseDetailsDialog);
+                table.getProperties().put(PROP_HEADER_MENU, headerMenu);
                 headerMenu.show(table, evt.getScreenX(), evt.getScreenY());
 
                 evt.consume();
@@ -75,8 +87,7 @@ public final class TableHeaderContextMenuInstaller {
         ContextMenu menu = new ContextMenu();
         menu.setAutoHide(true);
 
-        MenuItem sizeCol = new MenuItem("Size Column to Fit");
-        sizeCol.setOnAction(ae -> {
+        CustomMenuItem sizeCol = buildAlignedActionItem("Size Column to Fit", () -> {
             TableColumn<?, ?> col = currentClickedColumn.value;
             if (col != null) {
                 ColumnAutoFitUtil.sizeToFit(table, col);
@@ -84,8 +95,7 @@ public final class TableHeaderContextMenuInstaller {
             menu.hide();
         });
 
-        MenuItem sizeAll = new MenuItem("Size all Columns to Fit");
-        sizeAll.setOnAction(ae -> {
+        CustomMenuItem sizeAll = buildAlignedActionItem("Size all Columns to Fit", () -> {
             ColumnAutoFitUtil.sizeAllToFit(table);
             menu.hide();
         });
@@ -122,8 +132,7 @@ public final class TableHeaderContextMenuInstaller {
 
         menu.getItems().addAll(new SeparatorMenuItem());
 
-        MenuItem more = new MenuItem("More...");
-        more.setOnAction(ae -> {
+        CustomMenuItem more = buildAlignedActionItem("More...", () -> {
             menu.hide();
             showChooseDetailsDialog.run();
         });
@@ -158,6 +167,30 @@ public final class TableHeaderContextMenuInstaller {
 
         return menu;
     }
+
+
+    private static CustomMenuItem buildAlignedActionItem(String label, Runnable action) {
+        Label lead = new Label("");
+        lead.getStyleClass().add("explorer-menu-checkmark");
+        lead.setMinWidth(18);
+        lead.setPrefWidth(18);
+        lead.setMaxWidth(18);
+
+        Label text = new Label(label);
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        HBox row = new HBox(8, lead, text, spacer);
+        row.getStyleClass().add("explorer-menu-checkrow");
+
+        CustomMenuItem item = new CustomMenuItem(row, true);
+        item.getStyleClass().add("explorer-menu-plainitem");
+        item.setOnAction(ae -> action.run());
+        row.setOnMouseReleased(ev -> item.fire());
+        return item;
+    }
+
 
 
 

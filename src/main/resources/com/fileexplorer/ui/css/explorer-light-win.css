@@ -1,4 +1,65 @@
 /* explorer-light-win.css
-   Left intentionally minimal. This project defaults to dark; light theme can be redesigned later.
+   Minimal light theme, with Win11-style menus.
 */
 .root { }
+
+.context-menu {
+    -fx-background-color: #f6f7f9;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
+    -fx-border-color: rgba(0,0,0,0.10);
+    -fx-border-width: 1;
+    -fx-background-radius: 14;
+    -fx-border-radius: 14;
+    -fx-background-insets: 0;
+    -fx-padding: 8;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.18), 28, 0.16, 0, 10);
+}
+
+.context-menu .menu-item {
+    -fx-padding: 7 14 7 10;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
+    -fx-background-radius: 9;
+    -fx-border-radius: 9;
+    -fx-background-insets: 0;
+}
+
+.context-menu .menu-item > .left-container {
+    -fx-padding: 0 10 0 2;
+    -fx-min-width: 28;
+    -fx-pref-width: 28;
+    -fx-alignment: CENTER_LEFT;
+}
+
+.context-menu .menu-item > .graphic-container {
+    -fx-padding: 0 10 0 0;
+    -fx-min-width: 18;
+    -fx-pref-width: 18;
+    -fx-alignment: CENTER;
+}
+
+.context-menu .menu-item:focused {
+    -fx-background-color: rgba(0,0,0,0.05);
+}
+
+.context-menu .menu-item:armed {
+    -fx-background-color: rgba(0,120,212,0.11);
+}
+
+.context-menu .separator-menu-item {
+    -fx-padding: 4 6 4 6;
+}
+
+.context-menu .separator-menu-item .line {
+    -fx-border-color: rgba(0,0,0,0.09);
+    -fx-border-width: 1 0 0 0;
+}
+
+
+.context-menu .menu-item > .label {
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
+}

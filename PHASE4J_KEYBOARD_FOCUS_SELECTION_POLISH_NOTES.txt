@@ -1,0 +1,14 @@
+PHASE 4J / HOTFIX25 — Keyboard Focus Selection Polish
+
+Implemented in MainController.java.
+
+Highlights
+- F2 renames the focused table row and collapses selection to that row before edit starts.
+- Enter opens the focused row via openPath(), so files open and folders navigate.
+- Shift+F10 and the Context Menu key open the reused file operations context menu anchored to the focused row.
+- Escape hides transient table/header context menus and cancels active inline rename with focus restored to the edited row.
+- Secondary-click handling now preserves existing multi-selection when the row is already selected and only changes selection when the target row was not selected.
+- Pending rename selection survives refresh so the renamed item is reselected after the directory listing reloads.
+
+Verification note
+- Source was patched directly from HOTFIX24. A full Maven build could not be run in this environment because mvn is unavailable in the container. A syntax-only javac pass was started and reached dependency-resolution errors for missing JavaFX modules without surfacing parser errors in the modified sections.

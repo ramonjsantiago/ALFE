@@ -17,6 +17,7 @@
     -fx-selection-bar-non-focused: #233a59;
 
     /* UI font sizing baseline (your project expects 16px default) */
+    -fx-font-family: "Segoe UI Variable Text";
     -fx-font-size: 16px;
 
 /* Additional Modena compatibility tokens (avoid lookup-to-String issues) */
@@ -68,6 +69,26 @@
 /* Menu item icon spacing (used by the "See more" menu items) */
 .menuitem-icon-gap {
     -fx-padding: 0 10 0 0;
+}
+
+
+/* Windows 11 typography tuning */
+.context-menu,
+.context-menu .menu-item,
+.context-menu .menu-item > .label,
+.menu-item,
+.tool-bar .button,
+.tool-bar .toggle-button,
+.tool-bar .menu-button {
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
+}
+
+.table-view .column-header .label {
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 12px;
+    -fx-font-weight: normal;
 }
 
 /* Toolbars (flat) */
@@ -176,6 +197,12 @@
 }
 
 
+
+
+/* Tree view context menu: slightly taller rows for easier hit-targets. */
+.explorer-tree-menu .menu-item {
+    -fx-padding: 8 14 8 10;
+}
 /* Phase 4B.2 UI: toolbar buttons are borderless */
 .tool-bar .button,
 .tool-bar .toggle-button,
@@ -206,4 +233,20 @@
 
 .tool-bar .toggle-button:selected {
     -fx-background-color: rgba(255,255,255,0.12);
+}
+
+
+/* Win11 menu gutter + shadow tuning */
+.context-menu .menu-item > .left-container {
+    -fx-alignment: CENTER_LEFT;
+}
+
+.context-menu .menu-item > .graphic-container {
+    -fx-alignment: CENTER;
+}
+
+.context-menu .radio-menu-item:checked > .left-container > .radio,
+.context-menu .check-menu-item:checked > .left-container > .check {
+    -fx-scale-x: 0.92;
+    -fx-scale-y: 0.92;
 }

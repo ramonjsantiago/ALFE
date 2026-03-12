@@ -1,0 +1,169 @@
+/* Phase 4G - Context menus, flyouts, and inline rename parity */
+
+.explorer-flyout-button,
+.commandbar-icon-button,
+.command-pane-toggle {
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+}
+
+.explorer-flyout-button > .label,
+.commandbar-icon-button > .label {
+    -fx-font-weight: 500;
+}
+
+.context-menu,
+.explorer-context-menu,
+.explorer-flyout-menu {
+    -fx-background-insets: 0;
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+    -fx-padding: 6;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.20), 24, 0.18, 0, 8);
+}
+
+.theme-light .context-menu,
+.theme-light .explorer-context-menu,
+.theme-light .explorer-flyout-menu {
+    -fx-background-color: rgba(252, 252, 252, 0.98);
+    -fx-border-color: rgba(0, 0, 0, 0.10);
+}
+
+.theme-dark .context-menu,
+.theme-dark .explorer-context-menu,
+.theme-dark .explorer-flyout-menu {
+    -fx-background-color: rgba(38, 38, 38, 0.98);
+    -fx-border-color: rgba(255, 255, 255, 0.08);
+}
+
+.menu-item,
+.custom-menu-item,
+.explorer-menu-item {
+    -fx-background-radius: 8;
+    -fx-padding: 0.55em 0.8em 0.55em 0.8em;
+}
+
+.menu-item > .label,
+.custom-menu-item > .label,
+.explorer-menu-item > .label,
+.menu > .label {
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
+}
+
+.theme-light .menu-item > .label,
+.theme-light .custom-menu-item > .label,
+.theme-light .explorer-menu-item > .label,
+.theme-light .menu > .label {
+    -fx-text-fill: #1d1d1d;
+}
+
+.theme-dark .menu-item > .label,
+.theme-dark .custom-menu-item > .label,
+.theme-dark .explorer-menu-item > .label,
+.theme-dark .menu > .label {
+    -fx-text-fill: #f3f3f3;
+}
+
+.theme-light .menu-item:focused,
+.theme-light .custom-menu-item:focused,
+.theme-light .menu:hover,
+.theme-light .menu-item:hover,
+.theme-light .custom-menu-item:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.055);
+}
+
+.theme-dark .menu-item:focused,
+.theme-dark .custom-menu-item:focused,
+.theme-dark .menu:hover,
+.theme-dark .menu-item:hover,
+.theme-dark .custom-menu-item:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+}
+
+.theme-light .menu-item:disabled > .label,
+.theme-light .custom-menu-item:disabled > .label,
+.theme-light .menu:disabled > .label {
+    -fx-text-fill: rgba(32, 32, 32, 0.40);
+}
+
+.theme-dark .menu-item:disabled > .label,
+.theme-dark .custom-menu-item:disabled > .label,
+.theme-dark .menu:disabled > .label {
+    -fx-text-fill: rgba(255, 255, 255, 0.34);
+}
+
+.explorer-menu-glyph,
+.menuitem-icon-gap {
+    -fx-font-family: "Segoe Fluent Icons";
+    -fx-font-size: 14px;
+    -fx-min-width: 18px;
+    -fx-pref-width: 18px;
+    -fx-alignment: center;
+    -fx-opacity: 0.92;
+}
+
+.separator-menu-item {
+    -fx-padding: 4 0 4 0;
+}
+
+.separator-menu-item .line {
+    -fx-border-insets: 0;
+}
+
+.theme-light .separator-menu-item .line {
+    -fx-border-color: rgba(0, 0, 0, 0.10);
+}
+
+.theme-dark .separator-menu-item .line {
+    -fx-border-color: rgba(255, 255, 255, 0.09);
+}
+
+.menu-button > .arrow-button,
+.split-menu-button > .arrow-button {
+    -fx-padding: 0 4 0 2;
+}
+
+.menu-button > .arrow-button > .arrow,
+.split-menu-button > .arrow-button > .arrow,
+.menu > .right-container > .arrow {
+    -fx-background-insets: 0;
+    -fx-padding: 0.25em;
+    -fx-shape: "M 0 0 L 4 4 L 8 0";
+}
+
+.view-menu-row {
+    -fx-background-radius: 8;
+    -fx-padding: 0.2em 0.1em 0.2em 0.1em;
+}
+
+.explorer-inline-rename-field {
+    -fx-background-insets: 0;
+    -fx-background-radius: 7;
+    -fx-border-radius: 7;
+    -fx-padding: 0.22em 0.55em 0.22em 0.55em;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
+    -fx-pref-height: 28px;
+    -fx-min-height: 28px;
+}
+
+.theme-light .explorer-inline-rename-field {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #1d1d1d;
+    -fx-border-color: #7aa7e8;
+}
+
+.theme-dark .explorer-inline-rename-field {
+    -fx-background-color: #1f1f1f;
+    -fx-text-fill: #f4f4f4;
+    -fx-border-color: #5b9cff;
+}
+
+.tree-cell:editing {
+    -fx-background-insets: 3 8 3 8;
+}
+
+.explorer-details-table .table-row-cell .explorer-inline-rename-field {
+    -fx-max-width: 1000000;
+}

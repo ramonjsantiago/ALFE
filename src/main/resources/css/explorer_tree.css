@@ -1,32 +1,88 @@
-/* explorer_tree.css (DARK LITERAL)
-   Literal paints only (no lookups) to avoid CSS lookup casting issues.
+/* explorer_tree.css (Phase 4D base)
+   Base navigation-tree metrics and readable literals.
+   Phase 4D final visual overrides live in navigation-pane-parity.css.
 */
 
-.explorer-tree {
+.explorer-tree,
+.explorer-navigation-pane {
     -fx-background-color: #15181d;
     -fx-control-inner-background: #15181d;
     -fx-indent: 16px;
-    -fx-font-family: "Segoe UI";
-    -fx-font-size: 12px;
+    -fx-fixed-cell-size: 40px;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
     -fx-focus-color: transparent;
     -fx-faint-focus-color: transparent;
 }
 
-.explorer-tree .tree-cell {
+.explorer-tree .tree-cell,
+.explorer-navigation-pane .tree-cell {
     -fx-text-fill: #e6e8eb;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
     -fx-background-color: transparent;
-    -fx-background-insets: 0;
-    -fx-background-radius: 6;
+    -fx-background-insets: 3 8 3 8;
+    -fx-background-radius: 10;
+    -fx-padding: 4px 8px 4px 8px;
+    -fx-alignment: CENTER-LEFT;
+    -fx-min-height: 40px;
+    -fx-pref-height: 40px;
+    -fx-max-height: 40px;
 }
 
-.explorer-tree .tree-cell:hover {
-    -fx-background-color: rgba(255, 255, 255, 0.06);
+.explorer-tree .tree-cell:filled:hover,
+.explorer-navigation-pane .tree-cell:filled:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.045);
 }
 
-.explorer-tree .tree-cell:selected {
-    -fx-background-color: rgba(42, 74, 122, 0.85);
+.explorer-tree .tree-cell:selected,
+.explorer-navigation-pane .tree-cell:selected {
+    -fx-text-fill: #f4f6f8;
 }
 
-.explorer-tree:focused {
-    -fx-effect: dropshadow(gaussian, rgba(96, 165, 250, 0.35), 12, 0.35, 0, 0);
+.theme-dark .explorer-tree .tree-cell:selected,
+.theme-dark .explorer-navigation-pane .tree-cell:selected {
+    -fx-background-color: rgba(126, 167, 245, 0.20);
+}
+
+.theme-dark .explorer-tree .tree-cell:selected:hover,
+.theme-dark .explorer-navigation-pane .tree-cell:selected:hover {
+    -fx-background-color: rgba(126, 167, 245, 0.24);
+}
+
+.theme-dark .explorer-tree:focused .tree-cell:selected,
+.theme-dark .explorer-navigation-pane:focused .tree-cell:selected {
+    -fx-background-color: rgba(126, 167, 245, 0.28);
+}
+
+.theme-dark .explorer-tree:focused .tree-cell:selected:hover,
+.theme-dark .explorer-navigation-pane:focused .tree-cell:selected:hover {
+    -fx-background-color: rgba(126, 167, 245, 0.32);
+}
+
+.theme-light .explorer-tree .tree-cell:filled:hover,
+.theme-light .explorer-navigation-pane .tree-cell:filled:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.045);
+}
+
+.theme-light .explorer-tree .tree-cell:selected,
+.theme-light .explorer-navigation-pane .tree-cell:selected {
+    -fx-background-color: rgba(33, 99, 214, 0.12);
+    -fx-text-fill: #111111;
+}
+
+.theme-light .explorer-tree:focused .tree-cell:selected,
+.theme-light .explorer-navigation-pane:focused .tree-cell:selected {
+    -fx-background-color: rgba(33, 99, 214, 0.16);
+}
+
+.explorer-tree:focused,
+.explorer-navigation-pane:focused {
+    -fx-effect: dropshadow(gaussian, rgba(96, 165, 250, 0.18), 10, 0.20, 0, 0);
+}
+
+.explorer-tree .tree-cell > .tree-disclosure-node,
+.explorer-navigation-pane .tree-cell > .tree-disclosure-node {
+    -fx-padding: 0 8px 0 0;
 }

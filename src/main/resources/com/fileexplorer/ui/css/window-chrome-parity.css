@@ -1,0 +1,372 @@
+/* Phase 4B — Window chrome parity
+ * Focuses on the Explorer window shell: rounded surfaces, active/inactive chrome,
+ * subtle Mica-like layering, integrated top chrome, and maximized-state flattening.
+ */
+
+.explorer-root {
+    -fx-padding: 10 10 10 10;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 14, 13;
+    -fx-border-insets: 0;
+    -fx-border-radius: 14;
+    -fx-border-width: 1;
+}
+
+.explorer-root.window-maximized {
+    -fx-padding: 0;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
+}
+
+.theme-dark.explorer-root.window-active {
+    -fx-background-color: linear-gradient(to bottom, #232323, #181818), linear-gradient(to bottom, #4b4b4b, #2d2d2d);
+    -fx-border-color: #404040;
+}
+
+.theme-dark.explorer-root.window-inactive {
+    -fx-background-color: linear-gradient(to bottom, #202020, #161616), linear-gradient(to bottom, #343434, #252525);
+    -fx-border-color: #2f2f2f;
+}
+
+.theme-light.explorer-root.window-active {
+    -fx-background-color: linear-gradient(to bottom, #f9f9f9, #efefef), linear-gradient(to bottom, #d9d9d9, #cccccc);
+    -fx-border-color: #cfcfcf;
+}
+
+.theme-light.explorer-root.window-inactive {
+    -fx-background-color: linear-gradient(to bottom, #f4f4f4, #ececec), linear-gradient(to bottom, #d6d6d6, #cbcbcb);
+    -fx-border-color: #d4d4d4;
+}
+
+.window-top-stack {
+    -fx-padding: 0;
+    -fx-spacing: 8;
+}
+
+.content-surface,
+.status-bar-surface,
+.secondary-toolbar-surface,
+.top-chrome-surface {
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
+}
+
+.theme-dark .top-chrome-surface {
+    -fx-background-color: linear-gradient(to bottom, rgba(46,46,46,0.96), rgba(28,28,28,0.96));
+    -fx-background-radius: 12;
+    -fx-border-color: #3a3a3a;
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+}
+
+.theme-dark.window-inactive .top-chrome-surface {
+    -fx-background-color: linear-gradient(to bottom, rgba(40,40,40,0.95), rgba(24,24,24,0.95));
+    -fx-border-color: #313131;
+}
+
+.theme-light .top-chrome-surface {
+    -fx-background-color: linear-gradient(to bottom, rgba(252,252,252,0.97), rgba(241,241,241,0.97));
+    -fx-background-radius: 12;
+    -fx-border-color: #d6d6d6;
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+}
+
+.theme-light.window-inactive .top-chrome-surface {
+    -fx-background-color: linear-gradient(to bottom, rgba(248,248,248,0.97), rgba(238,238,238,0.97));
+    -fx-border-color: #dddddd;
+}
+
+.top-chrome-surface .breadcrumb-row,
+.top-chrome-surface .command-bar {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+}
+
+.top-chrome-surface .breadcrumb-row {
+    -fx-padding: 8 10 2 10;
+}
+
+.top-chrome-surface .command-bar {
+    -fx-padding: 2 10 8 10;
+}
+
+.fluent-toolbar.command-bar,
+.fluent-toolbar.secondary-toolbar {
+    -fx-spacing: 6;
+}
+
+.fluent-toolbar .button,
+.fluent-toolbar .toggle-button,
+.fluent-toolbar .menu-button {
+    -fx-min-height: 34;
+    -fx-pref-height: 34;
+    -fx-padding: 0 12 0 12;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-border-width: 1;
+    -fx-content-display: LEFT;
+    -fx-graphic-text-gap: 6;
+}
+
+.fluent-toolbar .button.icon-only,
+.fluent-toolbar .toggle-button.icon-only,
+.fluent-toolbar .menu-button.icon-only,
+.breadcrumb-row .address-nav-group > .button {
+    -fx-min-width: 34;
+    -fx-pref-width: 34;
+    -fx-padding: 0;
+    -fx-content-display: GRAPHIC_ONLY;
+    -fx-alignment: CENTER;
+}
+
+.theme-dark .fluent-toolbar .button,
+.theme-dark .fluent-toolbar .toggle-button,
+.theme-dark .fluent-toolbar .menu-button {
+    -fx-background-color: rgba(255,255,255,0.01);
+    -fx-border-color: transparent;
+    -fx-text-fill: #ececec;
+}
+
+.theme-dark .fluent-toolbar .button:hover,
+.theme-dark .fluent-toolbar .toggle-button:hover,
+.theme-dark .fluent-toolbar .menu-button:hover {
+    -fx-background-color: rgba(255,255,255,0.07);
+    -fx-border-color: rgba(255,255,255,0.04);
+}
+
+.theme-dark .fluent-toolbar .button:armed,
+.theme-dark .fluent-toolbar .toggle-button:armed,
+.theme-dark .fluent-toolbar .menu-button:armed,
+.theme-dark .fluent-toolbar .toggle-button:selected {
+    -fx-background-color: rgba(255,255,255,0.11);
+    -fx-border-color: rgba(255,255,255,0.06);
+}
+
+.theme-dark.window-inactive .fluent-toolbar .button,
+.theme-dark.window-inactive .fluent-toolbar .toggle-button,
+.theme-dark.window-inactive .fluent-toolbar .menu-button {
+    -fx-text-fill: #c9c9c9;
+}
+
+.theme-light .fluent-toolbar .button,
+.theme-light .fluent-toolbar .toggle-button,
+.theme-light .fluent-toolbar .menu-button {
+    -fx-background-color: rgba(255,255,255,0.01);
+    -fx-border-color: transparent;
+    -fx-text-fill: #202020;
+}
+
+.theme-light .fluent-toolbar .button:hover,
+.theme-light .fluent-toolbar .toggle-button:hover,
+.theme-light .fluent-toolbar .menu-button:hover {
+    -fx-background-color: rgba(0,0,0,0.045);
+    -fx-border-color: rgba(0,0,0,0.05);
+}
+
+.theme-light .fluent-toolbar .button:armed,
+.theme-light .fluent-toolbar .toggle-button:armed,
+.theme-light .fluent-toolbar .menu-button:armed,
+.theme-light .fluent-toolbar .toggle-button:selected {
+    -fx-background-color: rgba(0,0,0,0.075);
+    -fx-border-color: rgba(0,0,0,0.07);
+}
+
+.search-field-chrome {
+    -fx-min-height: 36;
+    -fx-pref-height: 36;
+    -fx-max-height: 36;
+    -fx-padding: 0 14 0 14;
+    -fx-background-radius: 18;
+    -fx-border-radius: 18;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
+    -fx-font-size: 13px;
+}
+
+.theme-dark .search-field-chrome {
+    -fx-background-color: #111111;
+    -fx-text-fill: #e5e5e5;
+    -fx-prompt-text-fill: #8c8c8c;
+    -fx-border-color: #3a3a3a;
+    -fx-border-width: 1;
+}
+
+.theme-dark .search-field-chrome:focused {
+    -fx-background-color: #0d0d0d;
+    -fx-border-color: #5b9cff;
+}
+
+.theme-dark.window-inactive .search-field-chrome {
+    -fx-background-color: #161616;
+    -fx-border-color: #2f2f2f;
+    -fx-prompt-text-fill: #767676;
+}
+
+.theme-light .search-field-chrome {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #202020;
+    -fx-prompt-text-fill: #7a7a7a;
+    -fx-border-color: #d4d4d4;
+    -fx-border-width: 1;
+}
+
+.theme-light .search-field-chrome:focused {
+    -fx-border-color: #2a7de1;
+}
+
+.secondary-toolbar-surface {
+    -fx-padding: 0 12 0 12;
+    -fx-min-height: 34;
+    -fx-pref-height: 34;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+}
+
+.theme-dark .secondary-toolbar-surface {
+    -fx-background-color: linear-gradient(to bottom, #202020, #1a1a1a);
+    -fx-border-color: #333333;
+}
+
+.theme-dark.window-inactive .secondary-toolbar-surface {
+    -fx-background-color: linear-gradient(to bottom, #1d1d1d, #181818);
+    -fx-border-color: #2c2c2c;
+}
+
+.theme-light .secondary-toolbar-surface {
+    -fx-background-color: linear-gradient(to bottom, #fbfbfb, #f1f1f1);
+    -fx-border-color: #d7d7d7;
+}
+
+.content-surface {
+    -fx-padding: 1;
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+}
+
+.theme-dark .content-surface {
+    -fx-background-color: linear-gradient(to bottom, #1c1c1c, #171717);
+    -fx-border-color: #333333;
+}
+
+.theme-dark.window-inactive .content-surface {
+    -fx-background-color: linear-gradient(to bottom, #1a1a1a, #151515);
+    -fx-border-color: #2c2c2c;
+}
+
+.theme-light .content-surface {
+    -fx-background-color: linear-gradient(to bottom, #ffffff, #fafafa);
+    -fx-border-color: #d7d7d7;
+}
+
+.side-pane-surface {
+    -fx-padding: 10;
+}
+
+.main-split-surface .split-pane-divider,
+#contentSplitPane .split-pane-divider {
+    -fx-padding: 0 1 0 1;
+}
+
+.theme-dark .main-split-surface .split-pane-divider,
+.theme-dark #contentSplitPane .split-pane-divider {
+    -fx-background-color: #2f2f2f;
+}
+
+.theme-light .main-split-surface .split-pane-divider,
+.theme-light #contentSplitPane .split-pane-divider {
+    -fx-background-color: #d9d9d9;
+}
+
+.status-bar-surface {
+    -fx-min-height: 52;
+    -fx-pref-height: 52;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+}
+
+.theme-dark .status-bar-surface {
+    -fx-background-color: linear-gradient(to bottom, #1d1d1d, #171717);
+    -fx-border-color: #323232;
+}
+
+.theme-dark.window-inactive .status-bar-surface {
+    -fx-background-color: linear-gradient(to bottom, #1a1a1a, #151515);
+    -fx-border-color: #2b2b2b;
+}
+
+.theme-light .status-bar-surface {
+    -fx-background-color: linear-gradient(to bottom, #fbfbfb, #f1f1f1);
+    -fx-border-color: #d7d7d7;
+}
+
+.status-bar-surface .label {
+    -fx-font-size: 12px;
+}
+
+.theme-dark .status-bar-surface .label {
+    -fx-text-fill: #dddddd;
+}
+
+.theme-dark.window-inactive .status-bar-surface .label {
+    -fx-text-fill: #c8c8c8;
+}
+
+.theme-light .status-bar-surface .label {
+    -fx-text-fill: #313131;
+}
+
+.status-bar-surface .status-view-toggle {
+    -fx-min-height: 30;
+    -fx-pref-height: 30;
+    -fx-padding: 0 10 0 10;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+}
+
+.theme-dark .status-bar-surface .status-view-toggle {
+    -fx-background-color: #202020;
+    -fx-border-color: #313131;
+    -fx-text-fill: #dddddd;
+}
+
+.theme-dark .status-bar-surface .status-view-toggle:hover {
+    -fx-background-color: #262626;
+}
+
+.theme-dark .status-bar-surface .status-view-toggle:selected {
+    -fx-background-color: #2b2b2b;
+}
+
+.theme-light .status-bar-surface .status-view-toggle {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d4d4d4;
+    -fx-text-fill: #2a2a2a;
+}
+
+.command-bar .separator:vertical .line,
+.secondary-toolbar .separator:vertical .line {
+    -fx-border-width: 0 1 0 0;
+}
+
+.theme-dark .command-bar .separator:vertical .line,
+.theme-dark .secondary-toolbar .separator:vertical .line {
+    -fx-border-color: #353535;
+}
+
+.theme-light .command-bar .separator:vertical .line,
+.theme-light .secondary-toolbar .separator:vertical .line {
+    -fx-border-color: #d7d7d7;
+}
+
+.window-maximized .top-chrome-surface,
+.window-maximized .content-surface,
+.window-maximized .status-bar-surface,
+.window-maximized .secondary-toolbar-surface {
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
+}

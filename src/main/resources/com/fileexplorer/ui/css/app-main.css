@@ -3,8 +3,43 @@
  ************************************************************/
 
 .root {
-    -fx-font-family: "Segoe UI Variable";
+    -fx-font-family: "Segoe UI Variable Text";
     -fx-font-size: 16px;
+}
+
+/* Windows 11 / Segoe UI metric tuning */
+.explorer-root,
+.explorer-root .label,
+.explorer-root .button,
+.explorer-root .toggle-button,
+.explorer-root .menu-button,
+.explorer-root .text-field,
+.explorer-root .table-view,
+.explorer-root .tree-view {
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-weight: normal;
+}
+
+.explorer-root .fluent-toolbar .button,
+.explorer-root .fluent-toolbar .toggle-button,
+.explorer-root .fluent-toolbar .menu-button,
+.explorer-root .breadcrumb-button,
+.explorer-root .breadcrumb-row .text-field,
+.explorer-root .table-view .column-header .label,
+.explorer-root .table-cell,
+.explorer-root .tree-cell {
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
+}
+
+.explorer-root .table-view .column-header .label {
+    -fx-font-size: 12px;
+}
+
+.explorer-root .secondary-toolbar .label,
+.explorer-root .status-bar .label {
+    -fx-font-size: 12px;
 }
 
 
@@ -13,6 +48,11 @@
 .glyph-icon,
 .icon-glyph {
     -fx-font-family: "Segoe Fluent Icons";
+}
+
+/* Icon glyphs (MDL2 Assets) */
+.mdl2-icon {
+    -fx-font-family: "Segoe MDL2 Assets";
 }
 /* Accent color (Win11 blue) */
 .theme-light,
@@ -103,6 +143,45 @@
     -fx-border-width: 0 0 1 0;
 }
 
+
+.top-chrome-surface {
+    -fx-spacing: 0;
+    -fx-padding: 0;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+}
+
+.theme-light .top-chrome-surface {
+    -fx-background-color: #f3f3f3;
+    -fx-border-color: #d0d0d0;
+    -fx-border-width: 1;
+}
+
+.theme-dark .top-chrome-surface {
+    -fx-background-color: #252525;
+    -fx-border-color: #3a3a3a;
+    -fx-border-width: 1;
+}
+
+.top-chrome-surface .breadcrumb-row,
+.top-chrome-surface .command-bar {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
+}
+
+.top-chrome-surface .breadcrumb-row {
+    -fx-padding: 8 8 0 8;
+}
+
+.top-chrome-surface .command-bar {
+    -fx-padding: 0 8 8 8;
+}
+
 /************************************************************
  * COMMAND BUTTONS (Back/Forward/Up, Details, Large icons, etc.)
  ************************************************************/
@@ -131,13 +210,15 @@
 .theme-light .fluent-toolbar .button:hover,
 .theme-light .fluent-toolbar .toggle-button:hover,
 .theme-light .fluent-toolbar .menu-button:hover {
-    -fx-background-color: rgba(0, 0, 0, 0.04);
+    -fx-background-color: rgba(0, 0, 0, 0.032);
 }
 
 .theme-light .fluent-command-button:armed,
+.theme-light .fluent-toolbar .button:armed,
 .theme-light .fluent-toolbar .menu-button:armed,
+.theme-light .fluent-toolbar .toggle-button:armed,
 .theme-light .fluent-toolbar .toggle-button:selected {
-    -fx-background-color: rgba(0, 120, 212, 0.16);
+    -fx-background-color: rgba(0, 120, 212, 0.12);
     -fx-text-fill: #202020;
 }
 
@@ -154,13 +235,15 @@
 .theme-dark .fluent-toolbar .button:hover,
 .theme-dark .fluent-toolbar .toggle-button:hover,
 .theme-dark .fluent-toolbar .menu-button:hover {
-    -fx-background-color: rgba(255, 255, 255, 0.07);
+    -fx-background-color: rgba(255, 255, 255, 0.055);
 }
 
 .theme-dark .fluent-command-button:armed,
+.theme-dark .fluent-toolbar .button:armed,
 .theme-dark .fluent-toolbar .menu-button:armed,
+.theme-dark .fluent-toolbar .toggle-button:armed,
 .theme-dark .fluent-toolbar .toggle-button:selected {
-    -fx-background-color: rgba(0, 120, 212, 0.4);
+    -fx-background-color: rgba(126, 167, 245, 0.22);
     -fx-text-fill: #ffffff;
 }
 
@@ -171,6 +254,29 @@
 
 .breadcrumb-row .text-field {
     -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-padding: 0 10 0 10;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
+}
+
+.breadcrumb-row .address-nav-group {
+    -fx-padding: 0 8 0 0;
+    -fx-alignment: CENTER_LEFT;
+}
+
+.top-chrome-surface #breadcrumbHost {
+    -fx-padding: 0;
+}
+
+.breadcrumb-row .address-nav-group > .button {
+    -fx-padding: 4 8 4 8;
+    -fx-alignment: CENTER;
+}
+
+.breadcrumb-row #breadcrumbHost {
+    -fx-padding: 0;
 }
 
 /************************************************************
@@ -178,8 +284,8 @@
  ************************************************************/
 
 .breadcrumb-bar {
-    -fx-spacing: 4;
-    -fx-padding: 2 8 2 8;
+    -fx-spacing: 8;
+    -fx-padding: 0 8 0 8;
 }
 
 .breadcrumb-button {
@@ -187,6 +293,9 @@
     -fx-padding: 2 8;
     -fx-background-insets: 0;
     -fx-border-width: 0;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
 }
 
 /* Light */
@@ -196,7 +305,7 @@
 }
 
 .theme-light .breadcrumb-button:hover {
-    -fx-background-color: rgba(0, 0, 0, 0.04);
+    -fx-background-color: rgba(0, 0, 0, 0.032);
 }
 
 /* Dark */
@@ -206,7 +315,7 @@
 }
 
 .theme-dark .breadcrumb-button:hover {
-    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-background-color: rgba(255, 255, 255, 0.055);
 }
 
 /* Separator ">" */
@@ -322,10 +431,17 @@
 
 /* Individual headers */
 .table-view .column-header {
-    -fx-padding: 4 8;
+    -fx-padding: 0;
     -fx-background-insets: 0;
     -fx-border-width: 0;
     -fx-alignment: CENTER_LEFT;
+}
+
+.table-view .column-header .label {
+    -fx-padding: 0 8 0 8;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 12px;
+    -fx-font-weight: normal;
 }
 
 /* Header label text color */
@@ -500,4 +616,81 @@
 /* See More menu spacing */
 .see-more-menuitem {
     -fx-graphic-text-gap: 10px;
+}
+
+/* View menu submenu row: keep the leading blank check/icon columns while letting the skin draw the submenu chevron. */
+.view-menu-leading {
+    -fx-alignment: CENTER_LEFT;
+    -fx-spacing: 10;
+}
+
+.context-menu .view-menu-submenu > .label {
+    -fx-padding: 0;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
+}
+
+/************************************************************
+ * TOOLTIP CONTRAST FIX
+ ************************************************************/
+.tooltip,
+.tooltip.explorer-rich-tooltip {
+    -fx-background-color: #101010;
+    -fx-background-insets: 0;
+    -fx-background-radius: 8;
+    -fx-border-color: #2f2f2f;
+    -fx-border-radius: 8;
+    -fx-border-width: 1;
+    -fx-padding: 6 10 6 10;
+    -fx-text-fill: #ffffff;
+}
+
+.tooltip .label,
+.tooltip > .label,
+.tooltip > *,
+.tooltip.explorer-rich-tooltip .label,
+.tooltip.explorer-rich-tooltip > .label,
+.tooltip.explorer-rich-tooltip .explorer-tooltip-label {
+    -fx-text-fill: #ffffff;
+}
+
+.tooltip .text,
+.tooltip.explorer-rich-tooltip .text {
+    -fx-fill: #ffffff;
+}
+
+.tooltip.explorer-rich-tooltip .explorer-tooltip-label {
+    -fx-text-fill: #ffffff;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
+    -fx-line-spacing: 2px;
+}
+
+.tooltip .page-corner,
+.tooltip.explorer-rich-tooltip .page-corner {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+    -fx-shape: "";
+}
+
+/************************************************************
+ * EXPLORER METADATA POPUP (HOTFIX38)
+ ************************************************************/
+.explorer-rich-tooltip-popup {
+    -fx-background-color: #101010;
+    -fx-background-radius: 8;
+    -fx-border-color: #2f2f2f;
+    -fx-border-width: 1;
+    -fx-border-radius: 8;
+    -fx-padding: 8 12 8 12;
+}
+
+.explorer-rich-tooltip-popup .explorer-tooltip-label {
+    -fx-text-fill: white;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
+    -fx-line-spacing: 2px;
 }

@@ -1,0 +1,203 @@
+/* Phase 4E - Details view parity */
+
+.details-view-shell {
+    -fx-padding: 0;
+    -fx-background-color: transparent;
+}
+
+.explorer-details-table {
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+    -fx-border-width: 0;
+    -fx-effect: null;
+}
+
+.theme-dark .explorer-details-table {
+    -fx-background-color: linear-gradient(to bottom, rgba(22,26,33,0.98), rgba(18,22,29,0.99));
+    -fx-control-inner-background: rgba(18,22,29,0.995);
+    -fx-table-cell-border-color: rgba(255,255,255,0.055);
+    /* HOTFIX30: keep Details hover/selection paints self-contained so they do not depend on a later stylesheet pass. */
+    -fx-details-selection-hover-bg: rgba(255,255,255,0.050);
+    -fx-details-selection-active-bg: rgba(113,162,255,0.260);
+    -fx-details-selection-active-bg-strong: rgba(113,162,255,0.305);
+    -fx-details-selection-inactive-bg: rgba(255,255,255,0.088);
+    -fx-details-selection-active-border: rgba(113,162,255,0.360);
+    -fx-details-selection-inactive-border: rgba(255,255,255,0.095);
+}
+
+.theme-light .explorer-details-table {
+    -fx-background-color: linear-gradient(to bottom, #fbfbfb, #f6f7f8);
+    -fx-control-inner-background: #ffffff;
+    -fx-table-cell-border-color: rgba(0,0,0,0.075);
+    /* HOTFIX30: keep Details hover/selection paints self-contained so they do not depend on a later stylesheet pass. */
+    -fx-details-selection-hover-bg: rgba(0,0,0,0.042);
+    -fx-details-selection-active-bg: rgba(33,99,214,0.158);
+    -fx-details-selection-active-bg-strong: rgba(33,99,214,0.188);
+    -fx-details-selection-inactive-bg: rgba(33,99,214,0.102);
+    -fx-details-selection-active-border: rgba(33,99,214,0.205);
+    -fx-details-selection-inactive-border: rgba(33,99,214,0.135);
+}
+
+.root.window-inactive.theme-dark.explorer-root .explorer-details-table {
+    -fx-details-selection-active-bg: rgba(255,255,255,0.092);
+    -fx-details-selection-active-bg-strong: rgba(255,255,255,0.105);
+    -fx-details-selection-active-border: rgba(255,255,255,0.100);
+}
+
+.root.window-inactive.theme-light.explorer-root .explorer-details-table {
+    -fx-details-selection-active-bg: rgba(0,0,0,0.060);
+    -fx-details-selection-active-bg-strong: rgba(0,0,0,0.074);
+    -fx-details-selection-active-border: rgba(0,0,0,0.090);
+}
+
+
+.explorer-details-table,
+.explorer-details-table .virtual-flow,
+.explorer-details-table .clipped-container,
+.explorer-details-table .sheet,
+.explorer-details-table .viewport,
+.explorer-details-table > .virtual-flow > .corner {
+    -fx-background-insets: 0;
+}
+
+.theme-dark .explorer-details-table .virtual-flow,
+.theme-dark .explorer-details-table .clipped-container,
+.theme-dark .explorer-details-table .sheet,
+.theme-dark .explorer-details-table .viewport,
+.theme-dark .explorer-details-table > .virtual-flow > .corner {
+    -fx-background-color: rgba(18,22,29,0.995);
+}
+
+.theme-light .explorer-details-table .virtual-flow,
+.theme-light .explorer-details-table .clipped-container,
+.theme-light .explorer-details-table .sheet,
+.theme-light .explorer-details-table .viewport,
+.theme-light .explorer-details-table > .virtual-flow > .corner {
+    -fx-background-color: #ffffff;
+}
+
+.explorer-details-table .column-header-background {
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+    -fx-min-height: 34px;
+    -fx-pref-height: 34px;
+    -fx-max-height: 34px;
+}
+
+.theme-dark .explorer-details-table .column-header-background {
+    -fx-background-color: linear-gradient(to bottom, rgba(28,33,41,0.98), rgba(24,29,36,0.98));
+    -fx-border-color: rgba(255,255,255,0.08);
+    -fx-border-width: 0 0 1 0;
+}
+
+.theme-light .explorer-details-table .column-header-background {
+    -fx-background-color: linear-gradient(to bottom, #f7f7f7, #f0f1f2);
+    -fx-border-color: rgba(0,0,0,0.10);
+    -fx-border-width: 0 0 1 0;
+}
+
+.explorer-details-table .column-header,
+.explorer-details-table .filler {
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+    -fx-background-radius: 0;
+    -fx-border-width: 0 1 0 0;
+    -fx-alignment: center-left;
+}
+
+.theme-dark .explorer-details-table .column-header,
+.theme-dark .explorer-details-table .filler {
+    -fx-background-color: rgba(24,29,36,0.98);
+    -fx-border-color: rgba(255,255,255,0.06);
+}
+
+.theme-light .explorer-details-table .column-header,
+.theme-light .explorer-details-table .filler {
+    -fx-background-color: #f0f1f2;
+    -fx-border-color: rgba(0,0,0,0.07);
+}
+
+.theme-dark .explorer-details-table .column-header:hover,
+.theme-dark .explorer-details-table .filler:hover {
+    -fx-background-color: rgba(35,40,49,0.98);
+}
+
+.theme-light .explorer-details-table .column-header:hover,
+.theme-light .explorer-details-table .filler:hover {
+    -fx-background-color: #ebedef;
+}
+
+.explorer-details-table .column-header .label {
+    -fx-padding: 0 14 0 14;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 12px;
+    -fx-font-weight: normal;
+    -fx-alignment: center-left;
+}
+
+.theme-dark .explorer-details-table .column-header .label {
+    -fx-text-fill: #eef2f7;
+}
+
+.theme-light .explorer-details-table .column-header .label {
+    -fx-text-fill: #1f1f1f;
+}
+
+.explorer-details-table .column-header .sort-order-dot,
+.explorer-details-table .column-header .sort-order-number {
+    -fx-text-fill: inherit;
+}
+
+.theme-dark .explorer-details-table .column-header .arrow {
+    -fx-background-color: #dce7ff;
+}
+
+.theme-light .explorer-details-table .column-header .arrow {
+    -fx-background-color: #315fbe;
+}
+
+.explorer-details-table {
+    -fx-selection-bar: transparent;
+    -fx-selection-bar-non-focused: transparent;
+}
+
+.explorer-details-table .table-row-cell {
+    -fx-background-insets: 0, 2 8 2 8;
+    -fx-background-radius: 0, 8;
+    -fx-border-insets: 2 8 2 8;
+    -fx-border-radius: 8;
+    -fx-border-width: 0, 1;
+    -fx-padding: 0;
+    -fx-cell-size: 34px;
+    -fx-background-color: transparent, transparent;
+    -fx-border-color: transparent, transparent;
+    -fx-selection-bar: transparent;
+    -fx-selection-bar-non-focused: transparent;
+}
+
+.explorer-details-table .table-row-cell,
+.explorer-details-table .table-row-cell:filled,
+.explorer-details-table .table-row-cell:hover,
+.explorer-details-table .table-row-cell:filled:hover,
+.explorer-details-table .table-row-cell:selected,
+.explorer-details-table .table-row-cell:filled:selected,
+.explorer-details-table .table-row-cell:filled:selected:hover,
+.explorer-details-table .table-row-cell:filled:explorer-hover,
+.explorer-details-table .table-row-cell:filled:selected:explorer-hover,
+.explorer-details-table:focused .table-row-cell:selected,
+.explorer-details-table:focused .table-row-cell:filled:selected,
+.root.window-inactive .explorer-details-table .table-row-cell:selected,
+.root.window-inactive .explorer-details-table .table-row-cell:filled:selected,
+.root.window-inactive .explorer-details-table:focused .table-row-cell:selected,
+.root.window-inactive .explorer-details-table:focused .table-row-cell:filled:selected {
+    -fx-background-color: transparent, transparent;
+    -fx-border-color: transparent, transparent;
+    -fx-selection-bar: transparent;
+    -fx-selection-bar-non-focused: transparent;
+}
+
+.explorer-details-table .table-row-cell:empty {
+    -fx-background-color: transparent, transparent;
+    -fx-border-color: transparent, transparent;
+}
+

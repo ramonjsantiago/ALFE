@@ -1,0 +1,250 @@
+
+.choose-details-dialog-root {
+    -fx-background-insets: 0;
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+}
+
+.theme-dark.choose-details-dialog-root {
+    -fx-background-color: #1f1f1f;
+    -fx-border-color: rgba(255,255,255,0.10);
+}
+
+.theme-light.choose-details-dialog-root {
+    -fx-background-color: #f3f3f3;
+    -fx-border-color: rgba(0,0,0,0.12);
+}
+
+.choose-details-dialog-root .label,
+.choose-details-dialog-root .button,
+.choose-details-dialog-root .text-field,
+.choose-details-dialog-root .list-view,
+.choose-details-dialog-root .list-cell,
+.choose-details-dialog-root .check-box {
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-weight: normal;
+}
+
+.choose-details-lead {
+    -fx-font-size: 12px;
+    -fx-padding: 2 0 0 0;
+}
+
+.choose-details-section-label,
+.choose-details-width-label {
+    -fx-font-size: 12px;
+}
+
+.theme-dark .choose-details-lead,
+.theme-dark .choose-details-section-label,
+.theme-dark .choose-details-width-label,
+.theme-dark .choose-details-row-label {
+    -fx-text-fill: #f5f5f5;
+}
+
+.theme-light .choose-details-lead,
+.theme-light .choose-details-section-label,
+.theme-light .choose-details-width-label,
+.theme-light .choose-details-row-label {
+    -fx-text-fill: #1c1c1c;
+}
+
+.choose-details-list {
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+    -fx-border-width: 1;
+    -fx-padding: 1;
+    -fx-fixed-cell-size: 22px;
+}
+
+.theme-dark .choose-details-list {
+    -fx-background-color: #1a1a1a;
+    -fx-border-color: rgba(255,255,255,0.18);
+}
+
+.theme-light .choose-details-list {
+    -fx-background-color: white;
+    -fx-border-color: rgba(0,0,0,0.22);
+}
+
+.choose-details-list .viewport,
+.choose-details-list .virtual-flow,
+.choose-details-list .clipped-container,
+.choose-details-list .sheet {
+    -fx-background-color: transparent;
+}
+
+.choose-details-list-cell {
+    -fx-padding: 0;
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+}
+
+.theme-dark .choose-details-list-cell {
+    -fx-background-color: #1a1a1a;
+}
+
+.theme-light .choose-details-list-cell {
+    -fx-background-color: white;
+}
+
+.theme-dark .choose-details-list-cell:filled:selected,
+.theme-dark .choose-details-list-cell:filled:selected:focused {
+    -fx-background-color: rgba(255,255,255,0.06);
+}
+
+.theme-light .choose-details-list-cell:filled:selected,
+.theme-light .choose-details-list-cell:filled:selected:focused {
+    -fx-background-color: rgba(0,0,0,0.06);
+}
+
+.choose-details-row-box {
+    -fx-min-height: 22px;
+    -fx-pref-height: 22px;
+    -fx-max-height: 22px;
+}
+
+.choose-details-list .scroll-bar:vertical,
+.choose-details-list .scroll-bar:horizontal {
+    -fx-background-color: transparent;
+}
+
+.theme-dark .choose-details-list .scroll-bar .thumb {
+    -fx-background-color: rgba(255,255,255,0.22);
+    -fx-background-radius: 999;
+}
+
+.theme-light .choose-details-list .scroll-bar .thumb {
+    -fx-background-color: rgba(0,0,0,0.20);
+    -fx-background-radius: 999;
+}
+
+.choose-details-list .check-box {
+    -fx-padding: 0;
+}
+
+.choose-details-list .check-box > .box {
+    -fx-background-radius: 2;
+    -fx-border-radius: 2;
+    -fx-padding: 0;
+    -fx-min-width: 14px;
+    -fx-min-height: 14px;
+    -fx-pref-width: 14px;
+    -fx-pref-height: 14px;
+}
+
+.theme-dark .choose-details-list .check-box > .box {
+    -fx-background-color: #161616;
+    -fx-border-color: rgba(255,255,255,0.45);
+    -fx-border-width: 1;
+}
+
+.theme-light .choose-details-list .check-box > .box {
+    -fx-background-color: white;
+    -fx-border-color: rgba(0,0,0,0.45);
+    -fx-border-width: 1;
+}
+
+.theme-dark .choose-details-list .check-box:selected > .box,
+.theme-light .choose-details-list .check-box:selected > .box {
+    -fx-background-color: #0f6cbd;
+    -fx-border-color: #0f6cbd;
+}
+
+.choose-details-list .check-box:selected > .box > .mark {
+    -fx-background-color: white;
+    -fx-shape: "M 2.0 7.0 L 5.0 10.0 L 11.0 3.0 L 12.3 4.3 L 5.0 12.0 L 0.7 7.7 Z";
+    -fx-scale-shape: false;
+}
+
+.choose-details-command-button {
+    -fx-font-size: 12px;
+    -fx-min-width: 86px;
+    -fx-pref-width: 86px;
+    -fx-min-height: 28px;
+    -fx-pref-height: 28px;
+    -fx-background-radius: 5;
+    -fx-border-radius: 5;
+    -fx-background-insets: 0;
+}
+
+.theme-dark .choose-details-command-button {
+    -fx-background-color: linear-gradient(to bottom, #333333, #2a2a2a);
+    -fx-border-color: rgba(255,255,255,0.10);
+    -fx-border-width: 1;
+    -fx-text-fill: #f5f5f5;
+}
+
+.theme-dark .choose-details-command-button:hover:armed,
+.theme-dark .choose-details-command-button:pressed {
+    -fx-background-color: linear-gradient(to bottom, #2b588f, #244a77);
+    -fx-border-color: rgba(255,255,255,0.20);
+}
+
+.theme-dark .choose-details-command-button:hover {
+    -fx-background-color: linear-gradient(to bottom, #3a3a3a, #313131);
+}
+
+.theme-dark .choose-details-command-button:disabled {
+    -fx-background-color: #2a2a2a;
+    -fx-border-color: rgba(255,255,255,0.06);
+    -fx-text-fill: rgba(255,255,255,0.40);
+}
+
+.theme-light .choose-details-command-button {
+    -fx-background-color: linear-gradient(to bottom, #ffffff, #f4f4f4);
+    -fx-border-color: rgba(0,0,0,0.12);
+    -fx-border-width: 1;
+    -fx-text-fill: #1f1f1f;
+}
+
+.theme-light .choose-details-command-button:hover {
+    -fx-background-color: linear-gradient(to bottom, #ffffff, #ececec);
+}
+
+.theme-light .choose-details-command-button:disabled {
+    -fx-background-color: #f1f1f1;
+    -fx-border-color: rgba(0,0,0,0.08);
+    -fx-text-fill: rgba(0,0,0,0.35);
+}
+
+.choose-details-width-row {
+    -fx-padding: 4 0 0 0;
+}
+
+.choose-details-width-field {
+    -fx-font-size: 12px;
+    -fx-pref-width: 58px;
+    -fx-min-width: 58px;
+    -fx-max-width: 58px;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
+    -fx-padding: 3 6 3 6;
+}
+
+.theme-dark .choose-details-width-field {
+    -fx-background-color: #141414;
+    -fx-border-color: rgba(255,255,255,0.18);
+    -fx-text-fill: #f5f5f5;
+    -fx-prompt-text-fill: rgba(255,255,255,0.45);
+}
+
+.theme-light .choose-details-width-field {
+    -fx-background-color: white;
+    -fx-border-color: rgba(0,0,0,0.18);
+    -fx-text-fill: #1f1f1f;
+}
+
+.theme-dark .choose-details-separator .line {
+    -fx-border-color: rgba(255,255,255,0.12);
+}
+
+.theme-light .choose-details-separator .line {
+    -fx-border-color: rgba(0,0,0,0.12);
+}
+
+.choose-details-button-bar .button {
+    -fx-min-width: 76px;
+    -fx-pref-width: 76px;
+}

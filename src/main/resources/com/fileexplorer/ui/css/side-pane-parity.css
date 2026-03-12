@@ -1,0 +1,157 @@
+/* Phase 4F - Modern details pane + preview pane parity */
+
+.explorer-side-pane {
+    -fx-padding: 12;
+    -fx-spacing: 12;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
+    -fx-border-width: 0 0 0 1;
+}
+
+.theme-dark .explorer-side-pane {
+    -fx-background-color: linear-gradient(to bottom, rgba(24,29,36,0.985), rgba(18,22,29,0.992));
+    -fx-border-color: rgba(255,255,255,0.075);
+}
+
+.theme-light .explorer-side-pane {
+    -fx-background-color: linear-gradient(to bottom, #f8f9fb, #f3f4f6);
+    -fx-border-color: rgba(0,0,0,0.08);
+}
+
+.side-pane-card {
+    -fx-padding: 12;
+    -fx-spacing: 10;
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
+}
+
+.theme-dark .side-pane-card {
+    -fx-background-color: linear-gradient(to bottom, rgba(35,42,53,0.92), rgba(28,34,43,0.96));
+    -fx-border-color: rgba(255,255,255,0.08);
+}
+
+.theme-light .side-pane-card {
+    -fx-background-color: linear-gradient(to bottom, #ffffff, #f8f9fb);
+    -fx-border-color: rgba(0,0,0,0.09);
+}
+
+.side-pane-card-header {
+    -fx-padding: 0 0 2 0;
+    -fx-alignment: center-left;
+}
+
+.side-pane-card-icon {
+    -fx-font-size: 15px;
+    -fx-min-width: 18px;
+}
+
+.side-pane-card-title {
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
+    -fx-font-weight: 700;
+}
+
+.side-pane-card-subtitle {
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 11px;
+}
+
+.theme-dark .side-pane-card-title,
+.theme-dark .side-pane-card-icon {
+    -fx-text-fill: #eef3fb;
+}
+
+.theme-dark .side-pane-card-subtitle {
+    -fx-text-fill: rgba(238,243,251,0.68);
+}
+
+.theme-light .side-pane-card-title,
+.theme-light .side-pane-card-icon {
+    -fx-text-fill: #1f1f1f;
+}
+
+.theme-light .side-pane-card-subtitle {
+    -fx-text-fill: rgba(31,31,31,0.62);
+}
+
+.preview-image-shell {
+    -fx-alignment: center;
+    -fx-padding: 12;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+}
+
+.theme-dark .preview-image-shell {
+    -fx-background-color: rgba(10,12,16,0.34);
+    -fx-border-color: rgba(255,255,255,0.06);
+}
+
+.theme-light .preview-image-shell {
+    -fx-background-color: rgba(0,0,0,0.025);
+    -fx-border-color: rgba(0,0,0,0.07);
+}
+
+.side-pane-text {
+    -fx-background-insets: 0;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+    -fx-padding: 0;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 12px;
+    -fx-highlight-fill: rgba(80,138,255,0.38);
+    -fx-highlight-text-fill: inherit;
+}
+
+.side-pane-text .content {
+    -fx-background-radius: 10;
+    -fx-padding: 10 12 10 12;
+}
+
+.theme-dark .side-pane-text {
+    -fx-background-color: rgba(18,22,29,0.92);
+    -fx-border-color: rgba(255,255,255,0.075);
+    -fx-text-fill: #eef3fb;
+    -fx-prompt-text-fill: rgba(238,243,251,0.52);
+}
+
+.theme-dark .side-pane-text .content {
+    -fx-background-color: rgba(18,22,29,0.92);
+}
+
+.theme-light .side-pane-text {
+    -fx-background-color: #ffffff;
+    -fx-border-color: rgba(0,0,0,0.08);
+    -fx-text-fill: #202020;
+    -fx-prompt-text-fill: rgba(32,32,32,0.5);
+}
+
+.theme-light .side-pane-text .content {
+    -fx-background-color: #ffffff;
+}
+
+.preview-pane-text {
+    -fx-pref-row-count: 9;
+}
+
+.details-pane-text {
+    -fx-pref-row-count: 13;
+}
+
+.operations-pane-card .progress-root,
+.operations-pane-card .progress-pane,
+.operations-pane-card .progress-list-view {
+    -fx-background-color: transparent;
+}
+
+.theme-dark.window-inactive .explorer-side-pane {
+    -fx-background-color: linear-gradient(to bottom, rgba(22,26,31,0.985), rgba(18,21,26,0.992));
+}
+
+.theme-light.window-inactive .explorer-side-pane {
+    -fx-background-color: linear-gradient(to bottom, #f6f7f9, #f1f2f4);
+}

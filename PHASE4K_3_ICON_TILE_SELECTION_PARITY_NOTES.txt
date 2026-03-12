@@ -1,0 +1,12 @@
+HOTFIX35 / Phase 4K.3 — Icon / Tile Selection Parity
+
+Summary
+- Added mode-aware icon/tile metrics so Extra Large, Large, Medium, Small, Tiles, and Content each get distinct spacing, padding, and tile widths.
+- Added mode-aware style classes on iconFlow and each icon/tile container so CSS can tune geometry without affecting Details view.
+- Refined grid icon tiles to better match Windows 11 Explorer by tightening label width, vertical spacing, and tile padding by view size.
+- Refined Tiles and Content rows with Explorer-like name/meta typography and wider left-aligned content blocks.
+- Kept selection, inactive-selection, and hover states on the same selection token layer so icon/tile views remain consistent with the existing parity work.
+
+Primary changed files
+- src/main/java/com/fileexplorer/controller/MainController.java
+- src/main/resources/com/fileexplorer/ui/css/selection-state-tokens.css

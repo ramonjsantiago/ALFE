@@ -1,6 +1,6 @@
 /* table_header_hover.css (DARK LITERAL SAFE) */
 .table-view .column-header:hover {
-    -fx-background-color: derive(#1c2027, 10%);
+    -fx-background-color: derive(#181c22, 4%);
 }
 
 .table-view .column-header:hover .label {
@@ -8,5 +8,5 @@
 }
 
 .table-view .column-header-background .filler:hover {
-    -fx-background-color: derive(#1c2027, 10%);
+    -fx-background-color: derive(#181c22, 4%);
 }

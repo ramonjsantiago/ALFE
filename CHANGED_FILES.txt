@@ -1,0 +1,9 @@
+src/main/java/com/fileexplorer/controller/MainController.java
+PHASE_LABEL.txt
+CHANGELOG.md
+CHANGED_FILES.txt
+PHASE4K_2D_DETAILS_HOVER_STABILIZATION_AND_TOOLTIP_BINDING_NOTES.txt
+
+src/main/java/com/fileexplorer/controller/MainController.java
+src/main/resources/com/fileexplorer/ui/css/details-view-parity.css
+PHASE4K_2F_DETAILS_OVERLAY_HOVER_RENDERER_AND_DELAYED_METADATA_POPUP_NOTES.txt

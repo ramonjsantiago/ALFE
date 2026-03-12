@@ -6,20 +6,22 @@
 }
 
 .table-view .column-header-background {
-    -fx-background-color: #1c2027;
+    -fx-background-color: #181c22;
     -fx-background-insets: 0;
+    -fx-border-color: #232933;
+    -fx-border-width: 0 0 1 0;
 }
 
 .table-view .column-header {
-    -fx-background-color: #1c2027;
+    -fx-background-color: #181c22;
     -fx-background-insets: 0;
-    -fx-border-color: #2a303a;
-    -fx-border-width: 0 1 1 0;
+    -fx-border-color: #232933;
+    -fx-border-width: 0 1 0 0;
 }
 
 .table-view .filler {
-    -fx-background-color: #1c2027;
-    -fx-border-color: #2a303a;
+    -fx-background-color: #181c22;
+    -fx-border-color: #232933;
     -fx-border-width: 0 0 1 0;
 }
 
@@ -35,6 +37,9 @@
 .table-cell {
     -fx-text-fill: #e6e8eb;
     -fx-padding: 0 8 0 8;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
 }
 
 
@@ -48,8 +53,8 @@
 */
 .table-view .column-header {
     /* Always show a subtle vertical separator between headers */
-    -fx-border-color: #2a303a;
-    -fx-border-width: 0 1 1 0;
+    -fx-border-color: #232933;
+    -fx-border-width: 0 1 0 0;
 }
 
 .table-view .column-header .column-resize-line {
@@ -65,3 +70,10 @@
     -fx-opacity: 1.0;
 }
 
+
+
+.table-view .column-header .label {
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 12px;
+    -fx-font-weight: normal;
+}

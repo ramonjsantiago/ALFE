@@ -46,14 +46,14 @@ public final class NavigationPaneController implements Lifecycle {
     private final ThemeService themeService = new ThemeService();
 
     // --- Metrics ------------------------------------------------------------
-    private static final double TREE_ROW_HEIGHT_PX = 24.0;
+    private static final double TREE_ROW_HEIGHT_PX = 42.0;
 
 
     private ExplorerContext context;
     private final CompositeCloseable disposables = new CompositeCloseable();
     private static final double TREE_ICON_SIZE_PX = 16.0;
     private static final double TREE_GRAPHIC_TEXT_GAP_PX = 5.0;
-    private static final Insets TREE_CELL_PADDING = new Insets(0, 8, 0, 8);
+    private static final Insets TREE_CELL_PADDING = new Insets(5, 8, 5, 8);
 
     @FXML
 /**

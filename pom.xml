@@ -6,7 +6,7 @@
 
     <groupId>com.fileexplorer</groupId>
     <artifactId>FileExplorer</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.2026.03.05</version>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

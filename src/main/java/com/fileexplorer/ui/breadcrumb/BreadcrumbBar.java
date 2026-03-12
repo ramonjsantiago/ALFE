@@ -209,7 +209,7 @@ public class BreadcrumbBar {
 
         try {
             Stage stage = new Stage();
-            MainApp.configureExplorerStage(stage, target);
+            MainApp.configureExplorerStage(stage, target, "ui.breadcrumb.new-window");
         } catch (IOException ex) {
             ex.printStackTrace();
         }

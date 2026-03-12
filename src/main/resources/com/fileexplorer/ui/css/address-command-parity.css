@@ -1,0 +1,122 @@
+/* Phase 4C - Address bar + command bar fidelity */
+
+.explorer-top-work-area {
+    -fx-spacing: 6;
+}
+
+.explorer-top-bands {
+    -fx-background-color: transparent;
+}
+
+.explorer-address-row {
+    -fx-background-color: transparent;
+    -fx-padding: 0.25em 0.5em 0.35em 0.5em;
+}
+
+.explorer-nav-cluster {
+    -fx-spacing: 4;
+    -fx-padding: 0 10 0 0;
+}
+
+.explorer-nav-cluster > .button {
+    -fx-background-radius: 999;
+    -fx-padding: 0.55em 0.72em;
+    -fx-min-width: 34px;
+    -fx-min-height: 34px;
+}
+
+.explorer-address-search-host {
+    -fx-alignment: center-left;
+}
+
+.explorer-address-shell,
+.explorer-search-shell,
+.explorer-address-pill {
+    -fx-background-insets: 0;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+}
+
+.explorer-address-shell,
+.explorer-address-pill {
+    -fx-padding: 0 6 0 6;
+}
+
+.address-content-host {
+    -fx-alignment: center-left;
+    -fx-spacing: 0;
+}
+
+.address-leading-icon {
+    -fx-padding: 0 8 0 6;
+    -fx-font-size: 15px;
+    -fx-opacity: 0.82;
+}
+
+.explorer-crumb-container {
+    -fx-padding: 0 6 0 0;
+    -fx-alignment: center-left;
+}
+
+.explorer-address-field,
+.explorer-search-field {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-background-insets: 0;
+    -fx-padding: 0 10 0 10;
+}
+
+.explorer-address-field:focused,
+.explorer-search-field:focused {
+    -fx-background-color: transparent;
+}
+
+.explorer-address-dropdown {
+    -fx-background-color: transparent;
+    -fx-background-radius: 8;
+    -fx-padding: 0.4em;
+}
+
+.explorer-command-row {
+    -fx-padding: 0.15em 0.55em 0.5em 0.55em;
+    -fx-background-color: transparent;
+    -fx-spacing: 2;
+}
+
+.explorer-command-row > .button,
+.explorer-command-row > .toggle-button,
+.explorer-command-row > .menu-button {
+    -fx-background-radius: 8;
+    -fx-padding: 0.52em 0.82em;
+}
+
+.explorer-command-row.compact > .button,
+.explorer-command-row.compact > .toggle-button,
+.explorer-command-row.compact > .menu-button {
+    -fx-content-display: graphic-only;
+    -fx-padding: 0.52em 0.6em;
+}
+
+.explorer-command-row.medium-compact > .button,
+.explorer-command-row.medium-compact > .toggle-button,
+.explorer-command-row.medium-compact > .menu-button {
+    -fx-padding: 0.52em 0.68em;
+}
+
+.command-primary-button {
+    -fx-font-weight: 600;
+}
+
+.command-pane-toggle:selected {
+    -fx-font-weight: 600;
+}
+
+.explorer-secondary-location-row {
+    -fx-padding: 0;
+}
+
+.root.window-inactive .explorer-address-shell,
+.root.window-inactive .explorer-search-shell,
+.root.window-inactive .explorer-address-pill {
+    -fx-opacity: 0.92;
+}

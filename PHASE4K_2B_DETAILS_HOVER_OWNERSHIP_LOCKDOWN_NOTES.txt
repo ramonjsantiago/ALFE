@@ -1,0 +1,19 @@
+HOTFIX33 / Phase 4K.2B — Details Hover Ownership Lockdown
+
+Goals
+- stop lingering hover flicker in Details/Table view
+- make the TableRow the single owner of row hover / selection paint
+- keep TableCell surfaces transparent so moving across columns does not flap highlight ownership
+
+Implementation
+- removed Details-row hover/selection style-class churn from MainController row state sync
+- kept row hover prefetch, double-click navigation, and context-menu behavior intact
+- made Details table cells mouse-transparent by default so hover and primary hit-testing stay on the row
+- kept inline-rename interactive by re-enabling mouse input only while the rename field is active
+- rewrote details-view-parity.css to use row pseudo-classes (:filled, :hover, :selected, :odd, :empty)
+  instead of custom hover/selection classes for Details rows
+- added stronger Details-specific overrides for generic table hover/selection CSS
+
+Expected result
+- moving horizontally across Name / Type / Size / Date Modified should no longer cause the row highlight to flicker
+- hover, selection, focused-selection, and inactive-selection should remain visually stable in Details view

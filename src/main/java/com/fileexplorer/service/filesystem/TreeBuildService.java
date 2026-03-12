@@ -10,9 +10,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
 import javafx.collections.ObservableList;
 import javafx.application.Platform;
@@ -73,6 +75,8 @@ public final class TreeBuildService {
 private static final int MAX_TREE_CHILD_DIRS =
         Integer.getInteger("fileexplorer.maxTreeChildDirs", 2000);
 
+    private final ConcurrentHashMap<String, String> specialDisplayNames = new ConcurrentHashMap<>();
+
 /**
  * A non-navigable informational row inside the navigation tree (e.g., to indicate truncation).
  */
@@ -118,6 +122,22 @@ public static final class MessageTreeItem extends TreeItem<Path> {
         LogSupport.enter(LOG, "buildComputerRoot");
         TreeItem<Path> computer = new TreeItem<>(null);
         computer.setExpanded(true);
+        specialDisplayNames.clear();
+
+        List<TreeItem<Path>> pinnedItems = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+
+        Path home = resolvePath(System.getProperty("user.home"));
+        addPinnedLocation(pinnedItems, seen, home, "Home");
+        if (home != null) {
+            addPinnedLocation(pinnedItems, seen, home.resolve("Desktop"), "Desktop");
+            addPinnedLocation(pinnedItems, seen, home.resolve("Downloads"), "Downloads");
+            addPinnedLocation(pinnedItems, seen, home.resolve("Documents"), "Documents");
+            addPinnedLocation(pinnedItems, seen, home.resolve("Pictures"), "Pictures");
+            addPinnedLocation(pinnedItems, seen, home.resolve("Music"), "Music");
+            addPinnedLocation(pinnedItems, seen, home.resolve("Videos"), "Videos");
+            addPinnedLocation(pinnedItems, seen, resolveOneDrivePath(home), "OneDrive");
+        }
 
         Iterable<Path> roots = FileSystems.getDefault().getRootDirectories();
         List<TreeItem<Path>> rootItems = new ArrayList<>();
@@ -126,11 +146,16 @@ public static final class MessageTreeItem extends TreeItem<Path> {
             if (r == null) {
                 continue;
             }
+            String key = normalizePathKey(r);
+            if (!seen.add(key)) {
+                continue;
+            }
             rootItems.add(new LazyDirTreeItem(r, true));
         }
 
         rootItems.sort(Comparator.comparing(a -> safeString(a.getValue())));
-        computer.getChildren().setAll(rootItems);
+        computer.getChildren().addAll(pinnedItems);
+        computer.getChildren().addAll(rootItems);
 
         return computer;
     }
@@ -160,6 +185,11 @@ public static final class MessageTreeItem extends TreeItem<Path> {
         }
         if (path == null) {
             return "";
+        }
+
+        String special = specialDisplayNames.get(normalizePathKey(path));
+        if (special != null && !special.isBlank()) {
+            return special;
         }
 
         if (path.getFileName() == null) {
@@ -198,6 +228,64 @@ public static final class MessageTreeItem extends TreeItem<Path> {
     private static String safeString(Path p) {
         LogSupport.enter(LOG, "safeString");
         return p == null ? "" : p.toString();
+    }
+
+
+    private void addPinnedLocation(List<TreeItem<Path>> pinnedItems, Set<String> seen, Path path, String label) {
+        if (path == null || label == null || label.isBlank()) {
+            return;
+        }
+        try {
+            Path normalized = path.toAbsolutePath().normalize();
+            if (!Files.exists(normalized) || !Files.isDirectory(normalized, LinkOption.NOFOLLOW_LINKS)) {
+                return;
+            }
+            String key = normalizePathKey(normalized);
+            if (!seen.add(key)) {
+                return;
+            }
+            specialDisplayNames.put(key, label);
+            pinnedItems.add(new LazyDirTreeItem(normalized, false));
+        } catch (Exception ignored) {
+            // Non-fatal: skip unavailable pinned locations.
+        }
+    }
+
+    private static Path resolvePath(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return Path.of(raw).toAbsolutePath().normalize();
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private static Path resolveOneDrivePath(Path home) {
+        Path env = resolvePath(System.getenv("OneDrive"));
+        if (env != null) {
+            return env;
+        }
+        env = resolvePath(System.getenv("OneDriveConsumer"));
+        if (env != null) {
+            return env;
+        }
+        if (home == null) {
+            return null;
+        }
+        return home.resolve("OneDrive").toAbsolutePath().normalize();
+    }
+
+    private static String normalizePathKey(Path path) {
+        if (path == null) {
+            return "";
+        }
+        try {
+            return path.toAbsolutePath().normalize().toString().toLowerCase(Locale.ROOT);
+        } catch (Exception ex) {
+            return safeString(path).toLowerCase(Locale.ROOT);
+        }
     }
 
 /**

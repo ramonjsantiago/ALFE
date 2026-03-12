@@ -20,6 +20,7 @@ import javafx.stage.Screen;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.OverrunStyle;
 import javafx.geometry.Rectangle2D;
+import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
 import java.util.prefs.Preferences;
 import java.util.Objects;
@@ -29,12 +30,19 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicInteger;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyObjectWrapper;
+import javafx.beans.InvalidationListener;
+import javafx.beans.property.IntegerProperty;
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.transformation.FilteredList;
 import javafx.collections.transformation.SortedList;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
+import javafx.css.PseudoClass;
 import javafx.fxml.Initializable;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -42,7 +50,10 @@ import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Label;
+import javafx.scene.control.Button;
+import javafx.scene.control.Labeled;
 import javafx.scene.control.ContentDisplay;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableCell;
@@ -50,12 +61,14 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.SplitPane;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.StackPane;
 import javafx.scene.control.TreeCell;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
@@ -72,6 +85,7 @@ import javafx.scene.layout.Priority;
 import java.nio.file.Paths;
 import javafx.stage.Stage;
 import javafx.stage.Window;
+import javafx.stage.Popup;
 import javafx.util.Callback;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
@@ -87,6 +101,7 @@ import javafx.scene.control.ListView;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 import com.fileexplorer.util.LogSupport;
+import com.fileexplorer.util.StartupTrace;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -107,10 +122,12 @@ import com.fileexplorer.service.icon.AsyncThumbnailService;
 import com.fileexplorer.service.icon.IconCacheService;
 import com.fileexplorer.ui.table.TableViewSupport;
 import com.fileexplorer.ui.table.TableHeaderContextMenuInstaller;
+import com.fileexplorer.ui.table.DetailColumnCatalog;
 import com.fileexplorer.ui.dialog.ChooseDetailsDialog;
 import com.fileexplorer.ui.tree.TreeViewSupport;
 import com.fileexplorer.ui.tree.SimplePathTreeCell;
 import com.fileexplorer.ui.tree.IconPathTreeCell;
+import com.fileexplorer.ui.motion.FluentMotionSupport;
 import com.fileexplorer.model.FileItem;
 import com.fileexplorer.service.filesystem.DirectoryListingService;
 import com.fileexplorer.service.filesystem.DirectoryLoadManager;
@@ -147,6 +164,10 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     private static final boolean RESOURCE_AUDIT = Boolean.getBoolean("fileexplorer.resourceAudit");
     // Fix16: diagnostics guard against VirtualFlow runaway cell creation during preferred-size computation
     private static final java.util.concurrent.atomic.AtomicInteger TREE_CELL_CREATED = new java.util.concurrent.atomic.AtomicInteger();
+    private static final double FOLDER_TREE_ROW_HEIGHT_PX = 39.0;
+    private static final Insets FOLDER_TREE_CELL_PADDING = new Insets(4.0, 8.0, 4.0, 6.0);
+    private static final String EXPLORER_ICON_TILE_PATH_KEY = "explorer.iconTilePath";
+    private static final String EXPLORER_ICON_TILE_HOVER_HANDLER_KEY = "explorer.iconTileHoverHandlerInstalled";
     private static final double UI_FONT_DEFAULT_PX = 16.0;
     private static final double UI_FONT_MIN_PX = 12.0;
     private static final double UI_FONT_MAX_PX = 32.0;
@@ -182,14 +203,26 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     @FXML private TableColumn<FileItem, String> colType;
     @FXML private TableColumn<FileItem, String> colSize;
     @FXML private TableColumn<FileItem, String> colModified;
-    // Optional Explorer-like columns (not in FileItem yet; placeholders for future metadata).
+    // Optional Explorer-like columns (created lazily from the Choose Details dialog).
     private TableColumn<FileItem, String> colDateCreated;
     private TableColumn<FileItem, String> colAuthors;
     private TableColumn<FileItem, String> colTags;
     private TableColumn<FileItem, String> colTitle;
+    private static final String PROP_DETAIL_COLUMN_KEY = "fileexplorer.detailColumnKey";
+    private final java.util.LinkedHashMap<String, javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?>> lazyDetailColumns = new java.util.LinkedHashMap<>();
+    private java.util.List<com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec> chooseDetailSpecs = java.util.List.of();
+    private java.util.Map<String, com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec> chooseDetailSpecsByKey = java.util.Map.of();
+    private static final PseudoClass PSEUDO_EXPLORER_HOVER = PseudoClass.getPseudoClass("explorer-hover");
+    private final IntegerProperty detailsHoverRowIndex = new SimpleIntegerProperty(-1);
+    private final ObjectProperty<TableRow<FileItem>> activeDetailsHoverRow = new SimpleObjectProperty<>(null);
+    private boolean stableDetailsHoverTrackingInstalled = false;
+    private final java.util.Map<String, Double> detailColumnWidths = new java.util.HashMap<>();
+    private final java.util.List<String> detailOrderedKeys = new java.util.ArrayList<>();
+    private boolean detailsColumnsPersistenceWired = false;
     @FXML private ToggleButton themeToggle;
     @FXML private ToggleButton detailsToggle;
-        @FXML private ToggleButton operationsToggle;
+    @FXML private ToggleButton previewToggle;
+    @FXML private ToggleButton operationsToggle;
 @FXML private BorderPane root;
     @FXML private SplitPane mainSplitPane;
     @FXML private SplitPane contentSplitPane;
@@ -211,8 +244,13 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     @FXML private Label statusLabel;
     @FXML private Label locationLabel;
     @FXML private TextField searchField;
+    @FXML private javafx.scene.control.ToolBar commandBar;
 // --- Top command bar / toolbar (wired programmatically) -----------------
 @FXML private javafx.scene.control.MenuButton newMenuButton;
+@FXML private javafx.scene.control.Button backButton;
+@FXML private javafx.scene.control.Button forwardButton;
+@FXML private javafx.scene.control.Button upButton;
+@FXML private javafx.scene.control.Button refreshButton;
 @FXML private javafx.scene.control.Button cutButton;
 @FXML private javafx.scene.control.Button copyButton;
 @FXML private javafx.scene.control.Button pasteButton;
@@ -221,8 +259,18 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
 @FXML private javafx.scene.control.Button deleteButton;
 @FXML private javafx.scene.control.MenuButton sortMenuButton;
 @FXML private javafx.scene.control.MenuButton viewMenuButton;
+    @FXML private javafx.scene.control.MenuButton seeMoreMenuButton;
+    @FXML private HBox tabStrip;
+    @FXML private Button homeTabButton;
+    @FXML private Button currentTabButton;
+    @FXML private Button newTabButton;
     @FXML private ScrollPane iconScroll;
     @FXML private FlowPane iconFlow;
+    @FXML private StackPane detailsViewShell;
+    @FXML private VBox homePane;
+    @FXML private HBox homePinnedRow;
+    @FXML private VBox recentFoldersBox;
+    @FXML private Label homeCurrentLocationLabel;
     @FXML private VBox sidePane;
     @FXML private VBox previewBox;
     @FXML private VBox detailsBox;
@@ -232,6 +280,13 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
      * by the toolbar "Details" toggle and by the View menu "Details pane" / "Preview pane" items.
      */
     private boolean sidePaneMasterVisible = false;
+    private Path inlineRenameTablePath;
+    private Path inlineRenameTreePath;
+    private Path pendingInlineRenameSelectionPath;
+    private int pendingInlineRenameSelectionIndex = -1;
+    private final java.util.List<Path> recentHomeLocations = new java.util.ArrayList<>();
+    private boolean homeActive = false;
+    private static final int HOME_RECENT_MAX = 8;
     @FXML private TextArea previewText;
     @FXML private javafx.scene.image.ImageView previewImage;
     @FXML private TextArea detailsText;
@@ -323,9 +378,14 @@ private volatile long hugeFolderScannedTotal = 0L;
     private static final String PREF_TABLE_DETAILS_COLS_WIDTHS = "table.details.cols.widths";
     private final ToggleGroup viewModeToggleGroup;
     private boolean windowPrefsInstalled;
+    private boolean windowChromeStateInstalled;
     private boolean zoomShortcutsInstalled;
     private boolean explorerShortcutsInstalled;
     private volatile Path currentDirectory;
+    private final java.util.concurrent.atomic.AtomicBoolean startupTreeSkeletonMarked = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicBoolean startupTreeRootVisibleMarked = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicBoolean startupInitialDirectoryLoadStarted = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicBoolean startupInitialDirectoryLoadFinished = new java.util.concurrent.atomic.AtomicBoolean(false);
     private volatile boolean directoryLoading;
     private final List<Path> backHistory;
     private final List<Path> forwardHistory;
@@ -352,6 +412,8 @@ private volatile Path hoverPrefetchTarget;
 private final ExecutorService hoverPrefetchExecutor;
     // Navigation tree sizing: prevent the pane from collapsing to icon-only width.
     private static final double NAV_TREE_MIN_WIDTH_PX = 275.0;
+    private static final double SIDE_PANE_MIN_WIDTH_PX = 304.0;
+    private static final double SIDE_PANE_PREF_WIDTH_PX = 356.0;
     private static final double NAV_TREE_PREF_WIDTH_PX = 320.0;
     // Shared background I/O executor for directory listing and paste/copy/move operations.
     private final ExecutorService ioExecutor;
@@ -367,6 +429,32 @@ private final ExecutorService hoverPrefetchExecutor;
     private final javafx.animation.PauseTransition metadataFlushDebounce = new javafx.animation.PauseTransition(javafx.util.Duration.millis(
             Long.getLong("fileexplorer.metadata.flushMs", 90L)
     ));
+    // Phase 4I: debounce top-chrome compaction so resize does not churn CSS classes every pulse.
+    private final javafx.animation.PauseTransition commandBarCompactionDebounce = new javafx.animation.PauseTransition(
+            javafx.util.Duration.millis(Long.getLong("fileexplorer.chrome.compactionDebounceMs", 70L))
+    );
+    private volatile double pendingCommandBarWidth = -1.0;
+    // Phase 4I: keep details/status updates immediate, but debounce heavier preview thumbnail work.
+    private final javafx.animation.PauseTransition previewLoadDebounce = new javafx.animation.PauseTransition(
+            javafx.util.Duration.millis(Long.getLong("fileexplorer.preview.selectionDebounceMs", 60L))
+    );
+    private final java.util.concurrent.atomic.AtomicLong previewLoadSeq = new java.util.concurrent.atomic.AtomicLong(0L);
+    private volatile java.nio.file.Path pendingPreviewPath;
+    // Phase 4I: coalesce expensive table.refresh() calls triggered by metadata fill.
+    private final javafx.animation.PauseTransition tableRefreshDebounce = new javafx.animation.PauseTransition(
+            javafx.util.Duration.millis(Long.getLong("fileexplorer.table.refreshDebounceMs", 75L))
+    );
+    private final java.util.concurrent.atomic.AtomicBoolean tableRefreshQueued = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private volatile boolean tableRefreshDeferredWhileHover = false;
+    private final PauseTransition explorerMetadataPopupDelay = new PauseTransition(Duration.millis(650));
+    private Popup explorerMetadataPopup;
+    private StackPane explorerMetadataPopupRoot;
+    private Label explorerMetadataPopupLabel;
+    private Node explorerMetadataPopupAnchor;
+    private java.util.function.Supplier<String> explorerMetadataPopupTextSupplier;
+    private double explorerMetadataPopupScreenX = Double.NaN;
+    private double explorerMetadataPopupScreenY = Double.NaN;
+    private int explorerMetadataPopupDetailsRowIndex = -1;
 private boolean hoverPrefetchEnabled;
     private int focusCycleIndex;
 /**
@@ -410,6 +498,24 @@ private boolean hoverPrefetchEnabled;
         this.hoverPrefetchEnabled = !SAFE_MODE;
         // Phase 4B.2+: coalesce metadata UI updates.
         this.metadataFlushDebounce.setOnFinished(_ -> flushPendingMetadataUpdates());
+        this.commandBarCompactionDebounce.setOnFinished(_ -> applyCommandBarCompactionNow(pendingCommandBarWidth));
+        this.previewLoadDebounce.setOnFinished(_ -> loadPreviewThumbnailNow(previewLoadSeq.get(), pendingPreviewPath));
+        this.tableRefreshDebounce.setOnFinished(_ -> {
+            tableRefreshQueued.set(false);
+            if (fileTable == null || isIconMode(viewMode)) {
+                return;
+            }
+            int maxRefresh = Integer.getInteger("fileexplorer.table.refreshAllMax", 2500);
+            if (tableItems != null && tableItems.size() > maxRefresh) {
+                return;
+            }
+            try {
+                if (fileTable.isVisible()) {
+                    fileTable.refresh();
+                }
+            } catch (Exception ignored) {
+            }
+        });
 this.tableIndexByPath = new HashMap<>();
         this.iconBuildGeneration = 0L;
         this.iconBuildNextIndex = 0;
@@ -507,6 +613,8 @@ public void attach(ExplorerContext context) {
     localDisposables.add(eventBus.subscribe(com.fileexplorer.service.event.events.FileOpCancelled.class, e -> {
         if (e.jobId() != activeFileOpJobId) return;
         activeFileOpJobId = -1L;
+        pendingInlineRenameSelectionPath = null;
+        pendingInlineRenameSelectionIndex = -1;
         if (statusLabel != null) {
             statusLabel.setText("Operation cancelled.");
         }
@@ -514,6 +622,8 @@ public void attach(ExplorerContext context) {
     localDisposables.add(eventBus.subscribe(com.fileexplorer.service.event.events.FileOpFailed.class, e -> {
         if (e.jobId() != activeFileOpJobId) return;
         activeFileOpJobId = -1L;
+        pendingInlineRenameSelectionPath = null;
+        pendingInlineRenameSelectionIndex = -1;
         if (statusLabel != null) {
             statusLabel.setText("Operation failed: " + e.error().getClass().getSimpleName());
         }
@@ -579,8 +689,94 @@ public void attach(ExplorerContext context) {
     if (deleteButton != null) {
             deleteButton.setOnAction(e -> moveSelectionToTrash());
     }
+    if (backButton != null) {
+        if (!backButton.getStyleClass().contains("icon-only")) {
+            backButton.getStyleClass().add("icon-only");
+        }
+        backButton.setOnAction(e -> navigateBack());
+    }
+    if (forwardButton != null) {
+        if (!forwardButton.getStyleClass().contains("icon-only")) {
+            forwardButton.getStyleClass().add("icon-only");
+        }
+        forwardButton.setOnAction(e -> navigateForward());
+    }
+    if (upButton != null) {
+        if (!upButton.getStyleClass().contains("icon-only")) {
+            upButton.getStyleClass().add("icon-only");
+        }
+        upButton.setOnAction(e -> navigateUp());
+    }
+    if (refreshButton != null) {
+        if (!refreshButton.getStyleClass().contains("icon-only")) {
+            refreshButton.getStyleClass().add("icon-only");
+        }
+        refreshButton.setOnAction(e -> refresh());
+    }
+    if (previewToggle != null) {
+        previewToggle.setOnAction(e -> setPreviewPaneVisible(previewToggle.isSelected()));
+    }
+    wireSeeMoreMenuActions();
+    updateNavigationButtonsState();
+    updateSelectionCommandState();
+    updateTopChromeState();
     // sortMenuButton and viewMenuButton actions are handled by their MenuItems' onAction in FXML.
 }
+
+    private void configureCommandFlyoutParity() {
+        styleCommandFlyout(newMenuButton);
+        styleCommandFlyout(sortMenuButton);
+        styleCommandFlyout(viewMenuButton);
+        styleCommandFlyout(seeMoreMenuButton);
+    }
+
+    private void styleCommandFlyout(javafx.scene.control.MenuButton menuButton) {
+        if (menuButton == null) {
+            return;
+        }
+        if (!menuButton.getStyleClass().contains("explorer-flyout-button")) {
+            menuButton.getStyleClass().add("explorer-flyout-button");
+        }
+        menuButton.getItems().forEach(this::applyExplorerMenuStyle);
+    }
+
+    private void applyExplorerMenuStyle(javafx.scene.control.MenuItem item) {
+        if (item == null) {
+            return;
+        }
+        if (!(item instanceof javafx.scene.control.SeparatorMenuItem)
+                && !item.getStyleClass().contains("explorer-menu-item")) {
+            item.getStyleClass().add("explorer-menu-item");
+        }
+        if (item instanceof javafx.scene.control.Menu menu) {
+            if (!menu.getStyleClass().contains("explorer-flyout-submenu")) {
+                menu.getStyleClass().add("explorer-flyout-submenu");
+            }
+            menu.getItems().forEach(this::applyExplorerMenuStyle);
+        }
+    }
+
+    private void wireSeeMoreMenuActions() {
+        if (seeMoreMenuButton == null) {
+            return;
+        }
+        for (javafx.scene.control.MenuItem item : seeMoreMenuButton.getItems()) {
+            String label = item.getText();
+            if (label == null || item instanceof javafx.scene.control.SeparatorMenuItem) {
+                continue;
+            }
+            switch (label) {
+                case "Undo" -> item.setOnAction(e -> setStatus("Undo: not implemented yet."));
+                case "Copy path" -> item.setOnAction(e -> copyPrimaryPathToClipboard());
+                case "Select all" -> item.setOnAction(e -> selectAll());
+                case "Select none" -> item.setOnAction(e -> clearSelection());
+                case "Invert selection" -> item.setOnAction(e -> invertSelection());
+                case "Properties" -> item.setOnAction(e -> openPropertiesForSelection());
+                default -> {
+                }
+            }
+        }
+    }
 @Override
 /**
  * initialize.
@@ -616,14 +812,19 @@ private void initializeWithContext() {
         }
         contextInitialized = true;
         configureTree();
+        configureNavigationPaneParity();
         configureTable();
         configureThemeToggle();
         configureBreadcrumbs();
         configureSearch();
         configureStatusBar();
         configureToolbarActions();
+        configureTabsAndHome();
+        configureCommandFlyoutParity();
         configureViewMenu();
+        configureSidePaneParity();
         configureIconActivation();
+        updateTopChromeState();
         // Phase 3.2: UI subscribes to directory load events
         localDisposables.add(eventBus.subscribe(DirectoryLoadSucceeded.class, e -> {
             if (e.requestId() != lastRequestedRequestId) return;
@@ -662,9 +863,13 @@ private void initializeWithContext() {
         if (scene == null) {
             return;
         }
-        
+
         this.boundScene = scene;
-if (!zoomShortcutsInstalled) {
+        // Phase 4A.3: Keep setScene itself lightweight. Anything that triggers broad
+        // CSS/layout work must be deferred so we do not block first interactivity.
+        StartupTrace.mark("MainController.setScene enter");
+
+        if (!zoomShortcutsInstalled) {
             installZoomShortcuts(scene);
             zoomShortcutsInstalled = true;
         }
@@ -673,6 +878,7 @@ if (!zoomShortcutsInstalled) {
             installCtrlScrollViewShortcuts(scene);
             explorerShortcutsInstalled = true;
         }
+        scene.widthProperty().addListener((obs, oldV, newV) -> scheduleCommandBarCompaction(newV == null ? 0.0 : newV.doubleValue()));
         // Adopt startup font provided by MainApp (if present) so the first frame
         // renders at the intended size on HiDPI displays.
         if (scene.getRoot() != null) {
@@ -688,9 +894,48 @@ if (!zoomShortcutsInstalled) {
                 uiFontFamilyResolved = s;
             }
         }
-        uiFontFamilyCss = buildUiFontFamilyCss(scene);
-        applyUiFontSize(scene);
-        applyThemeToCurrentScene(scene);
+        // Phase 4M: split deferred scene work into theme, font metrics, and motion so the first usable frame
+        // is not competing with every global CSS/layout pass at once.
+        Platform.runLater(() -> {
+            try {
+                StartupTrace.mark("MainController.setScene deferred theme begin");
+            } catch (Throwable ignored) {}
+            try {
+                uiFontFamilyCss = buildUiFontFamilyCss(scene);
+                applyThemeToCurrentScene(scene);
+            } catch (Throwable ignored) {
+            }
+            try {
+                StartupTrace.mark("MainController.setScene deferred theme end");
+            } catch (Throwable ignored) {}
+
+            Platform.runLater(() -> {
+                try {
+                    StartupTrace.mark("MainController.setScene deferred font begin");
+                } catch (Throwable ignored) {}
+                try {
+                    applyUiFontSize(scene);
+                } catch (Throwable ignored) {
+                }
+                try {
+                    StartupTrace.mark("MainController.setScene deferred font end");
+                } catch (Throwable ignored) {}
+            });
+
+            Platform.runLater(() -> Platform.runLater(() -> {
+                try {
+                    StartupTrace.mark("MainController.setScene deferred motion begin");
+                } catch (Throwable ignored) {}
+                try {
+                    FluentMotionSupport.install(root != null ? root : scene.getRoot());
+                    Platform.runLater(() -> FluentMotionSupport.install(root != null ? root : scene.getRoot()));
+                } catch (Throwable ignored) {
+                }
+                try {
+                    StartupTrace.mark("MainController.setScene deferred motion end");
+                } catch (Throwable ignored) {}
+            }));
+        });
         // Phase 4B.2+: feed user-activity signals to the metadata budgeter so it can stay idle during interaction.
         try {
             scene.addEventFilter(javafx.scene.input.InputEvent.ANY, e -> {
@@ -700,7 +945,15 @@ if (!zoomShortcutsInstalled) {
             });
         } catch (Exception ignored) {
         }
-        Platform.runLater(() -> ensureStartupWindowSize(scene));
+        Platform.runLater(() -> {
+            ensureStartupWindowSize(scene);
+            bindWindowChromeState(scene);
+            updateWindowTitle(currentDirectory);
+            updateNavigationButtonsState();
+        updateSearchPrompt(currentDirectory);
+        updateTopChromeState();
+        });
+        StartupTrace.mark("MainController.setScene exit");
     }
 /**
  * enterSafeMode.
@@ -751,7 +1004,12 @@ if (!zoomShortcutsInstalled) {
             return;
         }
         Path target = initialFolder.normalize();
-        Platform.runLater(() -> navigateToFolder(target, false));
+        Platform.runLater(() -> {
+            if (startupInitialDirectoryLoadStarted.compareAndSet(false, true)) {
+                StartupTrace.mark("initial directory load begin: " + target);
+            }
+            navigateToFolder(target, false);
+        });
     }
 
     /**
@@ -772,6 +1030,30 @@ if (!zoomShortcutsInstalled) {
     // ---------------------------------------------------------------------
     // FXML actions
     // ---------------------------------------------------------------------
+    @FXML
+    private void onNavigateBackButton(ActionEvent e) {
+        LogSupport.enter(LOG, "onNavigateBackButton");
+        navigateBack();
+    }
+
+    @FXML
+    private void onNavigateForwardButton(ActionEvent e) {
+        LogSupport.enter(LOG, "onNavigateForwardButton");
+        navigateForward();
+    }
+
+    @FXML
+    private void onNavigateUpButton(ActionEvent e) {
+        LogSupport.enter(LOG, "onNavigateUpButton");
+        navigateUp();
+    }
+
+    @FXML
+    private void onRefreshButton(ActionEvent e) {
+        LogSupport.enter(LOG, "onRefreshButton");
+        refresh();
+    }
+
     @FXML
 /**
  * onViewDetails.
@@ -802,6 +1084,17 @@ if (!zoomShortcutsInstalled) {
         LogSupport.enter(LOG, "onDetailsToggle");
         boolean show = detailsToggle != null && detailsToggle.isSelected();
         setSidePaneMasterVisible(show);
+        updateTopChromeState();
+    }
+    @FXML
+    private void onPreviewToggle(ActionEvent e) {
+        LogSupport.enter(LOG, "onPreviewToggle");
+        boolean show = previewToggle != null && previewToggle.isSelected();
+        if (show) {
+            setSidePaneMasterVisible(true);
+        }
+        setPreviewPaneVisible(show);
+        updateTopChromeState();
     }
     @FXML
 /**
@@ -812,6 +1105,7 @@ if (!zoomShortcutsInstalled) {
     private void onOperationsToggle(ActionEvent e) {
         LogSupport.enter(LOG, "onOperationsToggle");
         updateSidePaneVisibility();
+        updateTopChromeState();
     }
     @FXML
 /**
@@ -1015,6 +1309,7 @@ if (!zoomShortcutsInstalled) {
             setSidePaneMasterVisible(true);
         }
         setDetailsPaneVisible(show);
+        updateTopChromeState();
     }
     @FXML
 /**
@@ -1239,6 +1534,12 @@ if (!e.isAltDown() && !e.isControlDown() && !e.isMetaDown() && !e.isShiftDown())
             }
             // Ctrl + N: New window
             if (e.isControlDown() && !e.isShiftDown() && code == KeyCode.N) {
+                openNewWindow();
+                e.consume();
+                return;
+            }
+            // Ctrl + T: New tab (new window fallback for now)
+            if (e.isControlDown() && !e.isShiftDown() && code == KeyCode.T) {
                 openNewWindow();
                 e.consume();
                 return;
@@ -1481,21 +1782,31 @@ private void adjustUiFontSize(double deltaPx) {
             treeFontSizePxApplied = treeFontPx;
             String treeStyle = "-fx-font-family: " + uiFontFamilyCss + "; -fx-font-size: " + treeFontPx + "px;";
             folderTree.setStyle(treeStyle);
-            // Ensure row height tracks font size (prevents clipped glyphs on HiDPI).
-            double rowH = Math.ceil(treeFontPx + (UI_MIN_VPAD_PX * 2.0));
+            applyFolderTreeMetricsHard();
+            // Ensure row height tracks font size while preserving the requested taller Explorer-like pitch.
+            double rowH = Math.max(FOLDER_TREE_ROW_HEIGHT_PX, Math.ceil(treeFontPx + (UI_MIN_VPAD_PX * 2.0) + 12.0));
             folderTree.setFixedCellSize(rowH);
-            folderTree.refresh();
+            // Refresh can be expensive on startup; only do it if explicitly enabled.
+            if (Boolean.parseBoolean(System.getProperty("fileexplorer.ui.refreshAfterFontApply", "false"))) {
+                Platform.runLater(() -> {
+                    try { folderTree.refresh(); } catch (Exception ignored) {}
+                });
+            }
         }
         // Table: keep base font; headers/rows will follow.
         if (fileTable != null) {
             fileTable.setStyle("-fx-font-family: " + uiFontFamilyCss + "; -fx-font-size: " + uiFontSizePx + "px;");
             // Enforce: row height must be at least (font size + 5px top + 5px bottom).
-            double tableRowH = Math.ceil(uiFontSizePx + (UI_MIN_VPAD_PX * 2.0));
+            double tableRowH = Math.max(30.0, Math.ceil(uiFontSizePx + (UI_MIN_VPAD_PX * 2.0)));
             fileTable.setFixedCellSize(tableRowH);
             if (folderTree != null) {
-                folderTree.setFixedCellSize(tableRowH);
+                folderTree.setFixedCellSize(Math.max(FOLDER_TREE_ROW_HEIGHT_PX, tableRowH));
+                applyFolderTreeMetricsHard();
             }
-            Platform.runLater(() -> applyTableHeaderMetrics(tableRowH));
+            // Header lookups can be expensive; gate behind enforceMinMetrics.
+            if (Boolean.parseBoolean(System.getProperty("fileexplorer.ui.enforceMinMetrics", "false"))) {
+                Platform.runLater(() -> applyTableHeaderMetrics(tableRowH));
+            }
         }
         // Apply the same minimum vertical metric policy to other key controls.
         applyMinimumMetrics(scene, uiFontSizePx);
@@ -1537,6 +1848,11 @@ private void adjustUiFontSize(double deltaPx) {
  */
     private void applyMinimumMetrics(Scene scene, double fontPx) {
         LogSupport.enter(LOG, "applyMinimumMetrics");
+        // Phase 4A.3: This can be very expensive (lookupAll across the full scene graph).
+        // Keep it opt-in.
+        if (!Boolean.parseBoolean(System.getProperty("fileexplorer.ui.enforceMinMetrics", "false"))) {
+            return;
+        }
         if (scene == null || scene.getRoot() == null) {
             return;
         }
@@ -1618,6 +1934,34 @@ private double clamp(double v, double lo, double hi) {
     // ---------------------------------------------------------------------
     // Tree + Table
     // ---------------------------------------------------------------------
+    private void configureNavigationPaneParity() {
+        LogSupport.enter(LOG, "configureNavigationPaneParity");
+        if (folderTree != null) {
+            if (!folderTree.getStyleClass().contains("explorer-navigation-pane")) {
+                folderTree.getStyleClass().add("explorer-navigation-pane");
+            }
+            folderTree.setMinWidth(NAV_TREE_MIN_WIDTH_PX);
+            folderTree.setPrefWidth(Math.max(folderTree.getPrefWidth(), NAV_TREE_PREF_WIDTH_PX));
+            folderTree.setFocusTraversable(true);
+        }
+        if (mainSplitPane != null) {
+            if (!mainSplitPane.getStyleClass().contains("explorer-main-split")) {
+                mainSplitPane.getStyleClass().add("explorer-main-split");
+            }
+            Platform.runLater(() -> {
+                try {
+                    if (!mainSplitPane.getDividers().isEmpty()) {
+                        double current = mainSplitPane.getDividerPositions().length > 0 ? mainSplitPane.getDividerPositions()[0] : 0.25;
+                        if (current < 0.18 || current > 0.36) {
+                            mainSplitPane.setDividerPositions(0.235);
+                        }
+                    }
+                } catch (Exception ex) {
+                    LOG.log(Level.FINE, "Unable to normalize navigation divider position", ex);
+                }
+            });
+        }
+    }
 /**
  * configureTree.
  *
@@ -1645,23 +1989,28 @@ private double clamp(double v, double lo, double hi) {
         TREE_CELL_CREATED.set(0);
         final boolean safeMode = SAFE_MODE;
         final boolean hoverPrefetchEnabled = !safeMode && Boolean.parseBoolean(System.getProperty("fileexplorer.ui.hoverPrefetch", "false"));
-        final int treeFixedCellSize = (int) Math.round(folderTree.getFixedCellSize());
+        final int treeFixedCellSize = (int) Math.round(Math.max(folderTree.getFixedCellSize(), FOLDER_TREE_ROW_HEIGHT_PX));
+        folderTree.setFixedCellSize(treeFixedCellSize);
         // Build the real root off the FX thread to avoid freezing the initial render.
         folderTree.setShowRoot(false);
         // Show a placeholder root immediately (not shown since showRoot=false).
         TreeItem<Path> placeholderRoot = new TreeItem<>(Paths.get("/"));
         folderTree.setRoot(placeholderRoot);
         placeholderRoot.setExpanded(false);
+        if (startupTreeSkeletonMarked.compareAndSet(false, true)) {
+            StartupTrace.mark("navigation tree skeleton attached");
+        }
         ioExecutor.execute(() -> {
             TreeItem<Path> root = treeBuildService.buildComputerRoot();
             Platform.runLater(() -> {
                 folderTree.setRoot(root);
                 folderTree.setShowRoot(false);
-                if (!root.getChildren().isEmpty()) {
-                    folderTree.getSelectionModel().select(root.getChildren().get(0));
+                if (startupTreeRootVisibleMarked.compareAndSet(false, true)) {
+                    StartupTrace.mark("navigation tree root visible");
                 }
             });
         });
+folderTree.setEditable(true);
 folderTree.setCellFactory(tv -> {
             int created = TREE_CELL_CREATED.incrementAndGet();
             int maxCells = Integer.getInteger("fileexplorer.ui.tree.maxCells", 5000);
@@ -1671,9 +2020,9 @@ folderTree.setCellFactory(tv -> {
                 throw new IllegalStateException("TreeCell runaway detected (created=" + created + ")");
             }
             if (safeMode) {
-                return new SimplePathTreeCell(treeFixedCellSize, treeBuildService);
+                return new SimplePathTreeCell(treeFixedCellSize, treeBuildService, this::commitTreeInlineRename);
             }
-            return new IconPathTreeCell(treeFixedCellSize, themeService, treeBuildService);
+            return new IconPathTreeCell(treeFixedCellSize, themeService, treeBuildService, this::commitTreeInlineRename);
         });
         
         configureTreeContextMenu();
@@ -1792,6 +2141,21 @@ folderTree.setCellFactory(tv -> {
         event.setDropCompleted(false);
         event.consume();
     }
+
+    private void updateNavigationButtonsState() {
+        boolean canGoBack = !backHistory.isEmpty();
+        boolean canGoForward = !forwardHistory.isEmpty();
+        boolean canGoUp = currentDirectory != null && currentDirectory.getParent() != null;
+        if (backButton != null) {
+            backButton.setDisable(!canGoBack);
+        }
+        if (forwardButton != null) {
+            forwardButton.setDisable(!canGoForward);
+        }
+        if (upButton != null) {
+            upButton.setDisable(!canGoUp);
+        }
+    }
 /**
  * configureIconActivation.
  *
@@ -1818,6 +2182,11 @@ folderTree.setCellFactory(tv -> {
                 }
             });
         }
+        if (iconScroll != null) {
+            iconScroll.viewportBoundsProperty().addListener((obs, oldBounds, newBounds) -> refreshIconFlowLayoutForCurrentView());
+            iconScroll.widthProperty().addListener((obs, oldValue, newValue) -> refreshIconFlowLayoutForCurrentView());
+            iconScroll.heightProperty().addListener((obs, oldValue, newValue) -> refreshIconFlowLayoutForCurrentView());
+        }
     }
 /**
  * activateFromTableSelection.
@@ -1833,8 +2202,31 @@ folderTree.setCellFactory(tv -> {
         if (selected == null) {
             return;
         }
-        if (Files.isDirectory(selected)) {
-            navigateToFolder(selected, true);
+        openPath(selected);
+    }
+
+    private void openPrimarySelection() {
+        Path selected = getPrimarySelection();
+        if (selected != null) {
+            openPath(selected);
+        }
+    }
+
+    private void openPath(Path selected) {
+        if (selected == null) {
+            return;
+        }
+        try {
+            if (Files.isDirectory(selected)) {
+                navigateToFolder(selected, true);
+                return;
+            }
+            if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().open(selected.toFile());
+            }
+        } catch (Exception ex) {
+            setStatus("Open failed.");
+            LOG.log(Level.FINE, "Open path failed", ex);
         }
     }
 /**
@@ -1865,7 +2257,7 @@ folderTree.setCellFactory(tv -> {
         return icon;
     }
     /**
-     * Phase 3.5.1: Tree context menu (Refresh re-probes the selected node).
+     * Phase 4G: Explorer-style navigation context menu and inline rename entry point.
      */
     private void configureTreeContextMenu() {
         if (folderTree == null) {
@@ -1874,24 +2266,34 @@ folderTree.setCellFactory(tv -> {
         folderTree.setOnContextMenuRequested(ev -> {
             try {
                 TreeItem<java.nio.file.Path> sel = folderTree.getSelectionModel().getSelectedItem();
-                if (sel == null) {
+                if (sel == null || sel.getValue() == null) {
                     return;
                 }
-                javafx.scene.control.ContextMenu menu = new javafx.scene.control.ContextMenu();
-                javafx.scene.control.MenuItem refreshItem = new javafx.scene.control.MenuItem("Refresh");
-                refreshItem.setOnAction(ae -> {
+                Path selectedPath = sel.getValue();
+                javafx.scene.control.ContextMenu menu = createExplorerContextMenu();
+                javafx.scene.control.MenuItem openItem = createExplorerMenuItem("Open", "", () -> navigateToFolder(selectedPath, true));
+                javafx.scene.control.MenuItem expandCollapseItem = createExplorerMenuItem(
+                        sel.isExpanded() ? "Collapse" : "Expand",
+                        sel.isExpanded() ? "" : "",
+                        () -> sel.setExpanded(!sel.isExpanded()));
+                expandCollapseItem.setDisable(sel.isLeaf());
+                javafx.scene.control.MenuItem refreshItem = createExplorerMenuItem("Refresh", "", () -> {
                     if (sel instanceof com.fileexplorer.service.filesystem.TreeBuildService.LazyLoadingTreeItem lazy) {
                         lazy.invalidate();
                     }
-                    if (sel.getValue() != null && sel.getValue().equals(currentDirectory)) {
+                    if (selectedPath.equals(currentDirectory)) {
                         refresh();
                     }
                 });
-                menu.getItems().add(refreshItem);
+                javafx.scene.control.MenuItem renameItem = createExplorerMenuItem("Rename", "", () -> beginTreeInlineRename(sel));
+                javafx.scene.control.MenuItem propertiesItem = createExplorerMenuItem("Properties", "", () -> openPropertiesForPath(selectedPath));
+                renameItem.setDisable(sel.getParent() == null);
+                menu.getItems().addAll(openItem, expandCollapseItem, createExplorerSeparator(), refreshItem,
+                        createExplorerSeparator(), renameItem, propertiesItem);
                 menu.show(folderTree, ev.getScreenX(), ev.getScreenY());
                 ev.consume();
             } catch (Exception ex) {
-                // ignore
+                LOG.log(Level.FINE, "Tree context menu failed", ex);
             }
         });
     }
@@ -1910,6 +2312,7 @@ private void configureTable() {
         // Use a SortedList wrapper and bind its comparator to the TableView.
         sortedTableItems.comparatorProperty().bind(fileTable.comparatorProperty());
         fileTable.setItems(sortedTableItems);
+        fileTable.setEditable(true);
         fileTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         // Step 7: delegate TableView wiring
         TableViewSupport.configure(
@@ -1931,53 +2334,7 @@ private void configureTable() {
             String name = displayNameForTable(p);
             return new ReadOnlyObjectWrapper<>(name);
         });
-        colName.setCellFactory(_ -> new TableCell<>() {
-            private final HBox box;
-            private final ImageView iconView;
-            private final Label textLabel;
-            {
-                this.box = new HBox(10.0);
-                this.box.setAlignment(Pos.CENTER_LEFT);
-                this.iconView = new ImageView();
-                this.iconView.setPreserveRatio(true);
-                this.iconView.setSmooth(true);
-                this.textLabel = new Label();
-                this.textLabel.setTextOverrun(OverrunStyle.ELLIPSIS);
-                this.box.getChildren().addAll(iconView, textLabel);
-            }
-            @Override
-/**
- * updateItem.
- *
- * @param item TODO
- * @param empty TODO
- */
-            protected void updateItem(String item, boolean empty) {
-                LogSupport.enter(LOG, "updateItem2");
-                super.updateItem(item, empty);
-                if (empty) {
-                    setText(null);
-                    setGraphic(null);
-                    return;
-                }
-                FileItem fi = (getTableRow() != null) ? getTableRow().getItem() : null;
-                Path p = (fi != null) ? fi.path() : null;
-                double iconPx = clamp(uiFontSizePx + 4.0, 16.0, 24.0);
-                Image img;
-                try {
-                    String identity = fileMetadataService.iconIdentity(p);
-                    img = IconLoader.loadForIdentity(identity, themeService.isDarkPreferred(), (int) Math.round(iconPx));
-                } catch (Exception ex) {
-                    img = IconLoader.load(IconLoader.IconType.FILE, themeService.isDarkPreferred(), (int) Math.round(iconPx));
-                }
-                iconView.setFitWidth(iconPx);
-                iconView.setFitHeight(iconPx);
-                iconView.setImage(img);
-                textLabel.setText(item);
-                setText(null);
-                setGraphic(box);
-            }
-        });
+        colName.setCellFactory(_ -> new ExplorerNameTableCell());
         
 // Status column (icon-only): check outline placeholder with hover/selection tint.
 if (colStatus != null) {
@@ -2020,6 +2377,7 @@ if (colStatus != null) {
             if (empty) {
                 setGraphic(null);
                 icon = null;
+                setMouseTransparent(true);
                 return;
             }
             if (icon == null) {
@@ -2028,6 +2386,7 @@ if (colStatus != null) {
             }
             setGraphic(icon);
             setText(null);
+            setMouseTransparent(true);
             syncTint();
         }
     });
@@ -2036,36 +2395,50 @@ colType.setCellValueFactory(param -> {
             FileItem fi = param.getValue();
             return new ReadOnlyObjectWrapper<>(fi != null ? fi.type() : "");
         });
+        colType.setCellFactory(_ -> createExplorerTextTableCell(Pos.CENTER_LEFT));
         colSize.setCellValueFactory(param -> {
             FileItem fi = param.getValue();
             return new ReadOnlyObjectWrapper<>(fi != null ? fi.size() : "");
         });
         // Right align Size
-        colSize.setCellFactory(_ -> new TableCell<>() {
-            @Override
-/**
- * updateItem.
- *
- * @param item TODO
- * @param empty TODO
- */
-            protected void updateItem(String item, boolean empty) {
-                LogSupport.enter(LOG, "updateItem3");
-                super.updateItem(item, empty);
-                setText(empty ? null : item);
-                setAlignment(Pos.CENTER_RIGHT);
+        if (!colSize.getStyleClass().contains("explorer-size-column")) {
+            colSize.getStyleClass().add("explorer-size-column");
+        }
+        colSize.setStyle("-fx-alignment: CENTER-RIGHT;");
+        colSize.setCellFactory(_ -> {
+            TableCell<FileItem, String> cell = createExplorerTextTableCell(Pos.CENTER_RIGHT);
+            if (!cell.getStyleClass().contains("explorer-size-column-cell")) {
+                cell.getStyleClass().add("explorer-size-column-cell");
             }
+            return cell;
         });
         colModified.setCellValueFactory(param -> {
             FileItem fi = param.getValue();
             return new ReadOnlyObjectWrapper<>(fi != null ? fi.modified() : "");
         });
-        fileTable.getSelectionModel().selectedItemProperty().addListener((_, _, newSel) -> {
+        colModified.setCellFactory(_ -> createExplorerTextTableCell(Pos.CENTER_LEFT));
+        if (fileTable != null && !fileTable.getStyleClass().contains("explorer-details-table")) {
+            fileTable.getStyleClass().add("explorer-details-table");
+        }
+        if (fileTable != null) {
+            fileTable.setFixedCellSize(Math.max(fileTable.getFixedCellSize(), 34.0));
+        }
+        fileTable.getSelectionModel().selectedItemProperty().addListener((_, oldSel, newSel) -> {
             Path p = newSel != null ? newSel.path() : null;
             updateSelectionDetails(p);
+            updateSelectionCommandState();
+            refreshVisibleIconTileSelectionState();
             if (p != null) {
                 requestMetadataForFocus(p);
             }
+            if (inlineRenameTablePath != null && !Objects.equals(inlineRenameTablePath, p)) {
+                Path restorePath = inlineRenameTablePath;
+                clearInlineRenameTargets();
+                Platform.runLater(() -> restoreFocusToTablePath(restorePath));
+            }
+        });
+        fileTable.getSelectionModel().getSelectedItems().addListener((ListChangeListener<FileItem>) change -> {
+            refreshVisibleIconTileSelectionState();
         });
 
         // Phase 4B.2 (lowest CPU): metadata for Size/Modified is lazy. Without this,
@@ -2078,38 +2451,8 @@ colType.setCellValueFactory(param -> {
         tableItems.addListener((javafx.collections.ListChangeListener<FileItem>) c -> armVisibleMetadataRequest());
     
         // Activate folders on double-click and Enter (Details/List views use the TableView).
-        fileTable.setRowFactory(_ -> {
-            TableRow<FileItem> row = new TableRow<>();
-            row.setOnMouseClicked(me -> {
-                if (me.getButton() == MouseButton.PRIMARY && me.getClickCount() == 2 && !row.isEmpty()) {
-                    FileItem fi = row.getItem();
-                    Path p = (fi != null) ? fi.path() : null;
-                    lastIconActivatedPath = p;
-                    if (p != null && Files.isDirectory(p)) {
-                        navigateToFolder(p, true);
-                    }
-                }
-            });
-            // Hover prefetch: warm icon + metadata caches for the hovered item.
-            row.hoverProperty().addListener((_, _, isHover) -> {
-                if (isHover && !row.isEmpty()) {
-                    FileItem fi2 = row.getItem();
-                    scheduleHoverPrefetch(fi2 != null ? fi2.path() : null);
-                }
-            });
-            row.setOnContextMenuRequested(ev -> {
-                if (!row.isEmpty()) {
-                    // Explorer-like: right-clicking an unselected row selects it, but
-                    // right-clicking an already-selected row preserves the current multi-selection.
-                    if (!row.isSelected()) {
-                        fileTable.getSelectionModel().clearAndSelect(row.getIndex());
-                    }
-                }
-                showFileOpsContextMenu(ev.getScreenX(), ev.getScreenY());
-                ev.consume();
-            });
-            return row;
-        });
+        fileTable.setRowFactory(_ -> createExplorerDetailsTableRow());
+        installStableDetailsHoverTracking();
         
     fileTable.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
         // Keyboard parity: RIGHT enters folder; LEFT goes to parent; ENTER enters folder.
@@ -2128,10 +2471,9 @@ colType.setCellValueFactory(param -> {
             return;
         }
         if (e.getCode() == KeyCode.ENTER) {
-            FileItem selItem = fileTable.getSelectionModel().getSelectedItem();
-        Path sel = (selItem != null) ? selItem.path() : null;
-            if (sel != null && Files.isDirectory(sel)) {
-                navigateToFolder(sel, true);
+            Path sel = getFocusedOrSelectedPath();
+            if (sel != null) {
+                openPath(sel);
                 e.consume();
             }
         }
@@ -2142,73 +2484,953 @@ colType.setCellValueFactory(param -> {
         installHeaderDetailsMenu();
         configureFileOperationsUi();
 }
-    /**
-     * Ensures optional "Details" columns exist on the TableView.
-     *
-     * These are placeholders until FileItem/file-metadata includes these attributes.
-     */
-    private void ensureOptionalDetailsColumns() {
-        if (fileTable == null) return;
-        if (colDateCreated == null) {
-            colDateCreated = new TableColumn<>("Date created");
-            colDateCreated.setCellValueFactory(param -> new ReadOnlyObjectWrapper<>(""));
-            colDateCreated.setVisible(false);
+
+
+    private TableRow<FileItem> createExplorerDetailsTableRow() {
+        TableRow<FileItem> row = new TableRow<>();
+        row.setPickOnBounds(true);
+        if (!row.getStyleClass().contains("explorer-details-row")) {
+            row.getStyleClass().add("explorer-details-row");
         }
-        if (colAuthors == null) {
-            colAuthors = new TableColumn<>("Authors");
-            colAuthors.setCellValueFactory(param -> new ReadOnlyObjectWrapper<>(""));
-            colAuthors.setVisible(false);
-        }
-        if (colTags == null) {
-            colTags = new TableColumn<>("Tags");
-            colTags.setCellValueFactory(param -> new ReadOnlyObjectWrapper<>(""));
-            colTags.setVisible(false);
-        }
-        if (colTitle == null) {
-            colTitle = new TableColumn<>("Title");
-            colTitle.setCellValueFactory(param -> new ReadOnlyObjectWrapper<>(""));
-            colTitle.setVisible(false);
-        }
-        // Add only once, after the existing core columns.
-        if (!fileTable.getColumns().contains(colDateCreated)) fileTable.getColumns().add(colDateCreated);
-        if (!fileTable.getColumns().contains(colAuthors)) fileTable.getColumns().add(colAuthors);
-        if (!fileTable.getColumns().contains(colTags)) fileTable.getColumns().add(colTags);
-        if (!fileTable.getColumns().contains(colTitle)) fileTable.getColumns().add(colTitle);
+
+        row.setOnMouseClicked(me -> {
+            if (me.getButton() == MouseButton.PRIMARY && me.getClickCount() == 2 && !row.isEmpty()) {
+                FileItem fi = row.getItem();
+                Path p = (fi != null) ? fi.path() : null;
+                lastIconActivatedPath = p;
+                if (p != null && Files.isDirectory(p)) {
+                    navigateToFolder(p, true);
+                }
+            }
+        });
+
+        row.itemProperty().addListener((obs, oldItem, newItem) -> {
+            updateDetailsRowHoverState(row);
+            if (row.getIndex() == detailsHoverRowIndex.get()) {
+                if (row.isEmpty() || newItem == null) {
+                    clearDetailsHoveredRow();
+                } else {
+                    refreshExplorerMetadataPopupForDetailsRowIndex(row.getIndex(), () -> buildExplorerItemTooltipText(row.getItem()));
+                }
+            }
+        });
+        row.emptyProperty().addListener((obs, wasEmpty, isEmpty) -> {
+            if (isEmpty && row.getIndex() == detailsHoverRowIndex.get()) {
+                clearDetailsHoveredRow();
+            }
+            updateDetailsRowHoverState(row);
+            if (isEmpty) {
+                row.setContextMenu(null);
+            }
+        });
+        row.indexProperty().addListener((obs, oldV, newV) -> {
+            if (row.isEmpty()) {
+                if (row.getIndex() == detailsHoverRowIndex.get()) {
+                    clearDetailsHoveredRow();
+                }
+            } else if (row.getIndex() == detailsHoverRowIndex.get()) {
+                refreshExplorerMetadataPopupForDetailsRowIndex(row.getIndex(), () -> buildExplorerItemTooltipText(row.getItem()));
+            }
+            updateDetailsRowHoverState(row);
+        });
+        row.selectedProperty().addListener((obs, oldV, newV) -> updateDetailsRowHoverState(row));
+        row.hoverProperty().addListener((obs, oldV, newV) -> updateDetailsRowHoverState(row));
+        row.sceneProperty().addListener((obs, oldScene, newScene) -> updateDetailsRowHoverState(row));
+        row.addEventFilter(MouseEvent.MOUSE_PRESSED, ev -> {
+            if (ev.getButton() != MouseButton.SECONDARY || row.isEmpty()) {
+                return;
+            }
+            if (!row.isSelected()) {
+                fileTable.getSelectionModel().clearAndSelect(row.getIndex());
+            }
+            if (fileTable.getFocusModel() != null) {
+                fileTable.getFocusModel().focus(row.getIndex());
+            }
+            fileTable.requestFocus();
+            hideExplorerMetadataPopup();
+            ev.consume();
+        });
+        row.setOnContextMenuRequested(ev -> {
+            if (!row.isEmpty()) {
+                if (!row.isSelected()) {
+                    fileTable.getSelectionModel().clearAndSelect(row.getIndex());
+                }
+                if (fileTable.getFocusModel() != null) {
+                    fileTable.getFocusModel().focus(row.getIndex());
+                }
+            }
+            hideExplorerMetadataPopup();
+            showFileOpsContextMenu(ev.getScreenX(), ev.getScreenY());
+            ev.consume();
+        });
+        updateDetailsRowHoverState(row);
+        return row;
     }
-    private String detailsColKey(javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?> c) {
-        if (c == null) return null;
-        if (c == colName) return "name";
-        if (c == colModified) return "modified";
-        if (c == colType) return "type";
-        if (c == colSize) return "size";
-        if (c == colDateCreated) return "dateCreated";
-        if (c == colAuthors) return "authors";
-        if (c == colTags) return "tags";
-        if (c == colTitle) return "title";
+
+    private void installStableDetailsHoverTracking() {
+        if (fileTable == null || stableDetailsHoverTrackingInstalled) {
+            return;
+        }
+        stableDetailsHoverTrackingInstalled = true;
+
+        detailsHoverRowIndex.addListener((obs, oldValue, newValue) -> syncVisibleDetailsHoverRows());
+        fileTable.addEventFilter(MouseEvent.MOUSE_MOVED, this::handleDetailsTableMouseMoved);
+        fileTable.addEventFilter(MouseEvent.MOUSE_DRAGGED, this::handleDetailsTableMouseMoved);
+        fileTable.addEventFilter(MouseEvent.MOUSE_EXITED, event -> {
+            clearDetailsHoveredRow();
+            hideExplorerMetadataPopup();
+        });
+        fileTable.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> hideExplorerMetadataPopup());
+        fileTable.addEventFilter(MouseEvent.MOUSE_RELEASED, event -> syncVisibleDetailsHoverRows());
+        fileTable.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (oldScene != null) {
+                oldScene.windowProperty().removeListener(detailsWindowFocusRefreshListener);
+                if (oldScene.getWindow() != null) {
+                    oldScene.getWindow().focusedProperty().removeListener(detailsWindowFocusPresentationListener);
+                }
+            }
+            if (newScene == null) {
+                clearDetailsHoveredRow();
+                hideExplorerMetadataPopup();
+            } else {
+                newScene.windowProperty().addListener(detailsWindowFocusRefreshListener);
+                if (newScene.getWindow() != null) {
+                    newScene.getWindow().focusedProperty().addListener(detailsWindowFocusPresentationListener);
+                }
+            }
+            syncVisibleDetailsHoverRows();
+        });
+        if (fileTable.getScene() != null) {
+            fileTable.getScene().windowProperty().addListener(detailsWindowFocusRefreshListener);
+            if (fileTable.getScene().getWindow() != null) {
+                fileTable.getScene().getWindow().focusedProperty().addListener(detailsWindowFocusPresentationListener);
+            }
+        }
+    }
+
+    private final javafx.beans.value.ChangeListener<Boolean> detailsWindowFocusPresentationListener = (obs, wasFocused, isFocused) -> syncVisibleDetailsHoverRows();
+
+    private final javafx.beans.value.ChangeListener<Window> detailsWindowFocusRefreshListener = (obs, oldWindow, newWindow) -> {
+        if (oldWindow != null) {
+            oldWindow.focusedProperty().removeListener(detailsWindowFocusPresentationListener);
+        }
+        if (newWindow != null) {
+            newWindow.focusedProperty().addListener(detailsWindowFocusPresentationListener);
+        }
+        syncVisibleDetailsHoverRows();
+    };
+
+    private void handleDetailsTableMouseMoved(MouseEvent event) {
+        if (fileTable == null || viewMode != ViewMode.DETAILS) {
+            clearDetailsHoveredRow();
+            hideExplorerMetadataPopup();
+            return;
+        }
+        TableRow<FileItem> row = findDetailsTableRowAt(event.getSceneX(), event.getSceneY());
+        if (row == null || row.isEmpty() || row.getItem() == null) {
+            clearDetailsHoveredRow();
+            hideExplorerMetadataPopup();
+            return;
+        }
+        setDetailsHoveredRow(row);
+        armExplorerMetadataPopupForDetailsRow(row.getIndex(), () -> buildExplorerItemTooltipText(row.getItem()), event.getScreenX(), event.getScreenY());
+    }
+
+    @SuppressWarnings("unchecked")
+    private TableRow<FileItem> findDetailsTableRowAt(double sceneX, double sceneY) {
+        if (fileTable == null || fileTable.getScene() == null) {
+            return null;
+        }
+        fileTable.applyCss();
+        fileTable.layout();
+        for (Node node : fileTable.lookupAll(".table-row-cell")) {
+            if (node instanceof TableRow<?> rawRow) {
+                Bounds bounds = rawRow.localToScene(rawRow.getBoundsInLocal());
+                if (bounds != null && bounds.contains(sceneX, sceneY) && rawRow.getTableView() == fileTable) {
+                    return (TableRow<FileItem>) rawRow;
+                }
+            }
+        }
         return null;
     }
-    private javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?> detailsColByKey(String key) {
-        if (key == null) return null;
-        return switch (key) {
-            case "name" -> colName;
-            case "modified" -> colModified;
-            case "type" -> colType;
-            case "size" -> colSize;
-            case "dateCreated" -> colDateCreated;
-            case "authors" -> colAuthors;
-            case "tags" -> colTags;
-            case "title" -> colTitle;
-            default -> null;
+
+    @SuppressWarnings("unchecked")
+    private TableRow<FileItem> findVisibleDetailsRowByIndex(int targetIndex) {
+        if (fileTable == null) {
+            return null;
+        }
+        fileTable.applyCss();
+        fileTable.layout();
+        for (Node node : fileTable.lookupAll(".table-row-cell")) {
+            if (node instanceof TableRow<?> rawRow) {
+                if (rawRow.getIndex() == targetIndex && rawRow.getTableView() == fileTable) {
+                    return (TableRow<FileItem>) rawRow;
+                }
+            }
+        }
+        return null;
+    }
+
+    private void syncVisibleDetailsHoverRows() {
+        if (fileTable == null) {
+            return;
+        }
+        for (Node node : fileTable.lookupAll(".table-row-cell")) {
+            if (node instanceof TableRow<?> rawRow && rawRow.getTableView() == fileTable) {
+                @SuppressWarnings("unchecked")
+                TableRow<FileItem> row = (TableRow<FileItem>) rawRow;
+                updateDetailsRowHoverState(row);
+            }
+        }
+    }
+
+    private void setDetailsHoveredRow(TableRow<FileItem> row) {
+        int newIndex = (row == null || row.isEmpty() || row.getItem() == null) ? -1 : row.getIndex();
+        detailsHoverRowIndex.set(newIndex);
+        activeDetailsHoverRow.set(newIndex >= 0 ? row : null);
+        if (newIndex < 0) {
+            flushDeferredTableRefreshAfterHover();
+            return;
+        }
+        FileItem item = row.getItem();
+        scheduleHoverPrefetch(item != null ? item.path() : null);
+    }
+
+    private void clearDetailsHoveredRow() {
+        detailsHoverRowIndex.set(-1);
+        activeDetailsHoverRow.set(null);
+        flushDeferredTableRefreshAfterHover();
+    }
+
+    private void flushDeferredTableRefreshAfterHover() {
+        if (tableRefreshDeferredWhileHover) {
+            tableRefreshDeferredWhileHover = false;
+            requestCoalescedTableRefreshNow();
+        }
+    }
+
+    private Popup ensureExplorerMetadataPopup() {
+        if (explorerMetadataPopup != null) {
+            return explorerMetadataPopup;
+        }
+        explorerMetadataPopup = new Popup();
+        explorerMetadataPopup.setAutoFix(true);
+        explorerMetadataPopup.setAutoHide(true);
+        explorerMetadataPopup.setHideOnEscape(true);
+        explorerMetadataPopup.setConsumeAutoHidingEvents(false);
+
+        explorerMetadataPopupLabel = new Label();
+        explorerMetadataPopupLabel.getStyleClass().add("explorer-tooltip-label");
+        explorerMetadataPopupLabel.setWrapText(true);
+        explorerMetadataPopupLabel.setMaxWidth(440.0);
+        explorerMetadataPopupLabel.setTextFill(Color.WHITE);
+        explorerMetadataPopupLabel.setStyle("-fx-text-fill: white; -fx-font-family: 'Segoe UI Variable Text'; -fx-font-size: 13px; -fx-font-weight: normal; -fx-line-spacing: 2px;");
+
+        explorerMetadataPopupRoot = new StackPane(explorerMetadataPopupLabel);
+        explorerMetadataPopupRoot.getStyleClass().add("explorer-rich-tooltip-popup");
+        explorerMetadataPopupRoot.setPickOnBounds(false);
+        explorerMetadataPopupRoot.setPadding(new Insets(8, 12, 8, 12));
+        explorerMetadataPopupRoot.setMaxWidth(460.0);
+        explorerMetadataPopupRoot.setStyle("-fx-background-color: #101010; -fx-background-radius: 8; -fx-border-color: #2f2f2f; -fx-border-width: 1; -fx-border-radius: 8;");
+
+        explorerMetadataPopup.getContent().add(explorerMetadataPopupRoot);
+        return explorerMetadataPopup;
+    }
+
+    private void armExplorerMetadataPopup(Node anchor, java.util.function.Supplier<String> textSupplier, double screenX, double screenY) {
+        if (anchor == null || textSupplier == null) {
+            return;
+        }
+        explorerMetadataPopupAnchor = anchor;
+        explorerMetadataPopupDetailsRowIndex = -1;
+        explorerMetadataPopupTextSupplier = textSupplier;
+        explorerMetadataPopupScreenX = screenX;
+        explorerMetadataPopupScreenY = screenY;
+
+        Popup popup = ensureExplorerMetadataPopup();
+        if (popup.isShowing()) {
+            refreshExplorerMetadataPopupNow();
+            return;
+        }
+        explorerMetadataPopupDelay.stop();
+        explorerMetadataPopupDelay.setOnFinished(_ev -> refreshExplorerMetadataPopupNow());
+        explorerMetadataPopupDelay.playFromStart();
+    }
+
+    private void armExplorerMetadataPopupForDetailsRow(int rowIndex, java.util.function.Supplier<String> textSupplier, double screenX, double screenY) {
+        if (fileTable == null || textSupplier == null || rowIndex < 0) {
+            return;
+        }
+        explorerMetadataPopupAnchor = fileTable;
+        explorerMetadataPopupDetailsRowIndex = rowIndex;
+        explorerMetadataPopupTextSupplier = textSupplier;
+        explorerMetadataPopupScreenX = screenX;
+        explorerMetadataPopupScreenY = screenY;
+
+        Popup popup = ensureExplorerMetadataPopup();
+        if (popup.isShowing()) {
+            refreshExplorerMetadataPopupNow();
+            return;
+        }
+        explorerMetadataPopupDelay.stop();
+        explorerMetadataPopupDelay.setOnFinished(_ev -> refreshExplorerMetadataPopupNow());
+        explorerMetadataPopupDelay.playFromStart();
+    }
+
+    private void refreshExplorerMetadataPopupForAnchor(Node anchor, java.util.function.Supplier<String> textSupplier) {
+        if (anchor == null || textSupplier == null) {
+            return;
+        }
+        if (explorerMetadataPopupAnchor != anchor || explorerMetadataPopupDetailsRowIndex >= 0) {
+            return;
+        }
+        explorerMetadataPopupTextSupplier = textSupplier;
+        if (explorerMetadataPopup != null && explorerMetadataPopup.isShowing()) {
+            refreshExplorerMetadataPopupNow();
+        }
+    }
+
+    private void refreshExplorerMetadataPopupForDetailsRowIndex(int rowIndex, java.util.function.Supplier<String> textSupplier) {
+        if (rowIndex < 0 || textSupplier == null) {
+            return;
+        }
+        if (explorerMetadataPopupAnchor != fileTable || explorerMetadataPopupDetailsRowIndex != rowIndex) {
+            return;
+        }
+        explorerMetadataPopupTextSupplier = textSupplier;
+        if (explorerMetadataPopup != null && explorerMetadataPopup.isShowing()) {
+            refreshExplorerMetadataPopupNow();
+        }
+    }
+
+    private void refreshExplorerMetadataPopupNow() {
+        Popup popup = ensureExplorerMetadataPopup();
+        if (explorerMetadataPopupAnchor == null || explorerMetadataPopupTextSupplier == null) {
+            hideExplorerMetadataPopup();
+            return;
+        }
+        if (explorerMetadataPopupAnchor.getScene() == null) {
+            hideExplorerMetadataPopup();
+            return;
+        }
+        Window owner = explorerMetadataPopupAnchor.getScene().getWindow();
+        Bounds screenBounds = explorerMetadataPopupAnchor.localToScreen(explorerMetadataPopupAnchor.getBoundsInLocal());
+        if (explorerMetadataPopupDetailsRowIndex >= 0) {
+            TableRow<FileItem> row = findVisibleDetailsRowByIndex(explorerMetadataPopupDetailsRowIndex);
+            if (row == null || row.isEmpty() || row.getItem() == null) {
+                hideExplorerMetadataPopup();
+                return;
+            }
+            screenBounds = row.localToScreen(row.getBoundsInLocal());
+        }
+        if (owner == null || screenBounds == null) {
+            hideExplorerMetadataPopup();
+            return;
+        }
+        String text = explorerMetadataPopupTextSupplier.get();
+        if (text == null || text.isBlank()) {
+            hideExplorerMetadataPopup();
+            return;
+        }
+
+        explorerMetadataPopupLabel.setText(text);
+        explorerMetadataPopupLabel.applyCss();
+        explorerMetadataPopupRoot.applyCss();
+        explorerMetadataPopupRoot.autosize();
+
+        double anchorX = Double.isNaN(explorerMetadataPopupScreenX) ? screenBounds.getMinX() + 16.0 : explorerMetadataPopupScreenX + 16.0;
+        double anchorY = Double.isNaN(explorerMetadataPopupScreenY) ? screenBounds.getMinY() + 22.0 : explorerMetadataPopupScreenY + 22.0;
+
+        if (!popup.isShowing()) {
+            popup.show(owner, anchorX, anchorY);
+        } else {
+            popup.setX(anchorX);
+            popup.setY(anchorY);
+        }
+    }
+
+    private void hideExplorerMetadataPopup() {
+        explorerMetadataPopupDelay.stop();
+        if (explorerMetadataPopup != null) {
+            explorerMetadataPopup.hide();
+        }
+        explorerMetadataPopupAnchor = null;
+        explorerMetadataPopupDetailsRowIndex = -1;
+        explorerMetadataPopupTextSupplier = null;
+        explorerMetadataPopupScreenX = Double.NaN;
+        explorerMetadataPopupScreenY = Double.NaN;
+        if (explorerMetadataPopupLabel != null) {
+            explorerMetadataPopupLabel.setText("");
+        }
+    }
+
+    private void installExplorerItemTooltip(Node node, java.util.function.Supplier<String> textSupplier) {
+        if (node == null || textSupplier == null) {
+            return;
+        }
+        node.addEventHandler(MouseEvent.MOUSE_ENTERED, event -> armExplorerMetadataPopup(node, textSupplier, event.getScreenX(), event.getScreenY()));
+        node.addEventHandler(MouseEvent.MOUSE_MOVED, event -> armExplorerMetadataPopup(node, textSupplier, event.getScreenX(), event.getScreenY()));
+        node.addEventHandler(MouseEvent.MOUSE_EXITED, event -> {
+            if (explorerMetadataPopupAnchor == node) {
+                hideExplorerMetadataPopup();
+            }
+        });
+        node.addEventHandler(MouseEvent.MOUSE_PRESSED, event -> {
+            if (explorerMetadataPopupAnchor == node) {
+                hideExplorerMetadataPopup();
+            }
+        });
+        node.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (newScene == null && explorerMetadataPopupAnchor == node) {
+                hideExplorerMetadataPopup();
+            }
+        });
+    }
+
+    private String buildExplorerItemTooltipText(FileItem item) {
+        if (item == null) {
+            return "";
+        }
+        Path path = item.path();
+        String name = firstNonBlank(item.name(), path != null ? displayNameForTable(path) : null, "Item");
+        String type = firstNonBlank(item.type(), path != null ? typeForTable(path) : null, "—");
+        String size = firstNonBlank(item.size(), path != null ? sizeForTable(path) : null, "—");
+        String modified = firstNonBlank(item.modified(), path != null ? modifiedForTable(path) : null, "—");
+        return name + "\nType: " + type + "\nSize: " + size + "\nDate modified: " + modified
+                + (path != null ? "\nPath: " + path : "");
+    }
+
+    private String buildExplorerItemTooltipText(Path path) {
+        if (path == null) {
+            return "";
+        }
+        String name = firstNonBlank(displayNameForTable(path), path.getFileName() != null ? path.getFileName().toString() : path.toString(), "Item");
+        String type = firstNonBlank(typeForTable(path), "—");
+        String size = firstNonBlank(sizeForTable(path), "—");
+        String modified = firstNonBlank(modifiedForTable(path), "—");
+        return name + "\nType: " + type + "\nSize: " + size + "\nDate modified: " + modified + "\nPath: " + path;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
+    }
+
+    private void updateDetailsHoverRowIndex(MouseEvent event) {
+        if (fileTable == null || event == null) {
+            detailsHoverRowIndex.set(-1);
+            return;
+        }
+        TableRow<FileItem> row = findDetailsTableRowAt(event.getSceneX(), event.getSceneY());
+        if (row == null || row.isEmpty() || row.getTableView() != fileTable) {
+            detailsHoverRowIndex.set(-1);
+            return;
+        }
+        detailsHoverRowIndex.set(row.getIndex());
+    }
+
+    private TableRow<?> findAncestorTableRow(Node node) {
+        Node current = node;
+        while (current != null) {
+            if (current instanceof TableRow<?> tableRow) {
+                return tableRow;
+            }
+            current = current.getParent();
+        }
+        return null;
+    }
+
+    private boolean isWindowFocusedForDetailsPaint() {
+        if (fileTable == null || fileTable.getScene() == null || fileTable.getScene().getWindow() == null) {
+            return true;
+        }
+        return fileTable.getScene().getWindow().isFocused() && fileTable.isFocused();
+    }
+
+    private String detailsBaseFillForRow(int index, boolean darkTheme) {
+        boolean odd = (index & 1) == 1;
+        if (darkTheme) {
+            return odd ? "rgba(20,24,31,0.995)" : "rgba(18,22,29,0.995)";
+        }
+        return odd ? "#fbfbfb" : "#ffffff";
+    }
+
+    private String detailsHoverFill(boolean darkTheme) {
+        return darkTheme ? "rgba(255,255,255,0.050)" : "rgba(0,0,0,0.042)";
+    }
+
+    private String detailsSelectionFill(boolean darkTheme, boolean focusedWindow, boolean hovered) {
+        if (focusedWindow) {
+            if (darkTheme) {
+                return hovered ? "rgba(113,162,255,0.305)" : "rgba(113,162,255,0.260)";
+            }
+            return hovered ? "rgba(33,99,214,0.188)" : "rgba(33,99,214,0.158)";
+        }
+        if (darkTheme) {
+            return "rgba(255,255,255,0.088)";
+        }
+        return "rgba(33,99,214,0.102)";
+    }
+
+    private String detailsSelectionBorder(boolean darkTheme, boolean focusedWindow, boolean selected) {
+        if (!selected) {
+            return darkTheme ? "rgba(255,255,255,0.035)" : "rgba(0,0,0,0.045)";
+        }
+        if (focusedWindow) {
+            return darkTheme ? "rgba(113,162,255,0.360)" : "rgba(33,99,214,0.205)";
+        }
+        return darkTheme ? "rgba(255,255,255,0.095)" : "rgba(33,99,214,0.135)";
+    }
+
+    private void updateDetailsRowHoverState(TableRow<FileItem> row) {
+        if (row == null) {
+            return;
+        }
+        boolean active = !row.isEmpty()
+                && row.getItem() != null
+                && row.getIndex() >= 0
+                && row.getIndex() == detailsHoverRowIndex.get();
+        row.pseudoClassStateChanged(PSEUDO_EXPLORER_HOVER, active);
+        if (row.isEmpty() || row.getItem() == null || row.getIndex() < 0 || viewMode != ViewMode.DETAILS) {
+            row.setStyle("");
+            return;
+        }
+        boolean darkTheme = themeService != null && themeService.isDarkPreferred();
+        boolean selected = row.isSelected();
+        boolean focusedWindow = isWindowFocusedForDetailsPaint();
+        String innerFill = selected
+                ? detailsSelectionFill(darkTheme, focusedWindow, active)
+                : (active ? detailsHoverFill(darkTheme) : detailsBaseFillForRow(row.getIndex(), darkTheme));
+        String border = selected || active
+                ? detailsSelectionBorder(darkTheme, focusedWindow, selected)
+                : "transparent";
+        String style = String.join(" ",
+                "-fx-background-insets: 0, 2 8 2 8;",
+                "-fx-background-radius: 0, 8;",
+                "-fx-border-insets: 2 8 2 8;",
+                "-fx-border-radius: 8;",
+                "-fx-border-width: 0, 1;",
+                "-fx-background-color: transparent, " + innerFill + ";",
+                "-fx-border-color: transparent, " + border + ";");
+        row.setStyle(style);
+        if (active) {
+            FileItem fi = row.getItem();
+            scheduleHoverPrefetch(fi != null ? fi.path() : null);
+        }
+    }
+
+    private final class ExplorerNameTableCell extends TableCell<FileItem, String> {
+        private final HBox box = new HBox(10.0);
+        private final ImageView iconView = new ImageView();
+        private final Label textLabel = new Label();
+        private final TextField renameField = new TextField();
+        private final InvalidationListener rowStateSync = obs -> syncTextFill();
+        private boolean suppressFocusCommit;
+
+        private ExplorerNameTableCell() {
+            box.setAlignment(Pos.CENTER_LEFT);
+            iconView.setPreserveRatio(true);
+            iconView.setSmooth(true);
+            textLabel.setTextOverrun(OverrunStyle.ELLIPSIS);
+            textLabel.setMaxWidth(Double.MAX_VALUE);
+            HBox.setHgrow(textLabel, Priority.ALWAYS);
+            renameField.getStyleClass().add("explorer-inline-rename-field");
+            box.setMouseTransparent(true);
+            textLabel.setMouseTransparent(true);
+            iconView.setMouseTransparent(true);
+            HBox.setHgrow(renameField, Priority.ALWAYS);
+            renameField.setOnAction(e -> commitInlineRename());
+            renameField.focusedProperty().addListener((obs, oldV, newV) -> {
+                if (!newV && isEditingTarget() && !suppressFocusCommit) {
+                    commitInlineRename();
+                }
+            });
+            renameField.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+                if (e.getCode() == KeyCode.ESCAPE) {
+                    suppressFocusCommit = true;
+                    cancelInlineRename();
+                    e.consume();
+                }
+            });
+            tableRowProperty().addListener((obs, oldR, newR) -> {
+                if (oldR != null) {
+                    oldR.selectedProperty().removeListener(rowStateSync);
+                }
+                if (newR != null) {
+                    newR.selectedProperty().addListener(rowStateSync);
+                }
+                syncTextFill();
+            });
+        }
+
+        private boolean isEditingTarget() {
+            FileItem fi = getTableRow() != null ? getTableRow().getItem() : null;
+            Path p = fi != null ? fi.path() : null;
+            return p != null && p.equals(inlineRenameTablePath);
+        }
+
+        private void syncTextFill() {
+            textLabel.setTextFill(resolveExplorerTableTextFill(getTableRow()));
+        }
+
+        @Override
+        protected void updateItem(String item, boolean empty) {
+            super.updateItem(item, empty);
+            if (empty) {
+                setText(null);
+                setGraphic(null);
+                setMouseTransparent(true);
+                return;
+            }
+            FileItem fi = (getTableRow() != null) ? getTableRow().getItem() : null;
+            Path p = (fi != null) ? fi.path() : null;
+            double iconPx = clamp(uiFontSizePx + 4.0, 16.0, 24.0);
+            Image img;
+            try {
+                String identity = fileMetadataService.iconIdentity(p);
+                img = IconLoader.loadForIdentity(identity, themeService.isDarkPreferred(), (int) Math.round(iconPx));
+            } catch (Exception ex) {
+                img = IconLoader.load(IconLoader.IconType.FILE, themeService.isDarkPreferred(), (int) Math.round(iconPx));
+            }
+            iconView.setFitWidth(iconPx);
+            iconView.setFitHeight(iconPx);
+            iconView.setImage(img);
+            syncTextFill();
+            setText(null);
+            if (isEditingTarget()) {
+                suppressFocusCommit = false;
+                renameField.setText(item);
+                box.getChildren().setAll(iconView, renameField);
+                setGraphic(box);
+                setMouseTransparent(false);
+                Platform.runLater(() -> {
+                    renameField.requestFocus();
+                    renameField.selectAll();
+                });
+            } else {
+                textLabel.setText(item);
+                box.getChildren().setAll(iconView, textLabel);
+                setGraphic(box);
+                setMouseTransparent(true);
+            }
+        }
+
+        private void commitInlineRename() {
+            FileItem fi = getTableRow() != null ? getTableRow().getItem() : null;
+            Path p = fi != null ? fi.path() : null;
+            suppressFocusCommit = false;
+            MainController.this.commitInlineRename(p, renameField.getText());
+        }
+
+        private void cancelInlineRename() {
+            suppressFocusCommit = false;
+            Path p = inlineRenameTablePath;
+            clearInlineRenameTargets();
+            Platform.runLater(() -> restoreFocusToTablePath(p));
+        }
+    }
+
+    private TableCell<FileItem, String> createExplorerTextTableCell(Pos alignment) {
+        return new TableCell<>() {
+            private final InvalidationListener rowStateSync = obs -> syncTextFill();
+            {
+                setMouseTransparent(true);
+            }
+            {
+                tableRowProperty().addListener((obs, oldR, newR) -> {
+                    if (oldR != null) {
+                        oldR.selectedProperty().removeListener(rowStateSync);
+                    }
+                    if (newR != null) {
+                        newR.selectedProperty().addListener(rowStateSync);
+                    }
+                    syncTextFill();
+                });
+            }
+            private void syncTextFill() {
+                setTextFill(resolveExplorerTableTextFill(getTableRow()));
+            }
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                LogSupport.enter(LOG, "updateItem3");
+                super.updateItem(item, empty);
+                setText(empty ? null : item);
+                setGraphic(null);
+                setContentDisplay(ContentDisplay.TEXT_ONLY);
+                setAlignment(alignment);
+                setTextAlignment(alignment == Pos.CENTER_RIGHT ? javafx.scene.text.TextAlignment.RIGHT : javafx.scene.text.TextAlignment.LEFT);
+                syncTextFill();
+            }
         };
     }
+
+    private Color resolveExplorerTableTextFill(TableRow<FileItem> row) {
+        if (row != null && row.isSelected()) {
+            return Color.WHITE;
+        }
+        if (themeService != null && themeService.isDarkPreferred()) {
+            return Color.web("#f5f5f5");
+        }
+        return Color.web("#202020");
+    }
+
+    private void tagIconTile(Node tile, Path path, String... styleClasses) {
+        if (tile == null) {
+            return;
+        }
+        if (path == null) {
+            tile.getProperties().remove(EXPLORER_ICON_TILE_PATH_KEY);
+        } else {
+            tile.getProperties().put(EXPLORER_ICON_TILE_PATH_KEY, path);
+        }
+        installStableExplorerIconTileHover(tile);
+        if (styleClasses == null) {
+            return;
+        }
+        for (String styleClass : styleClasses) {
+            if (styleClass == null || styleClass.isBlank()) {
+                continue;
+            }
+            if (!tile.getStyleClass().contains(styleClass)) {
+                tile.getStyleClass().add(styleClass);
+            }
+        }
+    }
+
+    private void installStableExplorerIconTileHover(Node tile) {
+        if (tile == null) {
+            return;
+        }
+        tile.setPickOnBounds(true);
+        if (Boolean.TRUE.equals(tile.getProperties().get(EXPLORER_ICON_TILE_HOVER_HANDLER_KEY))) {
+            return;
+        }
+        tile.getProperties().put(EXPLORER_ICON_TILE_HOVER_HANDLER_KEY, Boolean.TRUE);
+        tile.addEventHandler(MouseEvent.MOUSE_ENTERED, e -> setStyleClass(tile, "explorer-hover", true));
+        tile.addEventHandler(MouseEvent.MOUSE_EXITED, e -> setStyleClass(tile, "explorer-hover", false));
+    }
+
+    private void markExplorerIconTileChild(Node node) {
+        if (node == null) {
+            return;
+        }
+        node.setMouseTransparent(true);
+        if (node instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                markExplorerIconTileChild(child);
+            }
+        }
+    }
+
+    private boolean isPathCurrentlySelected(Path path) {
+        if (path == null || fileTable == null) {
+            return false;
+        }
+        ObservableList<FileItem> selectedItems = fileTable.getSelectionModel().getSelectedItems();
+        if (selectedItems == null || selectedItems.isEmpty()) {
+            return false;
+        }
+        for (FileItem item : selectedItems) {
+            if (item != null && Objects.equals(item.path(), path)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void refreshVisibleIconTileSelectionState() {
+        refreshVisibleIconTileSelectionState(iconFlow);
+        refreshVisibleIconTileSelectionState(virtualIconGridView);
+        refreshVisibleIconTileSelectionState(virtualIconListView);
+    }
+
+    private void refreshVisibleIconTileSelectionState(Node node) {
+        if (node == null) {
+            return;
+        }
+        Object taggedPath = node.getProperties().get(EXPLORER_ICON_TILE_PATH_KEY);
+        if (taggedPath instanceof Path path) {
+            setStyleClass(node, "explorer-selected", isPathCurrentlySelected(path));
+        }
+        if (node instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                refreshVisibleIconTileSelectionState(child);
+            }
+        }
+    }
+
+    /**
+     * Registers the Choose Details catalog and the always-known base columns.
+     */
+    private void ensureOptionalDetailsColumns() {
+        ensureChooseDetailsCatalog();
+    }
+
+    private void ensureChooseDetailsCatalog() {
+        if (fileTable == null) return;
+        if (chooseDetailSpecs.isEmpty()) {
+            chooseDetailSpecs = DetailColumnCatalog.allSpecs();
+            chooseDetailSpecsByKey = DetailColumnCatalog.specsByKey();
+            detailOrderedKeys.clear();
+            detailOrderedKeys.addAll(DetailColumnCatalog.defaultOrderedKeys());
+        }
+        registerCoreDetailColumn("name", "Name", colName);
+        registerCoreDetailColumn("modified", "Date modified", colModified);
+        registerCoreDetailColumn("type", "Type", colType);
+        registerCoreDetailColumn("size", "Size", colSize);
+    }
+
+    private void registerCoreDetailColumn(String key,
+                                          String label,
+                                          javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?> column) {
+        if (column == null) return;
+        column.getProperties().put(PROP_DETAIL_COLUMN_KEY, key);
+        if (column.getText() == null || column.getText().isBlank()) {
+            column.setText(label);
+        }
+        lazyDetailColumns.putIfAbsent(key, column);
+        applyRememberedDetailWidth(key, column);
+    }
+
+    private void wireDetailColumnPersistence(javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?> column) {
+        if (column == null) return;
+        if (Boolean.TRUE.equals(column.getProperties().get("fileexplorer.detailColumn.persistenceWired"))) {
+            return;
+        }
+        column.getProperties().put("fileexplorer.detailColumn.persistenceWired", Boolean.TRUE);
+        column.visibleProperty().addListener((obs, ov, nv) -> persistDetailsColumnsState());
+        column.widthProperty().addListener((obs, ov, nv) -> {
+            String key = detailsColKey(column);
+            if (key != null) {
+                detailColumnWidths.put(key, column.getWidth());
+            }
+            persistDetailsColumnsState();
+        });
+    }
+
+    private javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?> ensureDetailColumnByKey(String key) {
+        if (key == null || key.isBlank()) return null;
+        ensureChooseDetailsCatalog();
+        javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?> existing = lazyDetailColumns.get(key);
+        if (existing != null) {
+            applyRememberedDetailWidth(key, existing);
+            return existing;
+        }
+        com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec spec = chooseDetailSpecsByKey.get(key);
+        if (spec == null) return null;
+        javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, String> column = new javafx.scene.control.TableColumn<>(spec.label());
+        column.getProperties().put(PROP_DETAIL_COLUMN_KEY, key);
+        column.setCellValueFactory(param -> new ReadOnlyObjectWrapper<>(detailValueForKey(key, param.getValue())));
+        if ("index".equals(key)) {
+            column.setCellFactory(_ -> new javafx.scene.control.TableCell<>() {
+                @Override
+                protected void updateItem(String item, boolean empty) {
+                    super.updateItem(item, empty);
+                    setText(empty ? null : item);
+                    setAlignment(Pos.CENTER_RIGHT);
+                }
+            });
+        }
+        double prefWidth = Math.max(96.0, Math.min(320.0, spec.label().length() * 8.5 + 32.0));
+        column.setPrefWidth(prefWidth);
+        applyRememberedDetailWidth(key, column);
+        wireDetailColumnPersistence(column);
+        lazyDetailColumns.put(key, column);
+        if ("dateCreated".equals(key)) colDateCreated = column;
+        if ("authors".equals(key)) colAuthors = column;
+        if ("tags".equals(key)) colTags = column;
+        if ("title".equals(key)) colTitle = column;
+        return column;
+    }
+
+    private void applyRememberedDetailWidth(String key,
+                                            javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?> column) {
+        if (key == null || column == null) return;
+        Double remembered = detailColumnWidths.get(key);
+        if (remembered == null) return;
+        if (remembered >= 24.0 && remembered <= 2000.0) {
+            column.setPrefWidth(remembered);
+        }
+    }
+
+    private String detailsColKey(javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?> c) {
+        if (c == null) return null;
+        Object v = c.getProperties().get(PROP_DETAIL_COLUMN_KEY);
+        return (v instanceof String s && !s.isBlank()) ? s : null;
+    }
+
+    private javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?> detailsColByKey(String key) {
+        if (key == null) return null;
+        ensureChooseDetailsCatalog();
+        return lazyDetailColumns.get(key);
+    }
+
+    private java.util.Set<String> currentVisibleDetailKeys() {
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        if (fileTable == null) return out;
+        for (var c : fileTable.getColumns()) {
+            String key = detailsColKey(c);
+            if (key != null && c.isVisible()) {
+                out.add(key);
+            }
+        }
+        out.add("name");
+        return out;
+    }
+
     private void restoreDetailsColumnsState() {
         if (fileTable == null) return;
-        // Defaults: Name, Date modified, Type, Size visible. Name is locked on.
-        java.util.Set<String> visible = new java.util.HashSet<>();
-        String visRaw = prefs.get(PREF_TABLE_DETAILS_COLS_VISIBLE, "");
-        if (!visRaw.isBlank()) {
-            for (String s : visRaw.split(",")) {
-                if (!s.isBlank()) visible.add(s.trim());
+        ensureChooseDetailsCatalog();
+
+        detailColumnWidths.clear();
+        String widthRaw = prefs.get(PREF_TABLE_DETAILS_COLS_WIDTHS, "");
+        if (!widthRaw.isBlank()) {
+            for (String part : widthRaw.split(",")) {
+                String[] kv = part.split("=");
+                if (kv.length != 2) continue;
+                try {
+                    double width = Double.parseDouble(kv[1].trim());
+                    if (width >= 24.0 && width <= 2000.0) {
+                        detailColumnWidths.put(kv[0].trim(), width);
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        }
+
+        detailOrderedKeys.clear();
+        String orderRaw = prefs.get(PREF_TABLE_DETAILS_COLS_ORDER, "");
+        if (!orderRaw.isBlank()) {
+            java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
+            for (String key : orderRaw.split(",")) {
+                String trimmed = key.trim();
+                if (!trimmed.isBlank() && chooseDetailSpecsByKey.containsKey(trimmed)) {
+                    seen.add(trimmed);
+                }
+            }
+            for (com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec spec : chooseDetailSpecs) {
+                seen.add(spec.key());
+            }
+            detailOrderedKeys.addAll(seen);
+        } else {
+            detailOrderedKeys.addAll(DetailColumnCatalog.defaultOrderedKeys());
+        }
+
+        java.util.LinkedHashSet<String> visible = new java.util.LinkedHashSet<>();
+        String visibleRaw = prefs.get(PREF_TABLE_DETAILS_COLS_VISIBLE, "");
+        if (!visibleRaw.isBlank()) {
+            for (String key : visibleRaw.split(",")) {
+                String trimmed = key.trim();
+                if (!trimmed.isBlank() && chooseDetailSpecsByKey.containsKey(trimmed)) {
+                    visible.add(trimmed);
+                }
             }
         } else {
             visible.add("name");
@@ -2216,197 +3438,482 @@ colType.setCellValueFactory(param -> {
             visible.add("type");
             visible.add("size");
         }
-        // Enforce Name always visible.
         visible.add("name");
-        // Apply visibility
-        for (var c : java.util.List.of(colName, colModified, colType, colSize, colDateCreated, colAuthors, colTags, colTitle)) {
-            String k = detailsColKey(c);
-            if (k == null) continue;
-            c.setVisible(visible.contains(k));
-        }
-        // Apply widths (best effort)
-        String wRaw = prefs.get(PREF_TABLE_DETAILS_COLS_WIDTHS, "");
-        if (!wRaw.isBlank()) {
-            for (String part : wRaw.split(",")) {
-                String[] kv = part.split("=");
-                if (kv.length == 2) {
-                    String k = kv[0].trim();
-                    try {
-                        double w = Double.parseDouble(kv[1].trim());
-                        var col = detailsColByKey(k);
-                        if (col != null && w >= 24 && w <= 2000) {
-                            col.setPrefWidth(w);
-                        }
-                    } catch (Exception ignored) {
-                    }
-                }
-            }
-        }
-        // Apply order (best effort). Only reorder the "details" columns, keep any non-details columns as-is.
-        String orderRaw = prefs.get(PREF_TABLE_DETAILS_COLS_ORDER, "");
-        if (!orderRaw.isBlank()) {
-            java.util.List<javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?>> ordered = new java.util.ArrayList<>();
-            for (String k : orderRaw.split(",")) {
-                var col = detailsColByKey(k.trim());
-                if (col != null) ordered.add(col);
-            }
-            // Ensure all known details cols appear at least once
-            for (var c : java.util.List.of(colName, colModified, colType, colSize, colDateCreated, colAuthors, colTags, colTitle)) {
-                if (!ordered.contains(c)) ordered.add(c);
-            }
-            // Rebuild columns list preserving any non-details columns already present.
-            java.util.List<javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?>> nonDetails = new java.util.ArrayList<>();
-            for (var c : fileTable.getColumns()) {
-                if (detailsColKey(c) == null) nonDetails.add(c);
-            }
-            fileTable.getColumns().setAll(nonDetails);
-            fileTable.getColumns().addAll(ordered);
-        }
+
+        rebuildActiveDetailColumns(visible);
     }
+
+    private void rebuildActiveDetailColumns(java.util.Set<String> visibleKeys) {
+        if (fileTable == null) return;
+        ensureChooseDetailsCatalog();
+
+        java.util.LinkedHashSet<String> orderedVisibleKeys = new java.util.LinkedHashSet<>();
+        orderedVisibleKeys.add("name");
+        for (String key : detailOrderedKeys) {
+            if ("name".equals(key) || visibleKeys.contains(key)) {
+                orderedVisibleKeys.add(key);
+            }
+        }
+
+        java.util.List<javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?>> orderedVisibleColumns = new java.util.ArrayList<>();
+        for (String key : orderedVisibleKeys) {
+            var column = ensureDetailColumnByKey(key);
+            if (column != null && !orderedVisibleColumns.contains(column)) {
+                orderedVisibleColumns.add(column);
+            }
+        }
+        orderedVisibleColumns.remove(colName);
+        orderedVisibleColumns.add(0, colName);
+
+        for (var entry : lazyDetailColumns.entrySet()) {
+            entry.getValue().setVisible(orderedVisibleKeys.contains(entry.getKey()));
+        }
+
+        java.util.List<javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?>> nonDetails = new java.util.ArrayList<>();
+        for (var c : fileTable.getColumns()) {
+            if (detailsColKey(c) == null) {
+                nonDetails.add(c);
+            }
+        }
+        fileTable.getColumns().setAll(nonDetails);
+        fileTable.getColumns().addAll(orderedVisibleColumns);
+    }
+
+    private void syncDetailOrderKeysFromTable() {
+        if (fileTable == null) return;
+        ensureChooseDetailsCatalog();
+        java.util.LinkedHashSet<String> merged = new java.util.LinkedHashSet<>();
+        for (var c : fileTable.getColumns()) {
+            String key = detailsColKey(c);
+            if (key != null && chooseDetailSpecsByKey.containsKey(key)) {
+                merged.add(key);
+            }
+        }
+        for (String key : detailOrderedKeys) {
+            if (chooseDetailSpecsByKey.containsKey(key)) {
+                merged.add(key);
+            }
+        }
+        for (com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec spec : chooseDetailSpecs) {
+            merged.add(spec.key());
+        }
+        detailOrderedKeys.clear();
+        detailOrderedKeys.addAll(merged);
+    }
+
     private void persistDetailsColumnsState() {
         if (fileTable == null) return;
-        // Visible set
-        java.util.List<String> visible = new java.util.ArrayList<>();
-        for (var c : java.util.List.of(colName, colModified, colType, colSize, colDateCreated, colAuthors, colTags, colTitle)) {
-            String k = detailsColKey(c);
-            if (k == null) continue;
-            if (c.isVisible() || "name".equals(k)) {
-                visible.add(k);
+        ensureChooseDetailsCatalog();
+        syncDetailOrderKeysFromTable();
+
+        java.util.LinkedHashSet<String> visible = new java.util.LinkedHashSet<>(currentVisibleDetailKeys());
+        visible.add("name");
+        prefs.put(PREF_TABLE_DETAILS_COLS_VISIBLE, String.join(",", visible));
+        prefs.put(PREF_TABLE_DETAILS_COLS_ORDER, String.join(",", detailOrderedKeys));
+
+        java.util.LinkedHashMap<String, Double> mergedWidths = new java.util.LinkedHashMap<>(detailColumnWidths);
+        for (var entry : lazyDetailColumns.entrySet()) {
+            mergedWidths.put(entry.getKey(), entry.getValue().getWidth());
+        }
+        detailColumnWidths.clear();
+        detailColumnWidths.putAll(mergedWidths);
+
+        java.util.List<String> widthParts = new java.util.ArrayList<>();
+        for (String key : detailOrderedKeys) {
+            Double width = detailColumnWidths.get(key);
+            if (width != null && width >= 24.0 && width <= 2000.0) {
+                widthParts.add(key + "=" + width);
             }
         }
-        // Name always
-        if (!visible.contains("name")) visible.add(0, "name");
-        prefs.put(PREF_TABLE_DETAILS_COLS_VISIBLE, String.join(",", visible));
-        // Order (as currently in table columns list)
-        java.util.List<String> order = new java.util.ArrayList<>();
-        for (var c : fileTable.getColumns()) {
-            String k = detailsColKey(c);
-            if (k != null) order.add(k);
-        }
-        if (!order.contains("name")) order.add(0, "name");
-        prefs.put(PREF_TABLE_DETAILS_COLS_ORDER, String.join(",", order));
-        // Widths
-        java.util.List<String> widths = new java.util.ArrayList<>();
-        for (var c : java.util.List.of(colName, colModified, colType, colSize, colDateCreated, colAuthors, colTags, colTitle)) {
-            String k = detailsColKey(c);
-            if (k == null) continue;
-            widths.add(k + "=" + c.getWidth());
-        }
-        prefs.put(PREF_TABLE_DETAILS_COLS_WIDTHS, String.join(",", widths));
+        prefs.put(PREF_TABLE_DETAILS_COLS_WIDTHS, String.join(",", widthParts));
     }
+
     private void wireDetailsColumnsPersistence() {
-        if (fileTable == null) return;
-        // Persist on visibility changes + width changes.
-        for (var c : java.util.List.of(colName, colModified, colType, colSize, colDateCreated, colAuthors, colTags, colTitle)) {
-            c.visibleProperty().addListener((obs, ov, nv) -> persistDetailsColumnsState());
-            c.widthProperty().addListener((obs, ov, nv) -> persistDetailsColumnsState());
-        }
-        // Persist on reordering of columns.
+        if (fileTable == null || detailsColumnsPersistenceWired) return;
+        ensureChooseDetailsCatalog();
+        detailsColumnsPersistenceWired = true;
+        wireDetailColumnPersistence(colName);
+        wireDetailColumnPersistence(colModified);
+        wireDetailColumnPersistence(colType);
+        wireDetailColumnPersistence(colSize);
         fileTable.getColumns().addListener((javafx.collections.ListChangeListener<javafx.scene.control.TableColumn<FileItem, ?>>) ch -> {
             while (ch.next()) {
                 if (ch.wasAdded() || ch.wasRemoved() || ch.wasPermutated() || ch.wasReplaced()) {
+                    syncDetailOrderKeysFromTable();
                     persistDetailsColumnsState();
                 }
             }
         });
     }
+
+    private java.util.Map<String, javafx.scene.control.TableColumn<?, ?>> currentHeaderDetailsColumns() {
+        java.util.LinkedHashMap<String, javafx.scene.control.TableColumn<?, ?>> out = new java.util.LinkedHashMap<>();
+        if (fileTable == null) return out;
+        for (var c : fileTable.getColumns()) {
+            String key = detailsColKey((javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?>) c);
+            if (key == null) continue;
+            String label = DetailColumnCatalog.labelForKey(key);
+            out.put(label, c);
+        }
+        return out;
+    }
+
     private void installHeaderDetailsMenu() {
         if (fileTable == null) return;
+        ensureChooseDetailsCatalog();
         restoreDetailsColumnsState();
         wireDetailsColumnsPersistence();
-        var map = TableHeaderContextMenuInstaller.defaultDetailsOrder(
-                colName,
-                colModified,
-                colType,
-                colSize,
-                colDateCreated,
-                colAuthors,
-                colTags,
-                colTitle
-        );
+        if (Boolean.TRUE.equals(fileTable.getProperties().get("fileexplorer.headerMenuInstalled"))) {
+            return;
+        }
+        fileTable.getProperties().put("fileexplorer.headerMenuInstalled", Boolean.TRUE);
         TableHeaderContextMenuInstaller.install(
                 fileTable,
-                map,
+                this::currentHeaderDetailsColumns,
                 this::showChooseDetailsDialog
         );
     }
+
     /**
      * Explorer-like "Choose Details" dialog invoked from the header menu.
      */
     private void showChooseDetailsDialog() {
         if (fileTable == null) return;
-        ensureOptionalDetailsColumns();
-        // Default specs (Explorer-like): Name, Date modified, Type, Size ON; Name locked.
-        java.util.List<com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec> defaults = java.util.List.of(
-                new com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec("name", "Name", true, true),
-                new com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec("modified", "Date modified", true, false),
-                new com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec("type", "Type", true, false),
-                new com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec("size", "Size", true, false),
-                new com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec("dateCreated", "Date created", false, false),
-                new com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec("authors", "Authors", false, false),
-                new com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec("tags", "Tags", false, false),
-                new com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec("title", "Title", false, false)
-        );
-        // Initial specs based on current table state (order + visibility).
-        java.util.List<com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec> initial = new java.util.ArrayList<>();
-        java.util.Set<String> seen = new java.util.HashSet<>();
-        for (var c : fileTable.getColumns()) {
-            String k = detailsColKey(c);
-            if (k == null) continue;
-            seen.add(k);
-            initial.add(new com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec(
-                    k,
-                    c.getText(),
-                    c.isVisible() || "name".equals(k),
-                    "name".equals(k)
-            ));
-        }
-        // Ensure all known details appear at least once (append missing in default order).
-        for (var d : defaults) {
-            if (!seen.contains(d.key())) {
-                initial.add(new com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec(
-                        d.key(), d.label(),
-                        (detailsColByKey(d.key()) != null && detailsColByKey(d.key()).isVisible()) || d.locked(),
-                        d.locked()
-                ));
+        ensureChooseDetailsCatalog();
+        syncDetailOrderKeysFromTable();
+
+        java.util.Set<String> visible = currentVisibleDetailKeys();
+        java.util.LinkedHashSet<String> orderedKeys = new java.util.LinkedHashSet<>();
+        for (String key : detailOrderedKeys) {
+            if (chooseDetailSpecsByKey.containsKey(key)) {
+                orderedKeys.add(key);
             }
         }
+        for (com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec spec : chooseDetailSpecs) {
+            orderedKeys.add(spec.key());
+        }
+
+        java.util.List<com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec> initial = new java.util.ArrayList<>(orderedKeys.size());
+        for (String key : orderedKeys) {
+            var spec = chooseDetailSpecsByKey.get(key);
+            if (spec == null) continue;
+            initial.add(new com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec(
+                    spec.key(),
+                    spec.label(),
+                    visible.contains(spec.key()) || spec.locked(),
+                    spec.locked()
+            ));
+        }
+
+        java.util.Map<String, Double> currentWidths = new java.util.LinkedHashMap<>();
+        for (com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec spec : chooseDetailSpecs) {
+            javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?> column = detailsColByKey(spec.key());
+            double width = (column != null && column.getWidth() > 0.0)
+                    ? column.getWidth()
+                    : detailColumnWidths.getOrDefault(spec.key(), 120.0);
+            currentWidths.put(spec.key(), width);
+        }
+
         javafx.stage.Window owner = (fileTable.getScene() != null) ? fileTable.getScene().getWindow() : null;
-        var resultOpt = com.fileexplorer.ui.dialog.ChooseDetailsDialog.show(owner, initial, defaults);
+        var resultOpt = com.fileexplorer.ui.dialog.ChooseDetailsDialog.show(owner, initial, chooseDetailSpecs, currentWidths);
         if (resultOpt.isEmpty()) return;
+
         var result = resultOpt.get();
-        // Apply visibility (Name always visible).
-        java.util.Set<String> visible = new java.util.HashSet<>(result.visibleKeys());
-        visible.add("name");
-        for (var c : java.util.List.of(colName, colModified, colType, colSize, colDateCreated, colAuthors, colTags, colTitle)) {
-            String k = detailsColKey(c);
-            if (k == null) continue;
-            c.setVisible(visible.contains(k));
+        if (result.widthByKey() != null) {
+            detailColumnWidths.putAll(result.widthByKey());
         }
-        // Apply order: reorder only details columns, keep any non-details as-is.
-        java.util.List<javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?>> ordered = new java.util.ArrayList<>();
-        for (String k : result.orderedKeys()) {
-            var col = detailsColByKey(k);
-            if (col != null && !ordered.contains(col)) ordered.add(col);
+        detailOrderedKeys.clear();
+        java.util.LinkedHashSet<String> mergedOrder = new java.util.LinkedHashSet<>();
+        for (String key : result.orderedKeys()) {
+            if (chooseDetailSpecsByKey.containsKey(key)) {
+                mergedOrder.add(key);
+            }
         }
-        // Ensure Name is first and present.
-        if (!ordered.contains(colName)) ordered.add(0, colName);
-        ordered.remove(colName);
-        ordered.add(0, colName);
-        // Ensure all known details exist once.
-        for (var c : java.util.List.of(colName, colModified, colType, colSize, colDateCreated, colAuthors, colTags, colTitle)) {
-            if (!ordered.contains(c)) ordered.add(c);
+        for (com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec spec : chooseDetailSpecs) {
+            mergedOrder.add(spec.key());
         }
-        java.util.List<javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?>> nonDetails = new java.util.ArrayList<>();
-        for (var c : fileTable.getColumns()) {
-            if (detailsColKey(c) == null) nonDetails.add(c);
+        detailOrderedKeys.addAll(mergedOrder);
+
+        java.util.LinkedHashSet<String> selectedVisible = new java.util.LinkedHashSet<>();
+        for (String key : result.visibleKeys()) {
+            if (chooseDetailSpecsByKey.containsKey(key)) {
+                selectedVisible.add(key);
+            }
         }
-        fileTable.getColumns().setAll(nonDetails);
-        fileTable.getColumns().addAll(ordered);
+        selectedVisible.add("name");
+        rebuildActiveDetailColumns(selectedVisible);
+        for (var entry : lazyDetailColumns.entrySet()) {
+            applyRememberedDetailWidth(entry.getKey(), entry.getValue());
+        }
         persistDetailsColumnsState();
     }
+
+    private String detailValueForKey(String key, FileItem item) {
+        if (key == null || item == null) return "";
+        Path path = item.path();
+        return switch (key) {
+            case "name" -> displayNameForTable(path);
+            case "modified", "date", "dateLastSaved" -> item.modified();
+            case "type", "itemType", "kind", "contentType", "perceivedType" -> item.type();
+            case "size", "totalFileSize", "totalSize" -> item.size();
+            case "index" -> detailRowIndex(item);
+            case "dateCreated", "contentCreated", "mediaCreated" -> safeCreationTimeString(path);
+            case "dateAccessed", "dateVisited" -> safeLastAccessTimeString(path);
+            case "path" -> path != null ? path.toString() : "";
+            case "folder", "fileLocation" -> safeParentPath(path);
+            case "folderName" -> safeParentName(path);
+            case "filename" -> safeFileName(path);
+            case "fileExtension" -> safeFileExtension(path);
+            case "title", "subject" -> safeFileStem(path);
+            case "owner", "fileOwnership" -> safeOwner(path);
+            case "attributes" -> safeAttributes(path);
+            case "localComputer" -> java.util.Objects.toString(System.getenv("COMPUTERNAME"), "");
+            default -> "";
+        };
+    }
+
+    private String detailRowIndex(FileItem item) {
+        if (item == null || fileTable == null || fileTable.getItems() == null) return "";
+        int idx = fileTable.getItems().indexOf(item);
+        return idx >= 0 ? Integer.toString(idx + 1) : "";
+    }
+
+    private String safeCreationTimeString(Path path) {
+        if (path == null) return "";
+        try {
+            java.nio.file.attribute.BasicFileAttributes attrs = Files.readAttributes(path, java.nio.file.attribute.BasicFileAttributes.class);
+            java.nio.file.attribute.FileTime ft = attrs.creationTime();
+            if (ft == null) return "";
+            return safeFormatFileTime(ft);
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private String safeLastAccessTimeString(Path path) {
+        if (path == null) return "";
+        try {
+            java.nio.file.attribute.BasicFileAttributes attrs = Files.readAttributes(path, java.nio.file.attribute.BasicFileAttributes.class);
+            java.nio.file.attribute.FileTime ft = attrs.lastAccessTime();
+            if (ft == null) return "";
+            return safeFormatFileTime(ft);
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private String safeFormatFileTime(java.nio.file.attribute.FileTime fileTime) {
+        try {
+            java.time.Instant instant = fileTime.toInstant();
+            java.time.LocalDateTime ldt = java.time.LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault());
+            return java.time.format.DateTimeFormatter.ofPattern("MM/dd/yyyy h:mm a", java.util.Locale.US).format(ldt);
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private String safeParentPath(Path path) {
+        if (path == null) return "";
+        Path parent = path.getParent();
+        return parent != null ? parent.toString() : "";
+    }
+
+    private String safeParentName(Path path) {
+        if (path == null) return "";
+        Path parent = path.getParent();
+        if (parent == null) return "";
+        Path fileName = parent.getFileName();
+        return fileName != null ? fileName.toString() : parent.toString();
+    }
+
+    private String safeFileName(Path path) {
+        if (path == null) return "";
+        Path fileName = path.getFileName();
+        return fileName != null ? fileName.toString() : path.toString();
+    }
+
+    private String safeFileStem(Path path) {
+        String name = safeFileName(path);
+        int dot = name.lastIndexOf('.');
+        if (dot > 0) {
+            return name.substring(0, dot);
+        }
+        return name;
+    }
+
+    private String safeFileExtension(Path path) {
+        String name = safeFileName(path);
+        int dot = name.lastIndexOf('.');
+        if (dot > 0 && dot < name.length() - 1) {
+            return name.substring(dot + 1);
+        }
+        return "";
+    }
+
+    private String safeOwner(Path path) {
+        if (path == null) return "";
+        try {
+            var owner = Files.getOwner(path);
+            return owner != null ? owner.getName() : "";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private String safeAttributes(Path path) {
+        if (path == null) return "";
+        java.util.List<String> flags = new java.util.ArrayList<>(6);
+        try {
+            if (Files.isDirectory(path)) flags.add("D");
+            if (Files.isHidden(path)) flags.add("H");
+            if (Files.isReadable(path)) flags.add("R");
+            if (Files.isWritable(path)) flags.add("W");
+            if (Files.isExecutable(path)) flags.add("X");
+            return String.join("", flags);
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private javafx.scene.control.ContextMenu createExplorerContextMenu() {
+        javafx.scene.control.ContextMenu menu = new javafx.scene.control.ContextMenu();
+        menu.getStyleClass().addAll("explorer-context-menu", "explorer-flyout-menu");
+        return menu;
+    }
+
+    private javafx.scene.control.MenuItem createExplorerMenuItem(String text, String glyph, Runnable action) {
+        javafx.scene.control.MenuItem item = new javafx.scene.control.MenuItem(text);
+        item.getStyleClass().add("explorer-menu-item");
+        if (glyph != null && !glyph.isBlank()) {
+            Label icon = new Label(glyph);
+            icon.getStyleClass().addAll("fluent-icon", "explorer-menu-glyph");
+            item.setGraphic(icon);
+        }
+        if (action != null) {
+            item.setOnAction(e -> action.run());
+        }
+        return item;
+    }
+
+    private javafx.scene.control.SeparatorMenuItem createExplorerSeparator() {
+        javafx.scene.control.SeparatorMenuItem separator = new javafx.scene.control.SeparatorMenuItem();
+        separator.getStyleClass().add("explorer-menu-separator");
+        return separator;
+    }
+
     // Reused context menu instance for file operations (prevents multiple menus stacking).
     private transient javafx.scene.control.ContextMenu fileOpsMenu;
+    private transient javafx.scene.control.MenuItem fileOpsOpenItem;
+    private transient javafx.scene.control.MenuItem fileOpsCopyItem;
+    private transient javafx.scene.control.MenuItem fileOpsCutItem;
+    private transient javafx.scene.control.MenuItem fileOpsPasteItem;
+    private transient javafx.scene.control.MenuItem fileOpsRenameItem;
+    private transient javafx.scene.control.MenuItem fileOpsDeleteItem;
+    private transient javafx.scene.control.MenuItem fileOpsPropertiesItem;
+    private FileItem getFocusedOrSelectedFileItem() {
+        if (fileTable == null || fileTable.getItems() == null) {
+            return null;
+        }
+        int focusedIndex = fileTable.getFocusModel() != null ? fileTable.getFocusModel().getFocusedIndex() : -1;
+        if (focusedIndex >= 0 && focusedIndex < fileTable.getItems().size()) {
+            FileItem focused = fileTable.getItems().get(focusedIndex);
+            if (focused != null) {
+                return focused;
+            }
+        }
+        return fileTable.getSelectionModel() != null ? fileTable.getSelectionModel().getSelectedItem() : null;
+    }
+
+    private Path getFocusedOrSelectedPath() {
+        FileItem item = getFocusedOrSelectedFileItem();
+        return item != null ? item.path() : null;
+    }
+
+    private int getFocusedOrSelectedIndex() {
+        if (fileTable == null) {
+            return -1;
+        }
+        int focusedIndex = fileTable.getFocusModel() != null ? fileTable.getFocusModel().getFocusedIndex() : -1;
+        if (focusedIndex >= 0) {
+            return focusedIndex;
+        }
+        return fileTable.getSelectionModel() != null ? fileTable.getSelectionModel().getSelectedIndex() : -1;
+    }
+
+    private int findTableIndexForPath(Path path) {
+        if (path == null || fileTable == null || fileTable.getItems() == null) {
+            return -1;
+        }
+        ObservableList<FileItem> items = fileTable.getItems();
+        for (int i = 0; i < items.size(); i++) {
+            FileItem item = items.get(i);
+            if (item != null && path.equals(item.path())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private void restoreFocusToTablePath(Path path) {
+        if (path == null || fileTable == null) {
+            return;
+        }
+        int idx = findTableIndexForPath(path);
+        if (idx < 0) {
+            return;
+        }
+        fileTable.getSelectionModel().clearAndSelect(idx);
+        if (fileTable.getFocusModel() != null) {
+            fileTable.getFocusModel().focus(idx);
+        }
+        fileTable.scrollTo(Math.max(0, idx - 2));
+        fileTable.requestFocus();
+    }
+
+    private void hideExplorerTransientUi() {
+        if (fileOpsMenu != null) {
+            fileOpsMenu.hide();
+        }
+        if (fileTable != null) {
+            Object header = fileTable.getProperties().get(com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.PROP_HEADER_MENU);
+            if (header instanceof javafx.scene.control.ContextMenu cm) {
+                cm.hide();
+            }
+        }
+    }
+
+    private void showFileOpsContextMenuForFocusedRow() {
+        if (fileTable == null) {
+            return;
+        }
+        int index = getFocusedOrSelectedIndex();
+        if (index < 0 || index >= fileTable.getItems().size()) {
+            return;
+        }
+        if (!fileTable.getSelectionModel().isSelected(index)) {
+            fileTable.getSelectionModel().clearAndSelect(index);
+        }
+        if (fileTable.getFocusModel() != null) {
+            fileTable.getFocusModel().focus(index);
+        }
+        fileTable.requestFocus();
+        fileTable.applyCss();
+        fileTable.layout();
+        for (Node node : fileTable.lookupAll(".table-row-cell")) {
+            if (node instanceof TableRow<?> rawRow && rawRow.getIndex() == index) {
+                Bounds bounds = node.localToScreen(node.getBoundsInLocal());
+                if (bounds != null) {
+                    showFileOpsContextMenu(bounds.getMinX() + 24.0, bounds.getMinY() + Math.min(24.0, bounds.getHeight()));
+                    return;
+                }
+            }
+        }
+        Bounds tableBounds = fileTable.localToScreen(fileTable.getBoundsInLocal());
+        if (tableBounds != null) {
+            showFileOpsContextMenu(tableBounds.getMinX() + 48.0, tableBounds.getMinY() + 48.0);
+        }
+    }
+
 /**
  * showFileOpsContextMenu.
  *
@@ -2416,43 +3923,41 @@ colType.setCellValueFactory(param -> {
     private void showFileOpsContextMenu(double screenX, double screenY) {
         if (fileTable == null) return;
         if (fileOpsMenu == null) {
-            fileOpsMenu = new javafx.scene.control.ContextMenu();
-            javafx.scene.control.MenuItem copy = new javafx.scene.control.MenuItem("Copy");
-            copy.setOnAction(ae -> {
-                fileOpsMenu.hide();
-                copySelection(false);
-            });
-            javafx.scene.control.MenuItem cut = new javafx.scene.control.MenuItem("Cut");
-            cut.setOnAction(ae -> {
-                fileOpsMenu.hide();
-                copySelection(true);
-            });
-            javafx.scene.control.MenuItem paste = new javafx.scene.control.MenuItem("Paste");
-            paste.setOnAction(ae -> {
-                fileOpsMenu.hide();
-                pasteIntoCurrentDirectory();
-            });
-            javafx.scene.control.MenuItem rename = new javafx.scene.control.MenuItem("Rename");
-            rename.setOnAction(ae -> {
-                fileOpsMenu.hide();
-                renameSelection();
-            });
-            javafx.scene.control.MenuItem delete = new javafx.scene.control.MenuItem("Delete");
-            delete.setOnAction(ae -> {
-                fileOpsMenu.hide();
-                deleteSelection(false);
-            });
-            fileOpsMenu.getItems().addAll(copy, cut, paste, new javafx.scene.control.SeparatorMenuItem(), rename, delete);
-            // Update dynamic enablement each time we show.
+            fileOpsMenu = createExplorerContextMenu();
+            fileOpsOpenItem = createExplorerMenuItem("Open", "", this::openPrimarySelection);
+            fileOpsCopyItem = createExplorerMenuItem("Copy", "", () -> copySelection(false));
+            fileOpsCutItem = createExplorerMenuItem("Cut", "", () -> copySelection(true));
+            fileOpsPasteItem = createExplorerMenuItem("Paste", "", this::pasteIntoCurrentDirectory);
+            fileOpsRenameItem = createExplorerMenuItem("Rename", "", this::renameSelection);
+            fileOpsDeleteItem = createExplorerMenuItem("Delete", "", () -> deleteSelection(false));
+            fileOpsPropertiesItem = createExplorerMenuItem("Properties", "", this::openPropertiesForSelection);
+            fileOpsMenu.getItems().addAll(
+                    fileOpsOpenItem,
+                    createExplorerSeparator(),
+                    fileOpsCopyItem,
+                    fileOpsCutItem,
+                    fileOpsPasteItem,
+                    createExplorerSeparator(),
+                    fileOpsRenameItem,
+                    fileOpsDeleteItem,
+                    createExplorerSeparator(),
+                    fileOpsPropertiesItem);
             fileOpsMenu.setOnShowing(e -> {
-                // Paste item is index 2
-                javafx.scene.control.MenuItem p = fileOpsMenu.getItems().get(2);
-                p.setDisable(clipboardPaths.isEmpty());
+                int selectionCount = fileTable.getSelectionModel() != null
+                        ? fileTable.getSelectionModel().getSelectedItems().size()
+                        : 0;
+                boolean hasSelection = selectionCount > 0;
+                boolean singleSelection = selectionCount == 1;
+                fileOpsOpenItem.setDisable(!singleSelection);
+                fileOpsCopyItem.setDisable(!hasSelection);
+                fileOpsCutItem.setDisable(!hasSelection);
+                fileOpsPasteItem.setDisable(currentDirectory == null || clipboardPaths.isEmpty());
+                fileOpsRenameItem.setDisable(!singleSelection);
+                fileOpsDeleteItem.setDisable(!hasSelection);
+                fileOpsPropertiesItem.setDisable(!singleSelection);
             });
-            // Expose for coordination with the header details menu.
             fileTable.getProperties().put(com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.PROP_FILEOPS_MENU, fileOpsMenu);
         }
-        // Ensure only one instance is ever visible (mutually exclusive with header menu).
         Object header = fileTable.getProperties().get(com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.PROP_HEADER_MENU);
         if (header instanceof javafx.scene.control.ContextMenu cm) cm.hide();
         fileOpsMenu.hide();
@@ -2466,8 +3971,8 @@ colType.setCellValueFactory(param -> {
         // Use a filter so we can ignore header clicks (header menu is handled separately).
         fileTable.addEventFilter(javafx.scene.input.ContextMenuEvent.CONTEXT_MENU_REQUESTED, ev -> {
             try {
-                if (isTableHeaderContext(ev)) {
-                    // Header menu (Choose Details) will handle this.
+                if (isTableHeaderContext(ev) || isTableRowContext(ev)) {
+                    // Header menu and row-specific context menu handlers manage these cases.
                     return;
                 }
                 showFileOpsContextMenu(ev.getScreenX(), ev.getScreenY());
@@ -2477,6 +3982,21 @@ colType.setCellValueFactory(param -> {
             }
         });
         fileTable.addEventFilter(javafx.scene.input.KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
+                Path restorePath = inlineRenameTablePath;
+                hideExplorerTransientUi();
+                if (restorePath != null) {
+                    clearInlineRenameTargets();
+                    Platform.runLater(() -> restoreFocusToTablePath(restorePath));
+                }
+                e.consume();
+                return;
+            }
+            if (e.getCode() == javafx.scene.input.KeyCode.CONTEXT_MENU || (e.getCode() == javafx.scene.input.KeyCode.F10 && e.isShiftDown())) {
+                showFileOpsContextMenuForFocusedRow();
+                e.consume();
+                return;
+            }
             if (e.isControlDown() && e.getCode() == javafx.scene.input.KeyCode.C) {
                 copySelection(false);
                 e.consume();
@@ -2511,6 +4031,20 @@ colType.setCellValueFactory(param -> {
             String cn = n.getClass().getName();
             if (cn.contains("TableColumnHeader") || cn.contains("TableHeaderRow")) return true;
             if (n == fileTable) break;
+        }
+        return false;
+    }
+
+    private boolean isTableRowContext(javafx.scene.input.ContextMenuEvent ev) {
+        javafx.scene.Node target = (ev.getPickResult() != null) ? ev.getPickResult().getIntersectedNode() : null;
+        if (target == null) return false;
+        for (javafx.scene.Node n = target; n != null; n = n.getParent()) {
+            if (n instanceof TableRow<?>) {
+                return true;
+            }
+            if (n == fileTable) {
+                break;
+            }
         }
         return false;
     }
@@ -3050,6 +4584,7 @@ private String displayNameForTable(Path p) {
         if (breadcrumbBarController != null) {
             breadcrumbBarController.setPath(directory);
         }
+        updateWindowTitle(directory);
         if (statusLabel != null) {
             statusLabel.setText(fileMetadataService.displayPathForStatus(directory));
         }
@@ -3059,6 +4594,16 @@ private String displayNameForTable(Path p) {
         tableItems.setAll(listing);
         updateStatusCounts();
         rebuildTableIndexCache(listing);
+        rememberRecentHomeLocation(directory);
+        refreshHomeSurface();
+        homeActive = false;
+        applyHomeModeVisibility();
+        updateNavigationButtonsState();
+        updateSearchPrompt(directory);
+        updateTopChromeState();
+        if (startupInitialDirectoryLoadStarted.get() && startupInitialDirectoryLoadFinished.compareAndSet(false, true)) {
+            StartupTrace.mark("initial directory load finished: success");
+        }
         
         // Phase 3.5.1: Restore selection after refresh if possible.
         if (pendingRestoreSelection && pendingReselectPath != null) {
@@ -3081,14 +4626,14 @@ private String displayNameForTable(Path p) {
             pendingRestoreSelection = false;
             pendingReselectPath = null;
             pendingReselectIndex = -1;
+            pendingInlineRenameSelectionPath = null;
+            pendingInlineRenameSelectionIndex = -1;
         }
 // Update view-specific UI
         if (isIconMode(viewMode)) {
             rebuildIconTiles();
         } else {
-            if (fileTable != null) {
-                fileTable.refresh();
-            }
+            requestCoalescedTableRefresh();
         }
     }
     /**
@@ -3129,6 +4674,7 @@ private String displayNameForTable(Path p) {
             }
 });
         // Initial predicate
+        updateSearchPrompt(currentDirectory);
         applySearchFilterNow(searchField.getText());
     }
     // Phase 4B.3.x: Find Next / Previous for the active search query.
@@ -3302,6 +4848,85 @@ private String displayNameForTable(Path p) {
             statusLabel.setText(String.format(java.util.Locale.ROOT, "%d items", total));
         }
     }
+    private void updateTopChromeState() {
+        updateSearchPrompt(currentDirectory);
+        updateSelectionCommandState();
+        syncPaneTogglesFromUiState();
+        updateTabStrip();
+        double width = 0.0;
+        if (root != null && root.getScene() != null) {
+            width = root.getScene().getWidth();
+        }
+        scheduleCommandBarCompaction(width);
+    }
+
+    private void updateSearchPrompt(Path directory) {
+        if (searchField == null) {
+            return;
+        }
+        if (homeActive) {
+            searchField.setPromptText("Search Home");
+            return;
+        }
+        String target = directoryDisplayName(directory);
+        if (target == null || target.isBlank()) {
+            target = "this folder";
+        }
+        searchField.setPromptText("Search " + target);
+    }
+
+    private void scheduleCommandBarCompaction(double width) {
+        pendingCommandBarWidth = width;
+        try {
+            commandBarCompactionDebounce.playFromStart();
+        } catch (Exception ignored) {
+            applyCommandBarCompactionNow(width);
+        }
+    }
+
+    private void applyCommandBarCompactionNow(double width) {
+        if (commandBar == null) {
+            return;
+        }
+        commandBar.getStyleClass().removeAll("compact", "medium-compact");
+        if (width > 0 && width < 1220) {
+            commandBar.getStyleClass().add("compact");
+        } else if (width > 0 && width < 1420) {
+            commandBar.getStyleClass().add("medium-compact");
+        }
+    }
+
+    private void updateSelectionCommandState() {
+        int selectionCount = !homeActive && fileTable != null && fileTable.getSelectionModel() != null
+                ? fileTable.getSelectionModel().getSelectedItems().size()
+                : 0;
+        boolean hasSelection = selectionCount > 0;
+        boolean singleSelection = selectionCount == 1;
+        if (cutButton != null) cutButton.setDisable(!hasSelection);
+        if (copyButton != null) copyButton.setDisable(!hasSelection);
+        if (renameButton != null) renameButton.setDisable(!singleSelection);
+        if (deleteButton != null) deleteButton.setDisable(!hasSelection);
+        if (shareButton != null) shareButton.setDisable(!singleSelection);
+        if (pasteButton != null) pasteButton.setDisable(homeActive || currentDirectory == null);
+    }
+
+    private void syncPaneTogglesFromUiState() {
+        boolean detailsVisible = detailsBox != null && detailsBox.isVisible();
+        boolean previewVisible = previewBox != null && previewBox.isVisible();
+        if (detailsToggle != null) {
+            detailsToggle.setSelected(sidePaneMasterVisible && !homeActive);
+        }
+        if (previewToggle != null) {
+            previewToggle.setSelected(previewVisible);
+        }
+        if (detailsPaneMenuItem != null) {
+            detailsPaneMenuItem.setSelected(detailsVisible);
+        }
+        if (previewPaneMenuItem != null) {
+            previewPaneMenuItem.setSelected(previewVisible);
+        }
+    }
+
 /**
  * handleDirectoryListingFailed.
  *
@@ -3313,10 +4938,17 @@ private String displayNameForTable(Path p) {
         if (breadcrumbBarController != null && directory != null) {
             breadcrumbBarController.setPath(directory);
         }
+        homeActive = false;
+        applyHomeModeVisibility();
+        refreshHomeSurface();
         String msg = (error == null) ? "Directory load failed." : ("Directory load failed: " + error.getMessage());
         setStatus(msg);
         if (statusLabel != null && directory != null) {
             statusLabel.setText(fileMetadataService.displayPathForStatus(directory));
+        }
+        updateNavigationButtonsState();
+        if (startupInitialDirectoryLoadStarted.get() && startupInitialDirectoryLoadFinished.compareAndSet(false, true)) {
+            StartupTrace.mark("initial directory load finished: failed");
         }
     }
 /**
@@ -3348,6 +4980,7 @@ private String displayNameForTable(Path p) {
             showHiddenItemsMenuItem.setSelected(showHiddenItems);
         }
         wireViewMenuHandlers();
+        syncPaneTogglesFromUiState();
         setNavigationPaneVisible(showNavigationPane);
         setCompactView(compactView);
         syncViewMenuSelection();
@@ -3373,6 +5006,7 @@ private String displayNameForTable(Path p) {
         if (detailsPaneMenuItem != null) {
             detailsPaneMenuItem.setSelected(show);
         }
+        syncPaneTogglesFromUiState();
         setStatus(show ? "Details pane shown." : "Details pane hidden.");
     }
 /**
@@ -3396,6 +5030,7 @@ private String displayNameForTable(Path p) {
         if (previewPaneMenuItem != null) {
             previewPaneMenuItem.setSelected(show);
         }
+        syncPaneTogglesFromUiState();
         setStatus(show ? "Preview pane shown." : "Preview pane hidden.");
     }
     /**
@@ -3424,6 +5059,7 @@ private String displayNameForTable(Path p) {
                 }
             }
         }
+        syncPaneTogglesFromUiState();
         updateSidePaneVisibility();
     }
     /**
@@ -3432,6 +5068,23 @@ private String displayNameForTable(Path p) {
      * Collapses the right-hand split item to 0px unless at least one pane inside is visible.
      */
     private void updateSidePaneVisibility() {
+        if (homeActive) {
+            if (sidePane != null) {
+                sidePane.setVisible(false);
+                sidePane.setManaged(false);
+                sidePane.setMinWidth(0);
+                sidePane.setPrefWidth(0);
+            }
+            if (contentSplitPane != null) {
+                Platform.runLater(() -> {
+                    try {
+                        contentSplitPane.setDividerPositions(1.0);
+                    } catch (Exception ignored) {
+                    }
+                });
+            }
+            return;
+        }
         boolean contentSelected = false;
         if (detailsBox != null && detailsBox.isManaged()) {
             contentSelected = true;
@@ -3448,7 +5101,10 @@ private String displayNameForTable(Path p) {
         if (sidePane != null) {
             sidePane.setVisible(show);
             sidePane.setManaged(show);
-            if (!show) {
+            if (show) {
+                sidePane.setMinWidth(SIDE_PANE_MIN_WIDTH_PX);
+                sidePane.setPrefWidth(Math.max(sidePane.getPrefWidth(), SIDE_PANE_PREF_WIDTH_PX));
+            } else {
                 sidePane.setMinWidth(0);
                 sidePane.setPrefWidth(0);
             }
@@ -3458,7 +5114,7 @@ private String displayNameForTable(Path p) {
             Platform.runLater(() -> {
                 try {
                     // Divider position is the proportion of space for the FIRST item (left content).
-                    contentSplitPane.setDividerPositions(finalShow ? 0.75 : 1.0);
+                    contentSplitPane.setDividerPositions(finalShow ? 0.72 : 1.0);
                 } catch (Exception ex) {
                     // Ignore layout exceptions.
                 }
@@ -3555,6 +5211,86 @@ private void configureThemeToggle() {
         }
         themeService.apply(scene);
     }
+
+    private void bindWindowChromeState(Scene scene) {
+        if (scene == null) {
+            return;
+        }
+        Window window = scene.getWindow();
+        if (window == null) {
+            Platform.runLater(() -> bindWindowChromeState(scene));
+            return;
+        }
+        if (!windowChromeStateInstalled) {
+            windowChromeStateInstalled = true;
+            window.focusedProperty().addListener((obs, oldV, newV) -> applyWindowChromeState(window));
+            if (window instanceof Stage stage) {
+                stage.maximizedProperty().addListener((obs, oldV, newV) -> applyWindowChromeState(stage));
+            }
+        }
+        applyWindowChromeState(window);
+    }
+
+    private void applyWindowChromeState(Window window) {
+        Node target = root != null ? root : (boundScene != null ? boundScene.getRoot() : null);
+        if (target == null) {
+            return;
+        }
+        boolean active = window != null && window.isFocused();
+        setStyleClass(target, "window-active", active);
+        setStyleClass(target, "window-inactive", !active);
+        if (window instanceof Stage stage) {
+            setStyleClass(target, "window-maximized", stage.isMaximized());
+        } else {
+            setStyleClass(target, "window-maximized", false);
+        }
+    }
+
+    private static void setStyleClass(Node node, String styleClass, boolean enabled) {
+        if (node == null || styleClass == null || styleClass.isBlank()) {
+            return;
+        }
+        var classes = node.getStyleClass();
+        if (enabled) {
+            if (!classes.contains(styleClass)) {
+                classes.add(styleClass);
+            }
+        } else {
+            classes.remove(styleClass);
+        }
+    }
+
+    private void updateWindowTitle(Path directory) {
+        Scene scene = boundScene != null ? boundScene : (root != null ? root.getScene() : null);
+        if (scene == null) {
+            return;
+        }
+        Window window = scene.getWindow();
+        if (window instanceof Stage stage) {
+            stage.setTitle(computeWindowTitle(directory));
+        }
+    }
+
+    private String computeWindowTitle(Path directory) {
+        if (directory == null) {
+            return homeActive ? "Home - FileExplorer" : "FileExplorer";
+        }
+        String leaf = null;
+        try {
+            Path fileName = directory.getFileName();
+            if (fileName != null) {
+                leaf = fileName.toString();
+            }
+        } catch (Exception ignored) {
+        }
+        if (leaf == null || leaf.isBlank()) {
+            leaf = directory.toString();
+        }
+        if (leaf == null || leaf.isBlank()) {
+            leaf = "FileExplorer";
+        }
+        return leaf + " - FileExplorer";
+    }
 /**
  * loadDirectoryIntoTableAsync.
  *
@@ -3643,6 +5379,7 @@ private void loadDirectoryIntoTableAsync(Path directory, boolean keepExistingUnt
     // If callers pass a directory without having updated currentDirectory first, the table would
     // appear empty because the loader runs against the previous directory.
     currentDirectory = directory;
+    updateNavigationButtonsState();
     // Phase 4B.1: reset huge-folder paging state for this navigation.
     resetHugeFolderPaging(directory);
 // Phase 4A.2/4A.3: cancel any queued thumbnail work when navigating to a new directory.
@@ -4094,15 +5831,30 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         for (java.util.Map.Entry<java.nio.file.Path, com.fileexplorer.service.filesystem.FileMetadataBudgetService.Metadata> e : batch.entrySet()) {
             applyMetadata(e.getKey(), e.getValue());
         }
-        // One refresh is cheaper than per-item churn (and safe if some columns are computed).
-        try {
-            if (fileTable != null) {
-                fileTable.refresh();
-            }
-        } catch (Exception ignore) {
-            // no-op
+        requestCoalescedTableRefresh();
+    }
+    private void requestCoalescedTableRefresh() {
+        if (fileTable == null || isIconMode(viewMode)) {
+            return;
+        }
+        if (detailsHoverRowIndex.get() >= 0) {
+            tableRefreshDeferredWhileHover = true;
+            return;
+        }
+        requestCoalescedTableRefreshNow();
+    }
+
+    private void requestCoalescedTableRefreshNow() {
+        if (fileTable == null || isIconMode(viewMode)) {
+            return;
+        }
+        if (tableRefreshQueued.compareAndSet(false, true)) {
+            tableRefreshDebounce.playFromStart();
+        } else {
+            tableRefreshDebounce.playFromStart();
         }
     }
+
     private void applyMetadata(Path p, com.fileexplorer.service.filesystem.FileMetadataBudgetService.Metadata meta) {
         if (p == null || meta == null) return;
         int idx = indexOfTableItem(p);
@@ -4138,65 +5890,200 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         }
         // Details text
         if (detailsText != null) {
-            if (selected == null) {
-                detailsText.setText("");
-            } else {
-                StringBuilder sb = new StringBuilder();
-                sb.append("Name: " ).append(displayNameForTable(selected)).append("\n");
-                sb.append("Path: " ).append(selected).append("\n");
-                sb.append("Type: " ).append(fileMetadataService.detectFileType(selected)).append("\n");
-                String size = fileMetadataService.humanReadableSize(selected);
-                if (size != null && !size.isBlank()) {
-                    sb.append("Size: " ).append(size).append("\n");
-                }
-                String mod = fileMetadataService.lastModifiedLocalString(selected);
-                if (mod != null && !mod.isBlank()) {
-                    sb.append("Date modified: " ).append(mod).append("\n");
-                }
-                detailsText.setText(sb.toString());
-            }
+            detailsText.setText(buildDetailsPaneText(selected));
         }
-        // Preview: show an actual image preview when possible; otherwise show path/text.
+        // Preview: update lightweight fallback immediately.
         if (previewImage != null) {
             previewImage.setImage(null);
         }
         if (previewText != null) {
-            previewText.setText(selected == null ? "" : selected.toString());
+            previewText.setText(buildPreviewFallbackText(selected));
             previewText.setVisible(true);
             previewText.setManaged(true);
         }
         if (selected == null) {
+            pendingPreviewPath = null;
+            previewLoadSeq.incrementAndGet();
+            previewLoadDebounce.stop();
             return;
         }
         // Only do heavier preview work if the preview pane is enabled/visible.
         boolean previewEnabled = previewBox != null && previewBox.isVisible();
         if (!previewEnabled) {
+            pendingPreviewPath = null;
+            previewLoadSeq.incrementAndGet();
+            previewLoadDebounce.stop();
             return;
         }
         if (previewImage != null && ImageSupport.isThumbCandidate(selected) && Files.isRegularFile(selected)) {
-            int px = 280;
-            try {
-                if (previewImage.getFitWidth() > 0) {
-                    px = (int) Math.round(previewImage.getFitWidth());
-                }
-            } catch (Exception ignored) {}
-            final Path captured = selected;
-            final long stamp = System.nanoTime();
-            previewImage.getProperties().put("previewStamp", stamp);
-            AsyncThumbnailService.getInstance()
-                    .request(captured, px)
-                    .thenAccept(img -> Platform.runLater(() -> {
-                        if (img == null) return;
-                        Object s = previewImage.getProperties().get("previewStamp");
-                        if (!(s instanceof Long) || ((Long) s) != stamp) return;
-                        previewImage.setImage(img);
-                        if (previewText != null) {
-                            previewText.setVisible(false);
-                            previewText.setManaged(false);
-                        }
-                    }));
+            pendingPreviewPath = selected;
+            previewLoadSeq.incrementAndGet();
+            previewLoadDebounce.playFromStart();
         }
     }
+
+    private void loadPreviewThumbnailNow(long ticket, Path selected) {
+        if (selected == null || previewImage == null) {
+            return;
+        }
+        boolean previewEnabled = previewBox != null && previewBox.isVisible();
+        if (!previewEnabled) {
+            return;
+        }
+        if (!ImageSupport.isThumbCandidate(selected) || !Files.isRegularFile(selected)) {
+            return;
+        }
+        int px = 280;
+        try {
+            if (previewImage.getFitWidth() > 0) {
+                px = (int) Math.round(previewImage.getFitWidth());
+            }
+        } catch (Exception ignored) {
+        }
+        final Path captured = selected;
+        final long stamp = ticket;
+        previewImage.getProperties().put("previewStamp", stamp);
+        AsyncThumbnailService.getInstance()
+                .request(captured, px)
+                .thenAccept(img -> Platform.runLater(() -> {
+                    if (img == null || previewImage == null) {
+                        return;
+                    }
+                    Object s = previewImage.getProperties().get("previewStamp");
+                    if (!(s instanceof Long) || ((Long) s) != stamp) {
+                        return;
+                    }
+                    previewImage.setImage(img);
+                    if (previewText != null) {
+                        previewText.setVisible(false);
+                        previewText.setManaged(false);
+                    }
+                }));
+    }
+
+    private void configureSidePaneParity() {
+        if (sidePane != null && !sidePane.getStyleClass().contains("explorer-side-pane")) {
+            sidePane.getStyleClass().add("explorer-side-pane");
+        }
+        if (previewBox != null && !previewBox.getStyleClass().contains("preview-pane-card")) {
+            previewBox.getStyleClass().add("preview-pane-card");
+        }
+        if (detailsBox != null && !detailsBox.getStyleClass().contains("details-pane-card")) {
+            detailsBox.getStyleClass().add("details-pane-card");
+        }
+        if (operationsBox != null && !operationsBox.getStyleClass().contains("operations-pane-card")) {
+            operationsBox.getStyleClass().add("operations-pane-card");
+        }
+        if (previewText != null && !previewText.getStyleClass().contains("side-pane-text")) {
+            previewText.getStyleClass().add("side-pane-text");
+        }
+        if (detailsText != null && !detailsText.getStyleClass().contains("side-pane-text")) {
+            detailsText.getStyleClass().add("side-pane-text");
+        }
+        if (previewImage != null) {
+            previewImage.setPreserveRatio(true);
+            previewImage.setFitWidth(Math.max(previewImage.getFitWidth(), SIDE_PANE_MIN_WIDTH_PX));
+        }
+    }
+
+    private String buildDetailsPaneText(Path selected) {
+        if (selected == null) {
+            return "Select an item to see details.";
+        }
+        StringBuilder sb = new StringBuilder(256);
+        String displayName = displayNameForTable(selected);
+        String type = fileMetadataService.detectFileType(selected);
+        String modified = fileMetadataService.lastModifiedLocalString(selected);
+        String size = fileMetadataService.humanReadableSize(selected);
+        sb.append(displayName == null || displayName.isBlank() ? selected.getFileName() : displayName).append("\n");
+        if (type != null && !type.isBlank()) {
+            sb.append(type).append("\n");
+        }
+        sb.append("\nLocation\n").append(selected).append("\n");
+        if (modified != null && !modified.isBlank()) {
+            sb.append("\nDate modified\n").append(modified).append("\n");
+        }
+        if (size != null && !size.isBlank()) {
+            sb.append("\nSize\n").append(size).append("\n");
+        }
+        try {
+            if (Files.isDirectory(selected)) {
+                sb.append("\nKind\nFolder\n");
+            } else if (Files.isRegularFile(selected)) {
+                String fileName = selected.getFileName() == null ? "" : selected.getFileName().toString();
+                int dot = fileName.lastIndexOf('.');
+                String ext = dot >= 0 && dot + 1 < fileName.length() ? fileName.substring(dot + 1).toLowerCase(Locale.ROOT) : "";
+                if (!ext.isBlank()) {
+                    sb.append("\nExtension\n.").append(ext).append("\n");
+                }
+            }
+            sb.append("\nAttributes\n")
+              .append(Files.isDirectory(selected) ? "Folder" : "File")
+              .append(Files.isHidden(selected) ? ", Hidden" : "")
+              .append(Files.isReadable(selected) ? ", Readable" : "")
+              .append(Files.isWritable(selected) ? ", Writable" : ", Read-only")
+              .append("\n");
+        } catch (Exception ignored) {
+            // Best-effort metadata only.
+        }
+        return sb.toString();
+    }
+
+    private String buildPreviewFallbackText(Path selected) {
+        if (selected == null) {
+            return "Select an item to preview.";
+        }
+        if (Files.isDirectory(selected)) {
+            return "Folder preview is not available.\n\n" + selected;
+        }
+        String textPreview = readTextPreview(selected);
+        if (textPreview != null && !textPreview.isBlank()) {
+            return textPreview;
+        }
+        return selected.toString();
+    }
+
+    private String readTextPreview(Path selected) {
+        try {
+            if (selected == null || !Files.isRegularFile(selected)) {
+                return null;
+            }
+            String name = selected.getFileName() == null ? "" : selected.getFileName().toString().toLowerCase(Locale.ROOT);
+            boolean textLike = name.endsWith(".txt") || name.endsWith(".md") || name.endsWith(".log")
+                    || name.endsWith(".json") || name.endsWith(".xml") || name.endsWith(".yaml")
+                    || name.endsWith(".yml") || name.endsWith(".properties") || name.endsWith(".ini")
+                    || name.endsWith(".csv") || name.endsWith(".java") || name.endsWith(".kt")
+                    || name.endsWith(".js") || name.endsWith(".ts") || name.endsWith(".css")
+                    || name.endsWith(".html") || name.endsWith(".htm") || name.endsWith(".fxml")
+                    || name.endsWith(".sql") || name.endsWith(".bat") || name.endsWith(".cmd")
+                    || name.endsWith(".ps1") || name.endsWith(".sh");
+            if (!textLike) {
+                return null;
+            }
+            long size = Files.size(selected);
+            if (size > 262_144L) {
+                return "Preview not shown for files larger than 256 KB.\n\n" + selected;
+            }
+            byte[] bytes = Files.readAllBytes(selected);
+            int limit = Math.min(bytes.length, 8_192);
+            for (int i = 0; i < limit; i++) {
+                if (bytes[i] == 0) {
+                    return null;
+                }
+            }
+            String preview = new String(bytes, 0, limit, StandardCharsets.UTF_8).replace("\r\n", "\n").trim();
+            if (preview.isBlank()) {
+                return "This file is empty.\n\n" + selected;
+            }
+            if (bytes.length > limit) {
+                preview = preview + "\n\n…";
+            }
+            return preview;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
     // ---------------------------------------------------------------------
     // View mode (Details vs Large icons)
     // ---------------------------------------------------------------------
@@ -4222,30 +6109,32 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             applyIconSizePreset(viewMode);
         }
         boolean tableMode = isTableMode(viewMode);
+        boolean showTable = !homeActive && tableMode;
+        boolean showIcons = !homeActive && !tableMode;
+        if (detailsViewShell != null) {
+            detailsViewShell.setVisible(showTable);
+            detailsViewShell.setManaged(showTable);
+        }
         if (fileTable != null) {
-            fileTable.setVisible(tableMode);
-            fileTable.setManaged(tableMode);
+            fileTable.setVisible(showTable);
+            fileTable.setManaged(showTable);
         }
         if (iconScroll != null) {
-            iconScroll.setVisible(!tableMode);
-            iconScroll.setManaged(!tableMode);
+            iconScroll.setVisible(showIcons);
+            iconScroll.setManaged(showIcons);
+        }
+        if (homePane != null) {
+            homePane.setVisible(homeActive);
+            homePane.setManaged(homeActive);
         }
         applyTableColumnMode(viewMode);
         if (iconFlow != null) {
-            if (viewMode == ViewMode.TILES || viewMode == ViewMode.CONTENT) {
-                iconFlow.setOrientation(javafx.geometry.Orientation.VERTICAL);
-                iconFlow.setPrefWrapLength(100000.0);
-                iconFlow.setHgap(0.0);
-                iconFlow.setVgap(8.0);
-            } else {
-                iconFlow.setOrientation(javafx.geometry.Orientation.HORIZONTAL);
-                iconFlow.setPrefWrapLength(600.0);
-                iconFlow.setHgap(16.0);
-                iconFlow.setVgap(16.0);
-            }
+            configureIconFlowLayout(viewMode);
+            applyIconFlowModeClasses(viewMode);
+            applyIconFlowPadding(viewMode);
         }
         syncViewMenuSelection();
-        if (!SAFE_MODE && isIconMode(viewMode)) {
+        if (!homeActive && !SAFE_MODE && isIconMode(viewMode)) {
             rebuildIconTiles();
         } else {
             clearIconTiles();
@@ -4260,7 +6149,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
  */
     private boolean isTableMode(ViewMode mode) {
         LogSupport.enter(LOG, "isTableMode");
-        return mode == ViewMode.DETAILS || mode == ViewMode.LIST;
+        return mode == ViewMode.DETAILS;
     }
 /**
  * isIconMode.
@@ -4274,8 +6163,243 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                 || mode == ViewMode.LARGE_ICONS
                 || mode == ViewMode.MEDIUM_ICONS
                 || mode == ViewMode.SMALL_ICONS
+                || mode == ViewMode.LIST
                 || mode == ViewMode.TILES
                 || mode == ViewMode.CONTENT;
+    }
+
+    private void configureIconFlowLayout(ViewMode mode) {
+        if (iconFlow == null) {
+            return;
+        }
+        boolean verticalFlow = mode == ViewMode.LIST || mode == ViewMode.TILES;
+        if (verticalFlow) {
+            iconFlow.setOrientation(javafx.geometry.Orientation.VERTICAL);
+            iconFlow.setPrefWrapLength(resolveIconFlowWrapLength(mode, true));
+            iconFlow.setHgap(iconListFlowHgapForMode(mode));
+            iconFlow.setVgap(iconListFlowVgapForMode(mode));
+        } else if (mode == ViewMode.CONTENT) {
+            iconFlow.setOrientation(javafx.geometry.Orientation.VERTICAL);
+            iconFlow.setPrefWrapLength(100000.0);
+            iconFlow.setHgap(0.0);
+            iconFlow.setVgap(4.0);
+        } else {
+            iconFlow.setOrientation(javafx.geometry.Orientation.HORIZONTAL);
+            iconFlow.setPrefWrapLength(resolveIconFlowWrapLength(mode, false));
+            iconFlow.setHgap(iconGridFlowHgapForMode(mode));
+            iconFlow.setVgap(iconGridFlowVgapForMode(mode));
+        }
+    }
+
+    private void refreshIconFlowLayoutForCurrentView() {
+        if (iconFlow == null || !isIconMode(viewMode)) {
+            return;
+        }
+        configureIconFlowLayout(viewMode);
+    }
+
+    private double resolveIconFlowWrapLength(ViewMode mode, boolean verticalFlow) {
+        if (iconScroll != null) {
+            Bounds viewport = iconScroll.getViewportBounds();
+            if (viewport != null) {
+                double candidate = verticalFlow ? viewport.getHeight() : viewport.getWidth();
+                if (candidate > 1.0) {
+                    return candidate;
+                }
+            }
+            Bounds scrollBounds = iconScroll.getLayoutBounds();
+            if (scrollBounds != null) {
+                double candidate = verticalFlow ? scrollBounds.getHeight() : scrollBounds.getWidth();
+                if (candidate > 1.0) {
+                    return candidate;
+                }
+            }
+        }
+        return verticalFlow ? 720.0 : 900.0;
+    }
+
+    private void applyIconFlowModeClasses(ViewMode mode) {
+        if (iconFlow == null) {
+            return;
+        }
+        setStyleClass(iconFlow, "explorer-icon-flow-xl", mode == ViewMode.EXTRA_LARGE_ICONS);
+        setStyleClass(iconFlow, "explorer-icon-flow-large", mode == ViewMode.LARGE_ICONS);
+        setStyleClass(iconFlow, "explorer-icon-flow-medium", mode == ViewMode.MEDIUM_ICONS);
+        setStyleClass(iconFlow, "explorer-icon-flow-small", mode == ViewMode.SMALL_ICONS);
+        setStyleClass(iconFlow, "explorer-icon-flow-list", mode == ViewMode.LIST);
+        setStyleClass(iconFlow, "explorer-icon-flow-tiles", mode == ViewMode.TILES);
+        setStyleClass(iconFlow, "explorer-icon-flow-content", mode == ViewMode.CONTENT);
+    }
+
+    private void applyIconFlowPadding(ViewMode mode) {
+        if (iconFlow == null) {
+            return;
+        }
+        iconFlow.setPadding(iconFlowPaddingForMode(mode));
+    }
+
+    private Insets iconFlowPaddingForMode(ViewMode mode) {
+        if (mode == null) {
+            return new Insets(10.0);
+        }
+        return switch (mode) {
+            case EXTRA_LARGE_ICONS -> new Insets(18.0, 20.0, 18.0, 20.0);
+            case LARGE_ICONS -> new Insets(16.0, 18.0, 16.0, 18.0);
+            case MEDIUM_ICONS -> new Insets(14.0, 16.0, 14.0, 16.0);
+            case SMALL_ICONS -> new Insets(12.0, 14.0, 12.0, 14.0);
+            case LIST -> new Insets(10.0, 12.0, 10.0, 12.0);
+            case TILES -> new Insets(10.0, 12.0, 10.0, 12.0);
+            case CONTENT -> new Insets(8.0, 10.0, 8.0, 10.0);
+            default -> new Insets(10.0);
+        };
+    }
+
+    private double iconGridFlowHgapForMode(ViewMode mode) {
+        if (mode == null) {
+            return 16.0;
+        }
+        return switch (mode) {
+            case EXTRA_LARGE_ICONS -> 22.0;
+            case LARGE_ICONS -> 18.0;
+            case MEDIUM_ICONS -> 14.0;
+            case SMALL_ICONS -> 10.0;
+            default -> 16.0;
+        };
+    }
+
+    private double iconGridFlowVgapForMode(ViewMode mode) {
+        if (mode == null) {
+            return 16.0;
+        }
+        return switch (mode) {
+            case EXTRA_LARGE_ICONS -> 18.0;
+            case LARGE_ICONS -> 16.0;
+            case MEDIUM_ICONS -> 14.0;
+            case SMALL_ICONS -> 10.0;
+            default -> 16.0;
+        };
+    }
+
+    private double iconListFlowHgapForMode(ViewMode mode) {
+        if (mode == ViewMode.LIST) {
+            return 14.0;
+        }
+        if (mode == ViewMode.TILES) {
+            return 16.0;
+        }
+        return 12.0;
+    }
+
+    private double iconListFlowVgapForMode(ViewMode mode) {
+        if (mode == ViewMode.LIST) {
+            return 4.0;
+        }
+        if (mode == ViewMode.TILES) {
+            return 8.0;
+        }
+        return 6.0;
+    }
+
+    private String iconTileModeStyleClass(ViewMode mode) {
+        if (mode == null) {
+            return "explorer-icon-tile-medium";
+        }
+        return switch (mode) {
+            case EXTRA_LARGE_ICONS -> "explorer-icon-tile-xl";
+            case LARGE_ICONS -> "explorer-icon-tile-large";
+            case MEDIUM_ICONS -> "explorer-icon-tile-medium";
+            case SMALL_ICONS -> "explorer-icon-tile-small";
+            case LIST -> "explorer-icon-tile-list";
+            case TILES -> "explorer-icon-tile-tiles";
+            case CONTENT -> "explorer-icon-tile-content";
+            default -> "explorer-icon-tile-medium";
+        };
+    }
+
+    private double iconGridTileWidthForMode(ViewMode mode) {
+        if (mode == null) {
+            return Math.max(112.0, iconSizePx + 44.0);
+        }
+        return switch (mode) {
+            case EXTRA_LARGE_ICONS -> 228.0;
+            case LARGE_ICONS -> 184.0;
+            case MEDIUM_ICONS -> 152.0;
+            case SMALL_ICONS -> 116.0;
+            default -> Math.max(112.0, iconSizePx + 44.0);
+        };
+    }
+
+    private double iconGridLabelWidthForMode(ViewMode mode) {
+        return Math.max(88.0, iconGridTileWidthForMode(mode) - 22.0);
+    }
+
+    private double iconGridTileSpacingForMode(ViewMode mode) {
+        if (mode == null) {
+            return 6.0;
+        }
+        return switch (mode) {
+            case EXTRA_LARGE_ICONS -> 10.0;
+            case LARGE_ICONS -> 8.0;
+            case MEDIUM_ICONS -> 6.0;
+            case SMALL_ICONS -> 4.0;
+            default -> 6.0;
+        };
+    }
+
+    private Insets iconGridTilePaddingForMode(ViewMode mode) {
+        if (mode == null) {
+            return new Insets(8.0, 10.0, 8.0, 10.0);
+        }
+        return switch (mode) {
+            case EXTRA_LARGE_ICONS -> new Insets(12.0, 12.0, 10.0, 12.0);
+            case LARGE_ICONS -> new Insets(10.0, 10.0, 8.0, 10.0);
+            case MEDIUM_ICONS -> new Insets(8.0, 8.0, 6.0, 8.0);
+            case SMALL_ICONS -> new Insets(6.0, 6.0, 4.0, 6.0);
+            default -> new Insets(8.0, 10.0, 8.0, 10.0);
+        };
+    }
+
+    private double iconGridLabelMinHeightForMode(ViewMode mode) {
+        if (mode == null) {
+            return 32.0;
+        }
+        return switch (mode) {
+            case EXTRA_LARGE_ICONS -> 36.0;
+            case LARGE_ICONS -> 34.0;
+            case MEDIUM_ICONS -> 32.0;
+            case SMALL_ICONS -> 24.0;
+            default -> 32.0;
+        };
+    }
+
+    private double tileRowWidthForMode(ViewMode mode) {
+        if (mode == ViewMode.CONTENT) {
+            return 640.0;
+        }
+        if (mode == ViewMode.LIST) {
+            return 240.0;
+        }
+        return 420.0;
+    }
+
+    private double tileRowTextWidthForMode(ViewMode mode) {
+        if (mode == ViewMode.CONTENT) {
+            return 500.0;
+        }
+        if (mode == ViewMode.LIST) {
+            return 188.0;
+        }
+        return 300.0;
+    }
+
+    private double tileRowMinHeightForMode(ViewMode mode) {
+        if (mode == ViewMode.CONTENT) {
+            return 54.0;
+        }
+        if (mode == ViewMode.LIST) {
+            return 28.0;
+        }
+        return 44.0;
     }
 /**
  * applyIconSizePreset.
@@ -4299,6 +6423,9 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                 break;
             case SMALL_ICONS:
                 iconSizePx = 64.0;
+                break;
+            case LIST:
+                iconSizePx = 20.0;
                 break;
             case TILES:
                 iconSizePx = 96.0;
@@ -4329,11 +6456,10 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (fileTable == null || colName == null || colType == null || colSize == null || colModified == null) {
             return;
         }
-        boolean list = (mode == ViewMode.LIST);
         colName.setVisible(true);
-        colType.setVisible(!list);
-        colSize.setVisible(!list);
-        colModified.setVisible(!list);
+        colType.setVisible(true);
+        colSize.setVisible(true);
+        colModified.setVisible(true);
     }
 /**
  * syncViewMenuSelection.
@@ -4474,8 +6600,8 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             }
             return;
         }
-        // Tiles / Content: treat as a virtualized list when the folder is non-trivial.
-        if (viewMode == ViewMode.TILES || viewMode == ViewMode.CONTENT) {
+        // List / Tiles / Content: use flow for normal folders, virtualized rows for larger ones.
+        if (viewMode == ViewMode.LIST || viewMode == ViewMode.TILES || viewMode == ViewMode.CONTENT) {
             if (items.size() <= ICON_FLOW_MAX_ITEMS) {
                 hideVirtualIconViews();
                 showIconScrollOnly();
@@ -4537,6 +6663,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             iconFlow.getChildren().add(buildIconTile(p));
         }
         iconBuildNextIndex = end;
+        refreshVisibleIconTileSelectionState();
     }
 /**
  * installIconScrollPaging.
@@ -4742,6 +6869,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         }
         virtualIconGridView.setItems(FXCollections.observableArrayList(rows));
         virtualIconGridView.requestFocus();
+        Platform.runLater(this::refreshVisibleIconTileSelectionState);
     }
 /**
  * showVirtualIconList.
@@ -4769,6 +6897,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         virtualIconListView.setManaged(true);
         virtualIconListView.setItems(FXCollections.observableArrayList(items));
         virtualIconListView.requestFocus();
+        Platform.runLater(this::refreshVisibleIconTileSelectionState);
     }
 /**
  * computeItemsPerIconRow.
@@ -4808,32 +6937,49 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         // - Icons: icon above name (wrapping)
         // - Tiles: icon left + (name/type/size)
         // - Content: icon left + (name/type/size/modified)
+        boolean isList = viewMode == ViewMode.LIST;
         boolean isTiles = viewMode == ViewMode.TILES;
         boolean isContent = viewMode == ViewMode.CONTENT;
-        if (isTiles || isContent) {
-            HBox row = new HBox(12.0);
+        if (isList || isTiles || isContent) {
+            HBox row = new HBox(isContent ? 14.0 : (isList ? 10.0 : 12.0));
             row.setAlignment(Pos.CENTER_LEFT);
-            row.getStyleClass().add("tile-row");
-            row.setMinHeight(36.0);
+            tagIconTile(row, p, "tile-row", "explorer-icon-tile", "explorer-icon-tile-row", iconTileModeStyleClass(viewMode));
+            row.setMinHeight(tileRowMinHeightForMode(viewMode));
+            row.setPrefWidth(tileRowWidthForMode(viewMode));
+            row.setMaxWidth(tileRowWidthForMode(viewMode));
             Node icon = buildIconNode(p, iconSizePx, "tile-item-icon");
-            VBox textCol = new VBox(2.0);
+            VBox textCol = new VBox(isContent ? 3.0 : (isList ? 0.0 : 2.0));
             textCol.setAlignment(Pos.CENTER_LEFT);
+            textCol.getStyleClass().add("explorer-tile-text-column");
+            textCol.setPrefWidth(tileRowTextWidthForMode(viewMode));
             Label name = new Label(displayNameForTable(p));
+            name.getStyleClass().add("explorer-icon-name-label");
             name.setWrapText(false);
-            String typeText = typeForTable(p);
-            String sizeText = sizeForTable(p);
-            String meta = typeText;
-            if (sizeText != null && !sizeText.isBlank()) {
-                meta = meta + " - " + sizeText;
-            }
-            Label line2 = new Label(meta);
-            textCol.getChildren().addAll(name, line2);
-            if (isContent) {
-                String modified = modifiedForTable(p);
-                Label line3 = new Label(modified);
-                textCol.getChildren().add(line3);
+            name.setTextOverrun(OverrunStyle.ELLIPSIS);
+            name.setMaxWidth(Double.MAX_VALUE);
+            textCol.getChildren().add(name);
+            if (!isList) {
+                String typeText = typeForTable(p);
+                String sizeText = sizeForTable(p);
+                String meta = typeText;
+                if (sizeText != null && !sizeText.isBlank()) {
+                    meta = meta + " · " + sizeText;
+                }
+                Label line2 = new Label(meta);
+                line2.getStyleClass().add("explorer-icon-meta-label");
+                textCol.getChildren().add(line2);
+                if (isContent) {
+                    String modified = modifiedForTable(p);
+                    Label line3 = new Label(modified);
+                    line3.getStyleClass().addAll("explorer-icon-meta-label", "explorer-icon-modified-label");
+                    textCol.getChildren().add(line3);
+                }
             }
             row.getChildren().addAll(icon, textCol);
+            markExplorerIconTileChild(icon);
+            markExplorerIconTileChild(textCol);
+            installExplorerItemTooltip(row, () -> buildExplorerItemTooltipText(p));
+            row.setOnMouseEntered(_ -> scheduleHoverPrefetch(p));
             row.setOnMouseClicked(me -> {
                 lastIconActivatedPath = p;
                 fileTable.getSelectionModel().clearSelection();
@@ -4861,17 +7007,25 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             });
             return row;
         }
-        VBox tile = new VBox(6.0);
+        VBox tile = new VBox(iconGridTileSpacingForMode(viewMode));
         tile.setAlignment(Pos.TOP_CENTER);
-        double w = Math.max(96.0, iconSizePx + 40.0);
+        tagIconTile(tile, p, "icon-tile", "explorer-icon-tile", "explorer-icon-tile-grid", iconTileModeStyleClass(viewMode));
+        double w = iconGridTileWidthForMode(viewMode);
         tile.setPrefWidth(w);
         tile.setMaxWidth(w);
+        tile.setPadding(iconGridTilePaddingForMode(viewMode));
         Node icon = buildIconNode(p, iconSizePx, "tile-item-icon");
         Label name = new Label(displayNameForTable(p));
+        name.getStyleClass().add("explorer-icon-name-label");
         name.setWrapText(true);
-        name.setMaxWidth(w);
+        name.setTextOverrun(OverrunStyle.ELLIPSIS);
+        name.setMaxWidth(iconGridLabelWidthForMode(viewMode));
+        name.setMinHeight(iconGridLabelMinHeightForMode(viewMode));
         name.setAlignment(Pos.TOP_CENTER);
         tile.getChildren().addAll(icon, name);
+        markExplorerIconTileChild(icon);
+        markExplorerIconTileChild(name);
+        installExplorerItemTooltip(tile, () -> buildExplorerItemTooltipText(p));
         tile.setOnMouseEntered(_ -> scheduleHoverPrefetch(p));
         tile.setOnMouseClicked(me -> {
             lastIconActivatedPath = p;
@@ -5028,6 +7182,173 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         }
         return ""; // generic document
     }
+    private void configureTabsAndHome() {
+        refreshHomeSurface();
+        updateTabStrip();
+        applyHomeModeVisibility();
+    }
+
+    @FXML
+    private void onShowHomeTab() {
+        showHomePage();
+    }
+
+    @FXML
+    private void onShowCurrentTab() {
+        hideHomePage();
+    }
+
+    @FXML
+    private void onOpenNewTabButton() {
+        openNewWindow(currentDirectory);
+    }
+
+    private void showHomePage() {
+        homeActive = true;
+        if (searchField != null) {
+            searchField.clear();
+        }
+        refreshHomeSurface();
+        applyHomeModeVisibility();
+        updateWindowTitle(null);
+        updateTopChromeState();
+        setStatus("Home");
+    }
+
+    private void hideHomePage() {
+        if (!homeActive) {
+            updateTabStrip();
+            return;
+        }
+        homeActive = false;
+        applyHomeModeVisibility();
+        updateWindowTitle(currentDirectory);
+        updateTopChromeState();
+        if (currentDirectory != null && statusLabel != null && fileMetadataService != null) {
+            statusLabel.setText(fileMetadataService.displayPathForStatus(currentDirectory));
+        }
+    }
+
+    private void applyHomeModeVisibility() {
+        if (homePane != null) {
+            homePane.setVisible(homeActive);
+            homePane.setManaged(homeActive);
+        }
+        if (searchField != null) {
+            searchField.setDisable(homeActive);
+        }
+        setViewMode(viewMode == null ? ViewMode.DETAILS : viewMode);
+        updateSidePaneVisibility();
+    }
+
+    private void refreshHomeSurface() {
+        if (homeCurrentLocationLabel != null) {
+            homeCurrentLocationLabel.setText(currentDirectory == null
+                    ? "Quick access and recent folders"
+                    : "Current folder: " + currentDirectory.toString());
+        }
+        rebuildHomePinnedRow();
+        rebuildRecentLocations();
+    }
+
+    private void updateTabStrip() {
+        if (homeTabButton != null) {
+            setStyleClass(homeTabButton, "selected-tab", homeActive);
+            homeTabButton.setTooltip(new javafx.scene.control.Tooltip("Open Home"));
+        }
+        if (currentTabButton != null) {
+            setStyleClass(currentTabButton, "selected-tab", !homeActive);
+            currentTabButton.setText(directoryDisplayName(currentDirectory));
+            currentTabButton.setDisable(currentDirectory == null);
+            currentTabButton.setTooltip(new javafx.scene.control.Tooltip(currentDirectory == null ? "Current folder" : currentDirectory.toString()));
+        }
+        if (newTabButton != null) {
+            newTabButton.setTooltip(new javafx.scene.control.Tooltip("Open current folder in a new window"));
+        }
+    }
+
+    private String directoryDisplayName(Path directory) {
+        if (directory == null) {
+            return "This PC";
+        }
+        try {
+            Path fileName = directory.getFileName();
+            if (fileName != null && !fileName.toString().isBlank()) {
+                return fileName.toString();
+            }
+        } catch (Exception ignored) {
+        }
+        String raw = directory.toString();
+        return (raw == null || raw.isBlank()) ? "This PC" : raw;
+    }
+
+    private void rememberRecentHomeLocation(Path directory) {
+        if (directory == null) {
+            return;
+        }
+        Path normalized = directory.normalize();
+        recentHomeLocations.removeIf(p -> Objects.equals(p, normalized));
+        recentHomeLocations.add(0, normalized);
+        while (recentHomeLocations.size() > HOME_RECENT_MAX) {
+            recentHomeLocations.remove(recentHomeLocations.size() - 1);
+        }
+    }
+
+    private void rebuildHomePinnedRow() {
+        if (homePinnedRow == null) {
+            return;
+        }
+        homePinnedRow.getChildren().clear();
+        Path home = Paths.get(System.getProperty("user.home"));
+        addHomePinnedButton("Home", home);
+        addHomePinnedButton("Desktop", home.resolve("Desktop"));
+        addHomePinnedButton("Downloads", home.resolve("Downloads"));
+        addHomePinnedButton("Documents", home.resolve("Documents"));
+        addHomePinnedButton("Pictures", home.resolve("Pictures"));
+        addHomePinnedButton("OneDrive", home.resolve("OneDrive"));
+    }
+
+    private void addHomePinnedButton(String label, Path path) {
+        if (homePinnedRow == null || path == null || !Files.isDirectory(path)) {
+            return;
+        }
+        Button button = new Button(label);
+        button.setFocusTraversable(false);
+        button.setMnemonicParsing(false);
+        button.getStyleClass().add("explorer-home-pinned-button");
+        button.setTooltip(new javafx.scene.control.Tooltip(path.toString()));
+        button.setOnAction(e -> navigateToFolder(path, true));
+        homePinnedRow.getChildren().add(button);
+    }
+
+    private void rebuildRecentLocations() {
+        if (recentFoldersBox == null) {
+            return;
+        }
+        recentFoldersBox.getChildren().clear();
+        if (recentHomeLocations.isEmpty()) {
+            Label empty = new Label("No recent folders yet.");
+            empty.getStyleClass().add("explorer-home-empty");
+            recentFoldersBox.getChildren().add(empty);
+            return;
+        }
+        for (Path recent : recentHomeLocations) {
+            if (recent == null) {
+                continue;
+            }
+            Button button = new Button(directoryDisplayName(recent));
+            button.setFocusTraversable(false);
+            button.setMnemonicParsing(false);
+            button.setMaxWidth(Double.MAX_VALUE);
+            button.setAlignment(Pos.CENTER_LEFT);
+            button.getStyleClass().add("explorer-home-recent-button");
+            button.setTooltip(new javafx.scene.control.Tooltip(recent.toString()));
+            button.setOnAction(e -> navigateToFolder(recent, true));
+            VBox.setVgrow(button, Priority.NEVER);
+            recentFoldersBox.getChildren().add(button);
+        }
+    }
+
     // ---------------------------------------------------------------------
     // Navigation + history
     // ---------------------------------------------------------------------
@@ -5042,11 +7363,17 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (target == null) {
             return;
         }
+        if (homeActive) {
+            homeActive = false;
+            applyHomeModeVisibility();
+            updateTopChromeState();
+        }
         Path normalized = target.normalize();
         if (!Files.isDirectory(normalized)) {
             setStatus("Not a folder: " + normalized);
             return;
         }
+        updateWindowTitle(normalized);
         // Phase 4A.4: Snapshot current folder before leaving (for instant Back/Forward paint).
         if (currentDirectory != null && !Objects.equals(currentDirectory.normalize(), normalized)) {
             FolderSnapshotCache.FolderSnapshot snap = captureFolderSnapshot();
@@ -5153,6 +7480,10 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
  */
     private Path getPrimarySelection() {
         LogSupport.enter(LOG, "getPrimarySelection");
+        Path focused = getFocusedOrSelectedPath();
+        if (focused != null) {
+            return focused;
+        }
         FileItem selItem = fileTable.getSelectionModel().getSelectedItem();
         return (selItem != null) ? selItem.path() : null;
     }
@@ -5164,6 +7495,45 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         LogSupport.enter(LOG, "selectAll");
         fileTable.getSelectionModel().selectAll();
         setStatus("Selected all.");
+    }
+
+    private void clearSelection() {
+        if (fileTable == null || fileTable.getSelectionModel() == null) {
+            return;
+        }
+        fileTable.getSelectionModel().clearSelection();
+        updateSelectionCommandState();
+        setStatus("Selection cleared.");
+    }
+
+    private void invertSelection() {
+        if (fileTable == null || fileTable.getItems() == null || fileTable.getSelectionModel() == null) {
+            return;
+        }
+        java.util.Set<Integer> selected = new java.util.HashSet<>(fileTable.getSelectionModel().getSelectedIndices());
+        fileTable.getSelectionModel().clearSelection();
+        for (int i = 0; i < fileTable.getItems().size(); i++) {
+            if (!selected.contains(i)) {
+                fileTable.getSelectionModel().select(i);
+            }
+        }
+        updateSelectionCommandState();
+        setStatus("Selection inverted.");
+    }
+
+    private void copyPrimaryPathToClipboard() {
+        Path primary = getPrimarySelection();
+        if (primary == null) {
+            TreeItem<Path> treeItem = folderTree != null ? folderTree.getSelectionModel().getSelectedItem() : null;
+            primary = treeItem != null ? treeItem.getValue() : null;
+        }
+        if (primary == null) {
+            return;
+        }
+        ClipboardContent content = new ClipboardContent();
+        content.putString(primary.toString());
+        Clipboard.getSystemClipboard().setContent(content);
+        setStatus("Copied path: " + safeName(primary));
     }
 /**
  * copySelection.
@@ -5447,48 +7817,152 @@ private void createNewFolder() {
  */
     private void renameSelection() {
         LogSupport.enter(LOG, "renameSelection");
-        Path sel = getPrimarySelection();
-        if (sel == null) {
+        if (folderTree != null && folderTree.isFocused()) {
+            TreeItem<Path> sel = folderTree.getSelectionModel().getSelectedItem();
+            if (sel != null && sel.getValue() != null && sel.getParent() != null) {
+                beginTreeInlineRename(sel);
+                return;
+            }
+        }
+        Path sel = getFocusedOrSelectedPath();
+        if (sel != null) {
+            beginTableInlineRename(sel);
             return;
         }
-        Path parent = sel.getParent();
+        TreeItem<Path> treeSel = folderTree != null ? folderTree.getSelectionModel().getSelectedItem() : null;
+        if (treeSel != null && treeSel.getValue() != null && treeSel.getParent() != null) {
+            beginTreeInlineRename(treeSel);
+        }
+    }
+
+    private void beginTableInlineRename(Path path) {
+        if (path == null || fileTable == null) {
+            return;
+        }
+        hideExplorerTransientUi();
+        int idx = findTableIndexForPath(path);
+        if (idx >= 0) {
+            fileTable.getSelectionModel().clearAndSelect(idx);
+            if (fileTable.getFocusModel() != null) {
+                fileTable.getFocusModel().focus(idx);
+            }
+            fileTable.scrollTo(Math.max(0, idx - 2));
+        }
+        inlineRenameTreePath = null;
+        inlineRenameTablePath = path;
+        fileTable.refresh();
+        fileTable.requestFocus();
+    }
+
+    private void beginTreeInlineRename(TreeItem<Path> treeItem) {
+        if (treeItem == null || treeItem.getValue() == null || treeItem.getParent() == null || folderTree == null) {
+            return;
+        }
+        inlineRenameTablePath = null;
+        inlineRenameTreePath = treeItem.getValue();
+        folderTree.requestFocus();
+        folderTree.edit(treeItem);
+    }
+
+    private void clearInlineRenameTargets() {
+        inlineRenameTablePath = null;
+        inlineRenameTreePath = null;
+        if (folderTree != null) {
+            folderTree.edit(null);
+            folderTree.refresh();
+        }
+        if (fileTable != null) {
+            fileTable.refresh();
+        }
+    }
+
+    private void commitInlineRename(Path source, String requestedName) {
+        if (source == null) {
+            clearInlineRenameTargets();
+            return;
+        }
+        String currentName = displayNameForTable(source);
+        String newName = requestedName == null ? "" : requestedName.trim();
+        if (newName.isEmpty() || Objects.equals(newName, currentName)) {
+            clearInlineRenameTargets();
+            Platform.runLater(() -> restoreFocusToTablePath(source));
+            return;
+        }
+        Path parent = source.getParent();
         if (parent == null) {
+            clearInlineRenameTargets();
+            Platform.runLater(() -> restoreFocusToTablePath(source));
             return;
         }
-        String currentName = displayNameForTable(sel);
-        TextInputDialog d = new TextInputDialog(currentName);
-        d.setTitle("Rename");
-        d.setHeaderText("Rename item");
-        d.setContentText("New name:");
-        Optional<String> result = d.showAndWait();
-        if (result.isEmpty()) {
-            return;
-        }
-        String newName = result.get().trim();
-        if (newName.isEmpty() || newName.equals(currentName)) {
-            return;
-        }
+        Path dest = parent.resolve(newName);
+        pendingInlineRenameSelectionPath = dest;
+        pendingInlineRenameSelectionIndex = findTableIndexForPath(source);
+        clearInlineRenameTargets();
         if (fileOperationService != null) {
             context.operationQueueService().enqueue(new com.fileexplorer.service.ops.FileOperationRequest(
                     com.fileexplorer.service.ops.FileOperationType.RENAME,
-                    java.util.List.of(sel),
+                    java.util.List.of(source),
                     null,
                     newName,
                     false,
                     false,
                     false
             ));
-                        setStatus("Renaming…");
+            setStatus("Renaming…");
             return;
         }
-        Path dest = parent.resolve(newName);
         try {
-            Files.move(sel, dest, new CopyOption[]{StandardCopyOption.REPLACE_EXISTING});
+            Files.move(source, dest, new CopyOption[]{StandardCopyOption.REPLACE_EXISTING});
             refresh();
             setStatus("Renamed.");
         } catch (Exception ex) {
+            pendingInlineRenameSelectionPath = null;
+            pendingInlineRenameSelectionIndex = -1;
             setStatus("Rename failed.");
+            LOG.log(Level.FINE, "Inline rename failed", ex);
+            Platform.runLater(() -> restoreFocusToTablePath(source));
         }
+    }
+
+    private void commitTreeInlineRename(Path source, String requestedName) {
+        if (source == null) {
+            clearInlineRenameTargets();
+            return;
+        }
+        if (inlineRenameTreePath == null || !source.equals(inlineRenameTreePath)) {
+            return;
+        }
+        commitInlineRename(source, requestedName);
+    }
+/**
+ * openPropertiesForPath.
+ *
+ */
+    private void openPropertiesForPath(Path sel) {
+        LogSupport.enter(LOG, "openPropertiesForPath");
+        if (sel == null) {
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("Name: ").append(displayNameForTable(sel)).append("\n");
+        sb.append("Path: ").append(sel).append("\n");
+        sb.append("Type: ").append(fileMetadataService.detectFileType(sel)).append("\n");
+        String size = fileMetadataService.humanReadableSize(sel);
+        if (!size.isBlank()) {
+            sb.append("Size: ").append(size).append("\n");
+        }
+        String mod = fileMetadataService.lastModifiedLocalString(sel);
+        if (!mod.isBlank()) {
+            sb.append("Date modified: ").append(mod).append("\n");
+        }
+        Alert a = new Alert(AlertType.INFORMATION);
+        a.setTitle("Properties");
+        a.setHeaderText(displayNameForTable(sel));
+        a.setContentText(sb.toString());
+        a.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
+        com.fileexplorer.util.DialogTheme.apply(a, null);
+        com.fileexplorer.util.DialogTheme.apply(a, null);
+        a.showAndWait();
     }
 /**
  * openPropertiesForSelection.
@@ -5629,7 +8103,11 @@ private void createNewFolder() {
         LogSupport.enter(LOG, "refresh");
         // Preserve current selection (table) if possible.
         try {
-            if (fileTable != null) {
+            if (pendingInlineRenameSelectionPath != null) {
+                pendingReselectPath = pendingInlineRenameSelectionPath;
+                pendingReselectIndex = pendingInlineRenameSelectionIndex;
+                pendingRestoreSelection = true;
+            } else if (fileTable != null) {
                 com.fileexplorer.model.FileItem sel = fileTable.getSelectionModel().getSelectedItem();
                 if (sel != null) {
                     pendingReselectPath = sel.path();
@@ -5719,8 +8197,7 @@ private void toggleFullScreen() {
         Platform.runLater(() -> {
             Stage stage = new Stage();
             try {
-                MainApp.configureExplorerStage(stage, Objects.requireNonNullElseGet(initialFolder, () -> Paths.get(System.getProperty("user.home"))), themeService.isDarkPreferred());
-                stage.show();
+                MainApp.configureExplorerStage(stage, Objects.requireNonNullElseGet(initialFolder, () -> Paths.get(System.getProperty("user.home"))), themeService.isDarkPreferred(), "user.main-controller.new-window");
             } catch (IOException ex) {
                 // ignore
             }
@@ -6195,13 +8672,14 @@ private void expandNavigationTreeLimited(TreeItem<Path> root, int maxDepth, int 
 private void enforceStartupFixedCellSizes() {
     // TreeView: MUST be > 0 to avoid VirtualFlow addTrailingCells() runaway when a cell reports 0 height.
     if (folderTree != null) {
-        double v = syspropDouble("fileexplorer.ui.tree.fixedCellSize", 22.0);
+        double v = syspropDouble("fileexplorer.ui.tree.fixedCellSize", FOLDER_TREE_ROW_HEIGHT_PX);
         v = clamp(v, 16.0, 96.0);
         // TreeView uses <=0 to mean "variable" sizing; enforce a positive value.
         if (!(v > 0.0)) {
-            v = 22.0;
+            v = FOLDER_TREE_ROW_HEIGHT_PX;
         }
-        folderTree.setFixedCellSize(v);
+        folderTree.setFixedCellSize(Math.max(FOLDER_TREE_ROW_HEIGHT_PX, v));
+        applyFolderTreeMetricsHard();
     }
     // TableView: optional; keep disabled by default to preserve variable row heights unless requested.
     if (fileTable != null) {
@@ -6280,6 +8758,57 @@ private void enforceStartupFixedCellSizes() {
             LOG.info("Startup virtualization guard applied for " + label + ": prefWidth=" + prefWidth + ", prefHeight=" + prefHeight);
         }
     }
+    private void applyFolderTreeMetricsHard() {
+        if (folderTree == null) {
+            return;
+        }
+        folderTree.setFixedCellSize(FOLDER_TREE_ROW_HEIGHT_PX);
+        String style = folderTree.getStyle();
+        if (style == null) {
+            style = "";
+        }
+        style = style.replaceAll("(?i)-fx-fixed-cell-size\\s*:\\s*[^;]+;?", "").trim();
+        style = style.replaceAll("(?i)-fx-cell-size\\s*:\\s*[^;]+;?", "").trim();
+        style = style.replaceAll("(?i)-fx-padding\\s*:\\s*[^;]+;?", "").trim();
+        if (!style.isEmpty() && !style.endsWith(";")) {
+            style = style + ";";
+        }
+        style = style + " -fx-fixed-cell-size: " + FOLDER_TREE_ROW_HEIGHT_PX + "px;"
+                + " -fx-cell-size: " + FOLDER_TREE_ROW_HEIGHT_PX + "px;"
+                + " -fx-padding: 0;";
+        folderTree.setStyle(style);
+
+        Runnable applyCells = () -> {
+            for (Node node : folderTree.lookupAll(".tree-cell")) {
+                if (node instanceof TreeCell<?> cell) {
+                    cell.setMinHeight(FOLDER_TREE_ROW_HEIGHT_PX);
+                    cell.setPrefHeight(FOLDER_TREE_ROW_HEIGHT_PX);
+                    cell.setMaxHeight(FOLDER_TREE_ROW_HEIGHT_PX);
+                    cell.setAlignment(Pos.CENTER_LEFT);
+                    cell.setPadding(FOLDER_TREE_CELL_PADDING);
+                    cell.setContentDisplay(ContentDisplay.LEFT);
+                    cell.setGraphicTextGap(8.0);
+                    String cellStyle = cell.getStyle();
+                    if (cellStyle == null) {
+                        cellStyle = "";
+                    }
+                    if (!cellStyle.isBlank() && !cellStyle.endsWith(";")) {
+                        cellStyle = cellStyle + ";";
+                    }
+                    cell.setStyle(cellStyle
+                            + " -fx-padding: 4 8 4 6;"
+                            + " -fx-alignment: CENTER-LEFT;"
+                            + " -fx-cell-size: " + FOLDER_TREE_ROW_HEIGHT_PX + "px;"
+                            + " -fx-min-height: " + FOLDER_TREE_ROW_HEIGHT_PX + "px;"
+                            + " -fx-pref-height: " + FOLDER_TREE_ROW_HEIGHT_PX + "px;"
+                            + " -fx-max-height: " + FOLDER_TREE_ROW_HEIGHT_PX + "px;");
+                }
+            }
+        };
+        folderTree.skinProperty().addListener((obs, oldSkin, newSkin) -> Platform.runLater(applyCells));
+        Platform.runLater(applyCells);
+    }
+
 /**
  * syspropDouble.
  *
@@ -6342,15 +8871,28 @@ private static boolean syspropBoolean(String key, boolean def) {
         if (!folderTree.getStyleClass().contains("explorer-tree")) {
             folderTree.getStyleClass().add("explorer-tree");
         }
+        if (folderTree.getFixedCellSize() < FOLDER_TREE_ROW_HEIGHT_PX) {
+            folderTree.setFixedCellSize(FOLDER_TREE_ROW_HEIGHT_PX);
+        }
+        applyFolderTreeMetricsHard();
         // Ensure explorer_tree.css is loaded once the TreeView is attached to a Scene.
         folderTree.sceneProperty().addListener((obs, oldScene, newScene) -> {
             if (newScene == null) return;
             try {
-                var url = MainController.class.getResource("/css/explorer_tree.css");
-                if (url == null) return;
-                String css = url.toExternalForm();
-                if (!newScene.getStylesheets().contains(css)) {
-                    newScene.getStylesheets().add(css);
+                var baseUrl = MainController.class.getResource("/css/explorer_tree.css");
+                if (baseUrl != null) {
+                    String css = baseUrl.toExternalForm();
+                    if (!newScene.getStylesheets().contains(css)) {
+                        newScene.getStylesheets().add(css);
+                    }
+                }
+                var parityUrl = MainController.class.getResource("/com/fileexplorer/ui/css/navigation-pane-parity.css");
+                if (parityUrl != null) {
+                    String parityCss = parityUrl.toExternalForm();
+                    if (newScene.getStylesheets().contains(parityCss)) {
+                        newScene.getStylesheets().remove(parityCss);
+                    }
+                    newScene.getStylesheets().add(parityCss);
                 }
             } catch (Exception ignored) {
                 // Non-fatal: styling will fall back to existing CSS.
