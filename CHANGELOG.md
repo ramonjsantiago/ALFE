@@ -1,3 +1,40 @@
+## HOTFIX87 / Phase 4P.3 — Single-Pass Styled Startup
+
+- removed the startup black pre-show placeholder scene and now build the lightweight shell root before `stage.show()`
+- attached the critical stylesheet layer before the first visible frame so startup begins on a styled dark Scene instead of flashing through unstyled intermediate frames
+- kept the single-Scene shell-to-main-root handoff, but limited post-load CSS work to the deferred/noncritical stylesheet layer
+- set the startup Scene fill to a matching theme color to reduce default white-frame exposure during root swaps
+
+
+## HOTFIX86 / Phase 4P.2 — View Menu Icon Rollback
+
+- backed out the HOTFIX85 View menu vector icon implementation and restored the prior View menu appearance from the HOTFIX84 baseline
+- removed the ViewMenuIcons helper and reverted the MainController and CSS changes that introduced the generated icon blocks
+- kept the thumbnail pipeline and prior HOTFIX84 functionality unchanged while undoing only the View menu icon experiment
+
+
+## HOTFIX85 / Phase 4P.1 — View Menu Vector Icons
+
+- replaced the current View menu view-mode glyph labels with code-generated JavaFX vector icons for Extra large icons, Large icons, Medium icons, Small icons, List, Details, Tiles, and Content
+- wired the icons directly into the existing View menu row implementation in MainController so the current radio-button interaction model stays unchanged
+- added view-menu vector icon CSS so the new icons remain monochrome, theme-aware, and crisp without bundled image assets
+
+
+## HOTFIX84 / Phase 4O.12 — Disk Cache Touch-On-Read and Cold Aging
+
+- added optional touch-on-read refresh for persisted thumbnail payload files so age-based disk-cache pruning reflects recent reuse rather than only write time
+- excluded manifest and temporary files from touch-on-read refresh and added a minimum touch interval to avoid excessive metadata churn on hot entries
+- extended thumbnail diagnostics and debug output with disk-cache touch write / skip / fail counters and touch-related settings
+
+
+## HOTFIX83 / Phase 4O.11 — Disk cache metadata protection and temp hygiene
+
+- hardened `AsyncThumbnailService.pruneDiskCache()` so it protects `thumbcache-manifest.properties` from age/size pruning and only applies cache eviction rules to persisted thumbnail payload files
+- added stale temporary cache-file cleanup for interrupted `.tmp` writes plus empty hash-directory cleanup after payload deletions
+- extended thumbnail diagnostics with temp-file and empty-directory prune counters and improved the persistent-cache summary so it reports payload files separately from temporary files
+- added `-Dfileexplorer.thumb.diskCache.tmpMaxAgeHours=<hours>` for bounded cleanup of abandoned temp files
+
+
 ## HOTFIX79 / Phase 4O.7 — Safe document disk cache
 
 - carefully reintroduced persistent thumbnail caching as a read-through / write-through disk cache layered behind the existing in-memory cache

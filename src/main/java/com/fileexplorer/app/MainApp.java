@@ -396,43 +396,46 @@ if (!claimBootstrap(stage, normalizedReason)) {
 
 StartupTrace.mark("configureExplorerStage enter");
 
-// Build a visible window immediately (fast) and defer FXML/controller wiring by a single pulse.
-// This prevents "nothing appears" when FXMLLoader/controller initialization takes time.
+// Keep startup on a single Scene and attach critical CSS before the first frame.
+// This avoids the black -> white -> themed flash caused by pre-show/root-swap staging.
 stage.setTitle("FileExplorer");
 
-        // App icon is optional; defer until after first paint.
-// Defer min-size constraints until after the first visible frame.
-// This can shave time off the initial stage.show() on some platforms.
+StartupTrace.mark("buildShellRoot begin");
+final Parent shellRoot = buildShellRoot();
+try {
+    java.util.List<String> sc = shellRoot.getStyleClass();
+    if (!sc.contains("explorer-root")) {
+        sc.add("explorer-root");
+    }
+    sc.remove("theme-dark");
+    sc.remove("theme-light");
+    sc.add(dark ? "theme-dark" : "theme-light");
+} catch (Throwable ignored) {
+}
+StartupTrace.mark("buildShellRoot end");
 
-
-// Phase 4A.3+: show an ultra-minimal scene FIRST, then install the shell root on the next pulse.
-// This reduces work inside stage.show() and improves time-to-visible.
-final StackPane preShowRoot = new StackPane();
-preShowRoot.setStyle("-fx-background-color: #121212;");
-final Scene shellScene = new Scene(preShowRoot, DEFAULT_WIDTH, DEFAULT_HEIGHT);
+final Scene shellScene = new Scene(shellRoot, DEFAULT_WIDTH, DEFAULT_HEIGHT);
+try {
+    shellScene.setFill(dark ? Color.web("#181818") : Color.web("#f3f3f3"));
+} catch (Throwable ignored) {
+}
+attachCriticalStylesheets(shellScene, dark);
+StartupTrace.mark("stylesheets attach (startup critical) end");
 stage.setScene(shellScene);
-StartupTrace.mark("stage.setScene (shell scene)");
+StartupTrace.mark("stage.setScene (styled shell scene)");
 if (!stage.isShowing()) {
     stage.show();
 }
-StartupTrace.mark("stage.show (shell scene)");
+StartupTrace.mark("stage.show (styled shell scene)");
 markBootstrapState(stage, BootstrapState.SHELL_VISIBLE);
 
-// Install the richer shell placeholder AFTER the first window is visible.
+// App icon is optional; defer until after first paint.
+// Defer min-size constraints until after the first visible frame.
+// This can shave time off the initial stage.show() on some platforms.
 Platform.runLater(() -> {
     try {
-        StartupTrace.mark("buildShellRoot begin");
-        final Parent shellRoot = buildShellRoot();
-        StartupTrace.mark("buildShellRoot end");
-        shellScene.setRoot(shellRoot);
-        StartupTrace.mark("shellScene.setRoot (shell root)");
-
-        // Apply min-size constraints after first paint.
-        try {
-            stage.setMinWidth(DEFAULT_MIN_WIDTH);
-            stage.setMinHeight(DEFAULT_MIN_HEIGHT);
-        } catch (Throwable ignored2) {
-        }
+        stage.setMinWidth(DEFAULT_MIN_WIDTH);
+        stage.setMinHeight(DEFAULT_MIN_HEIGHT);
     } catch (Throwable ignored) {
     }
 });
@@ -606,21 +609,14 @@ markBootstrapState(stage, BootstrapState.MAIN_UI_ATTACHED);
 // Mark UI ready once the main root is installed; critical startup work can now drain promptly.
 workQueue.markUiReady();
 
-// Phase 4M: optionally defer stylesheet attachment, but keep the critical layer on a bounded next-pulse queue
-// so it does not drift behind user interaction by seconds.
+// Critical stylesheets are already attached before stage.show() so the shell and main UI
+// stay on one styled Scene from first frame onward. Keep only the deferred/noncritical layer here.
 final boolean deferCss = Boolean.parseBoolean(System.getProperty("fileexplorer.startup.deferCss", "true"));
 if (!deferCss) {
-    StartupTrace.mark("stylesheets attach (immediate) begin");
-    attachCriticalStylesheets(scene, darkActual);
-    attachDeferredStylesheets(scene);
-    StartupTrace.mark("stylesheets attach (immediate) end");
+    StartupTrace.mark("stylesheets attach (deferred layer immediate) begin");
+    attachDeferredStylesheets(sceneForCss);
+    StartupTrace.mark("stylesheets attach (deferred layer immediate) end");
 } else {
-    workQueue.runCritical(() -> {
-        StartupTrace.mark("stylesheets attach (critical deferred) begin");
-        attachCriticalStylesheets(sceneForCss, darkActualForCss);
-        StartupTrace.mark("stylesheets attach (critical deferred) end");
-    });
-
     workQueue.runIdle(() -> {
         StartupTrace.mark("stylesheets attach (idle deferred) begin");
         attachDeferredStylesheets(sceneForCss);

@@ -127,6 +127,18 @@ public final class AsyncThumbnailService {
     private static final long STARTUP_PRUNE_DELAY_MS =
             longProp("fileexplorer.thumb.diskCache.startupPrune.delayMs", 2500L, 250L, 120000L);
 
+    /** Maximum age for stale temporary disk-cache files left behind by interrupted writes. */
+    private static final long DISK_CACHE_TMP_MAX_AGE_HOURS =
+            longProp("fileexplorer.thumb.diskCache.tmpMaxAgeHours", 24L, 1L, 24L * 365L);
+
+    /** Refresh disk-cache payload mtimes on read so age-based pruning favors recently used entries. */
+    private static final boolean TOUCH_DISK_CACHE_ON_READ =
+            boolProp("fileexplorer.thumb.diskCache.touchOnRead", true);
+
+    /** Minimum spacing between touch-on-read mtime refreshes for the same cache file. */
+    private static final long DISK_CACHE_TOUCH_MIN_INTERVAL_MINUTES =
+            longProp("fileexplorer.thumb.diskCache.touchMinIntervalMinutes", 240L, 1L, 24L * 30L);
+
     /** Best-effort self-heal for corrupt cache entries encountered during reads. */
     private static final boolean DELETE_CORRUPT_ON_READ =
             boolProp("fileexplorer.thumb.diskCache.deleteCorruptOnRead", true);
@@ -332,6 +344,11 @@ public final class AsyncThumbnailService {
     private final LongAdder diskCacheCorruptDeletes = new LongAdder();
     private final LongAdder diskCacheStartupClearRuns = new LongAdder();
     private final LongAdder diskCacheStartupClearDeletes = new LongAdder();
+    private final LongAdder diskCacheTempPruned = new LongAdder();
+    private final LongAdder diskCacheEmptyDirsPruned = new LongAdder();
+    private final LongAdder diskCacheTouchWrite = new LongAdder();
+    private final LongAdder diskCacheTouchSkip = new LongAdder();
+    private final LongAdder diskCacheTouchFail = new LongAdder();
     private final LongAdder diskCacheManifestWrites = new LongAdder();
     private final LongAdder diskCacheManifestWriteFail = new LongAdder();
     private final LongAdder diskCacheManifestMismatchDetected = new LongAdder();
@@ -375,7 +392,7 @@ public final class AsyncThumbnailService {
         ses.scheduleAtFixedRate(() -> {
             double avgMs = averageDecodeMs();
             LOG.info(() -> String.format(
-                    "[Thumbs] req=%d hit=%d miss=%d coalesced=%d bucketReuse=%d throttled=%d viewportCancels=%d queued=%d inFlight=%d pending=%d rendered=%d failed=%d fallback=%d cancelled=%d docTimeouts=%d provider{fx=%d,doc=%d,imageio=%d} disk{hit=%d,miss=%d,write=%d,writeFail=%d,pruned=%d,pruneRuns=%d,startupPruneRuns=%d,corruptDeletes=%d,startupClearRuns=%d,startupClearDeletes=%d,manifestWrites=%d,manifestWriteFail=%d,manifestMismatchDetected=%d,manifestMismatchClears=%d,enabled=%s,docsOnly=%s,clearOnStartup=%s,clearOnManifestMismatch=%s} avgDecodeMs=%.2f cache={%s} gates={pdf=%s,word=%s,excel=%s,pptx=%s}",
+                    "[Thumbs] req=%d hit=%d miss=%d coalesced=%d bucketReuse=%d throttled=%d viewportCancels=%d queued=%d inFlight=%d pending=%d rendered=%d failed=%d fallback=%d cancelled=%d docTimeouts=%d provider{fx=%d,doc=%d,imageio=%d} disk{hit=%d,miss=%d,write=%d,writeFail=%d,pruned=%d,pruneRuns=%d,startupPruneRuns=%d,corruptDeletes=%d,startupClearRuns=%d,startupClearDeletes=%d,tempPruned=%d,emptyDirsPruned=%d,touchWrite=%d,touchSkip=%d,touchFail=%d,manifestWrites=%d,manifestWriteFail=%d,manifestMismatchDetected=%d,manifestMismatchClears=%d,enabled=%s,docsOnly=%s,clearOnStartup=%s,clearOnManifestMismatch=%s,touchOnRead=%s} avgDecodeMs=%.2f cache={%s} gates={pdf=%s,word=%s,excel=%s,pptx=%s}",
                     requested.sum(),
                     hit.sum(),
                     miss.sum(),
@@ -404,6 +421,11 @@ public final class AsyncThumbnailService {
                     diskCacheCorruptDeletes.sum(),
                     diskCacheStartupClearRuns.sum(),
                     diskCacheStartupClearDeletes.sum(),
+                    diskCacheTempPruned.sum(),
+                    diskCacheEmptyDirsPruned.sum(),
+                    diskCacheTouchWrite.sum(),
+                    diskCacheTouchSkip.sum(),
+                    diskCacheTouchFail.sum(),
                     diskCacheManifestWrites.sum(),
                     diskCacheManifestWriteFail.sum(),
                     diskCacheManifestMismatchDetected.sum(),
@@ -412,6 +434,7 @@ public final class AsyncThumbnailService {
                     onOff(DISK_CACHE_DOCUMENTS_ONLY),
                     onOff(CLEAR_DISK_CACHE_ON_STARTUP),
                     onOff(CLEAR_ON_MANIFEST_MISMATCH),
+                    onOff(TOUCH_DISK_CACHE_ON_READ),
                     avgMs,
                     cache.debugString(),
                     onOff(ENABLE_PDF),
@@ -467,6 +490,11 @@ public final class AsyncThumbnailService {
                 + ",corruptDeletes=" + diskCacheCorruptDeletes.sum()
                 + ",startupClearRuns=" + diskCacheStartupClearRuns.sum()
                 + ",startupClearDeletes=" + diskCacheStartupClearDeletes.sum()
+                + ",tempPruned=" + diskCacheTempPruned.sum()
+                + ",emptyDirsPruned=" + diskCacheEmptyDirsPruned.sum()
+                + ",touchWrite=" + diskCacheTouchWrite.sum()
+                + ",touchSkip=" + diskCacheTouchSkip.sum()
+                + ",touchFail=" + diskCacheTouchFail.sum()
                 + ",manifestWrites=" + diskCacheManifestWrites.sum()
                 + ",manifestWriteFail=" + diskCacheManifestWriteFail.sum()
                 + ",manifestMismatchDetected=" + diskCacheManifestMismatchDetected.sum()
@@ -474,7 +502,8 @@ public final class AsyncThumbnailService {
                 + ",enabled=" + onOff(ENABLE_DISK_CACHE)
                 + ",docsOnly=" + onOff(DISK_CACHE_DOCUMENTS_ONLY)
                 + ",clearOnStartup=" + onOff(CLEAR_DISK_CACHE_ON_STARTUP)
-                + ",clearOnManifestMismatch=" + onOff(CLEAR_ON_MANIFEST_MISMATCH) + "}"
+                + ",clearOnManifestMismatch=" + onOff(CLEAR_ON_MANIFEST_MISMATCH)
+                + ",touchOnRead=" + onOff(TOUCH_DISK_CACHE_ON_READ) + "}"
                 + " gates{pdf=" + onOff(ENABLE_PDF)
                 + ",word=" + onOff(ENABLE_WORD)
                 + ",excel=" + onOff(ENABLE_EXCEL)
@@ -1179,6 +1208,9 @@ public final class AsyncThumbnailService {
             props.setProperty("clearOnStartup", Boolean.toString(CLEAR_DISK_CACHE_ON_STARTUP));
             props.setProperty("clearOnManifestMismatch", Boolean.toString(CLEAR_ON_MANIFEST_MISMATCH));
             props.setProperty("startupPruneEnabled", Boolean.toString(ENABLE_STARTUP_PRUNE));
+            props.setProperty("tmpMaxAgeHours", Long.toString(DISK_CACHE_TMP_MAX_AGE_HOURS));
+            props.setProperty("touchOnRead", Boolean.toString(TOUCH_DISK_CACHE_ON_READ));
+            props.setProperty("touchMinIntervalMinutes", Long.toString(DISK_CACHE_TOUCH_MIN_INTERVAL_MINUTES));
             props.setProperty("deleteCorruptOnRead", Boolean.toString(DELETE_CORRUPT_ON_READ));
             props.setProperty("enablePdf", Boolean.toString(ENABLE_PDF));
             props.setProperty("enableWord", Boolean.toString(ENABLE_WORD));
@@ -1254,6 +1286,25 @@ public final class AsyncThumbnailService {
         }
     }
 
+    private void maybeTouchDiskCacheFileOnRead(Path cacheFile) {
+        if (!TOUCH_DISK_CACHE_ON_READ || cacheFile == null || isDiskCacheManifestFile(cacheFile) || isDiskCacheTempFile(cacheFile)) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        long minIntervalMs = Math.max(60_000L, DISK_CACHE_TOUCH_MIN_INTERVAL_MINUTES * 60_000L);
+        try {
+            long prior = Files.getLastModifiedTime(cacheFile).toMillis();
+            if (now - prior < minIntervalMs) {
+                diskCacheTouchSkip.increment();
+                return;
+            }
+            Files.setLastModifiedTime(cacheFile, java.nio.file.attribute.FileTime.fromMillis(now));
+            diskCacheTouchWrite.increment();
+        } catch (Throwable ignored) {
+            diskCacheTouchFail.increment();
+        }
+    }
+
     private Image readDiskCachedThumbnail(Path path, String ext, int sizePx, long lastMod, long fileSizeBytes, ThumbnailProvider provider) {
         if (!isDiskCacheEligible(provider)) {
             return null;
@@ -1285,6 +1336,7 @@ public final class AsyncThumbnailService {
                 return null;
             }
             diskCacheHit.increment();
+            maybeTouchDiskCacheFileOnRead(cacheFile);
             return img;
         } catch (Throwable ignored) {
             diskCacheMiss.increment();
@@ -1359,12 +1411,38 @@ public final class AsyncThumbnailService {
             }
             long now = System.currentTimeMillis();
             long maxAgeMs = Math.max(1L, DISK_CACHE_MAX_AGE_DAYS) * 24L * 60L * 60L * 1000L;
-            java.util.List<Path> files = new ArrayList<>();
+            long tmpMaxAgeMs = Math.max(1L, DISK_CACHE_TMP_MAX_AGE_HOURS) * 60L * 60L * 1000L;
+
+            java.util.List<Path> payloadFiles = new ArrayList<>();
+            java.util.List<Path> tempFiles = new ArrayList<>();
             try (java.util.stream.Stream<Path> stream = Files.walk(diskCacheDir)) {
-                stream.filter(Files::isRegularFile).forEach(files::add);
+                stream.filter(Files::isRegularFile).forEach(p -> {
+                    if (isDiskCacheManifestFile(p)) {
+                        return;
+                    }
+                    if (isDiskCacheTempFile(p)) {
+                        tempFiles.add(p);
+                        return;
+                    }
+                    if (isDiskCachePayloadFile(p)) {
+                        payloadFiles.add(p);
+                    }
+                });
             }
+
+            for (Path f : tempFiles) {
+                try {
+                    long ageMs = now - Files.getLastModifiedTime(f).toMillis();
+                    if (ageMs > tmpMaxAgeMs && Files.deleteIfExists(f)) {
+                        diskCacheTempPruned.increment();
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+
             long totalBytes = 0L;
-            for (Path f : files) {
+            java.util.List<Path> retainedPayloadFiles = new ArrayList<>(payloadFiles.size());
+            for (Path f : payloadFiles) {
                 try {
                     long ageMs = now - Files.getLastModifiedTime(f).toMillis();
                     if (ageMs > maxAgeMs) {
@@ -1374,26 +1452,47 @@ public final class AsyncThumbnailService {
                         continue;
                     }
                     totalBytes += Files.size(f);
+                    retainedPayloadFiles.add(f);
                 } catch (Throwable ignored) {
                 }
             }
-            if (totalBytes <= DISK_CACHE_MAX_BYTES) {
-                return;
-            }
-            files.clear();
-            try (java.util.stream.Stream<Path> stream = Files.walk(diskCacheDir)) {
-                stream.filter(Files::isRegularFile).forEach(files::add);
-            }
-            files.sort(Comparator.comparingLong(this::safeFileMtimeForSort));
-            for (Path f : files) {
-                if (totalBytes <= DISK_CACHE_MAX_BYTES) {
-                    break;
+            if (totalBytes > DISK_CACHE_MAX_BYTES) {
+                retainedPayloadFiles.sort(Comparator.comparingLong(this::safeFileMtimeForSort));
+                for (Path f : retainedPayloadFiles) {
+                    if (totalBytes <= DISK_CACHE_MAX_BYTES) {
+                        break;
+                    }
+                    try {
+                        long size = Files.size(f);
+                        if (Files.deleteIfExists(f)) {
+                            totalBytes -= size;
+                            diskCachePruned.increment();
+                        }
+                    } catch (Throwable ignored) {
+                    }
                 }
-                try {
-                    long size = Files.size(f);
-                    if (Files.deleteIfExists(f)) {
-                        totalBytes -= size;
-                        diskCachePruned.increment();
+            }
+            pruneEmptyDiskCacheDirectories();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void pruneEmptyDiskCacheDirectories() {
+        Path root = diskCacheDir;
+        if (root == null) {
+            return;
+        }
+        try (java.util.stream.Stream<Path> stream = Files.walk(root)) {
+            java.util.List<Path> dirs = stream.filter(Files::isDirectory)
+                    .sorted(Comparator.reverseOrder())
+                    .toList();
+            for (Path dir : dirs) {
+                if (root.equals(dir)) {
+                    continue;
+                }
+                try (java.util.stream.Stream<Path> children = Files.list(dir)) {
+                    if (!children.findAny().isPresent() && Files.deleteIfExists(dir)) {
+                        diskCacheEmptyDirsPruned.increment();
                     }
                 } catch (Throwable ignored) {
                 }
@@ -1408,6 +1507,34 @@ public final class AsyncThumbnailService {
         } catch (Throwable ignored) {
             return Long.MAX_VALUE;
         }
+    }
+
+    private boolean isDiskCacheManifestFile(Path path) {
+        Path manifest = diskCacheManifestFile();
+        if (manifest == null || path == null) {
+            return false;
+        }
+        try {
+            return manifest.toAbsolutePath().normalize().equals(path.toAbsolutePath().normalize());
+        } catch (Throwable ignored) {
+            return manifest.equals(path);
+        }
+    }
+
+    private boolean isDiskCacheTempFile(Path path) {
+        if (path == null) {
+            return false;
+        }
+        String name = path.getFileName() == null ? "" : path.getFileName().toString().toLowerCase(Locale.ROOT);
+        return name.endsWith(".tmp");
+    }
+
+    private boolean isDiskCachePayloadFile(Path path) {
+        if (path == null) {
+            return false;
+        }
+        String name = path.getFileName() == null ? "" : path.getFileName().toString().toLowerCase(Locale.ROOT);
+        return name.endsWith(".png") && !isDiskCacheManifestFile(path);
     }
 
     private Path diskCacheFile(Path path, String ext, int sizePx, long lastMod, long fileSizeBytes, ThumbnailProvider provider) {
@@ -1502,6 +1629,8 @@ public final class AsyncThumbnailService {
         sb.append(" clearOnStartup=").append(onOff(CLEAR_DISK_CACHE_ON_STARTUP));
         sb.append(" clearOnManifestMismatch=").append(onOff(CLEAR_ON_MANIFEST_MISMATCH));
         sb.append(" startupPrune=").append(onOff(ENABLE_STARTUP_PRUNE));
+        sb.append(" touchOnRead=").append(onOff(TOUCH_DISK_CACHE_ON_READ));
+        sb.append(" touchMinIntervalMinutes=").append(DISK_CACHE_TOUCH_MIN_INTERVAL_MINUTES);
         sb.append(" manifestEnabled=").append(onOff(ENABLE_DISK_CACHE_MANIFEST));
         sb.append(" compatVersion=").append(DISK_CACHE_COMPAT_VERSION);
         sb.append(" fingerprint=").append(currentDiskCacheCompatibilityFingerprint());
@@ -1511,14 +1640,29 @@ public final class AsyncThumbnailService {
         sb.append(" maxBytes=").append(DISK_CACHE_MAX_BYTES);
         sb.append(" maxAgeDays=").append(DISK_CACHE_MAX_AGE_DAYS);
         if (dir != null && Files.isDirectory(dir)) {
-            long fileCount = 0L;
+            long payloadFileCount = 0L;
+            long tempFileCount = 0L;
             long totalBytes = 0L;
             long newestMs = -1L;
             try (java.util.stream.Stream<Path> stream = Files.walk(dir)) {
                 java.util.Iterator<Path> it = stream.filter(Files::isRegularFile).iterator();
                 while (it.hasNext()) {
                     Path p = it.next();
-                    fileCount++;
+                    if (isDiskCacheManifestFile(p)) {
+                        continue;
+                    }
+                    if (isDiskCacheTempFile(p)) {
+                        tempFileCount++;
+                        try {
+                            newestMs = Math.max(newestMs, Files.getLastModifiedTime(p).toMillis());
+                        } catch (Throwable ignored) {
+                        }
+                        continue;
+                    }
+                    if (!isDiskCachePayloadFile(p)) {
+                        continue;
+                    }
+                    payloadFileCount++;
                     try {
                         totalBytes += Files.size(p);
                     } catch (Throwable ignored) {
@@ -1530,7 +1674,8 @@ public final class AsyncThumbnailService {
                 }
             } catch (Throwable ignored) {
             }
-            sb.append(" files=").append(fileCount);
+            sb.append(" files=").append(payloadFileCount);
+            sb.append(" tempFiles=").append(tempFileCount);
             sb.append(" bytes=").append(totalBytes);
             sb.append(" newestMs=").append(newestMs);
         }

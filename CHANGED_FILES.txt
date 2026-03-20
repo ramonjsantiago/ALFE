@@ -1,5 +1,5 @@
 PHASE_LABEL.txt
 CHANGELOG.md
-PHASE4O_10_DISK_CACHE_COMPATIBILITY_MANIFEST_NOTES.txt
-src/main/java/com/fileexplorer/service/diag/DiagnosticsBundleService.java
-src/main/java/com/fileexplorer/service/icon/AsyncThumbnailService.java
+CHANGED_FILES.txt
+PHASE4P_3_SINGLE_PASS_STYLED_STARTUP_NOTES.txt
+src/main/java/com/fileexplorer/app/MainApp.java
