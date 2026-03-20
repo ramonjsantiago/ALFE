@@ -1,0 +1,19 @@
+HOTFIX75 / Phase 4O.3 rollback — Restore thumbnail rendering
+
+Summary
+- backs out the HOTFIX74 persistent thumbnail cache changes
+- restores the HOTFIX73 thumbnail pipeline behavior that was still showing thumbnails correctly
+- keeps the thumbnails4j and JAI Image I/O support added in HOTFIX72 and HOTFIX73
+
+Why
+- HOTFIX74 caused thumbnail icons to stop appearing in the file views
+- this package prioritizes restoring the working thumbnail path over keeping the new persistent cache layer
+
+Implementation
+- reverted AsyncThumbnailService.java to the HOTFIX73 implementation
+- removed the HOTFIX74 persistent disk thumbnail cache logic from the active code path
+- preserved the existing lazy async thumbnail construction flow for supported image, Office, PDF, and JAI-backed formats
+
+Result
+- thumbnails should again render through the known-good lazy async pipeline
+- persistent thumbnail cache changes from HOTFIX74 are no longer active in this package

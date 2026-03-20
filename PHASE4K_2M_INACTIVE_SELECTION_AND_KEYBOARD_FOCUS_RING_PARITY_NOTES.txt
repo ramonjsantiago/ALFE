@@ -1,0 +1,8 @@
+Phase 4K.2M — Inactive Selection and Keyboard Focus Ring Parity
+
+Included:
+- softened inactive selected surfaces to rgba(80,80,80,0.38) with border #8e8e8e
+- kept active selected surfaces at rgba(80,80,80,0.50) with border #c3c3c3
+- added a subtle focused selection ring for icon/list/tile/content views
+- added a subtle focused selection ring for Details rows through inline row presentation
+- kept hover border at #505050 so hover and selection remain visually distinct

@@ -338,7 +338,7 @@
                                         <!-- Sort submenu (native Menu skin already reserves a left "check" column; do NOT add an extra graphic indentation) -->
 <SeparatorMenuItem/>
 
-                                <CustomMenuItem hideOnClick="false">
+                                <CustomMenuItem fx:id="detailsPaneRowItem" hideOnClick="false">
                                     <content>
                                         <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
                                             <RadioButton fx:id="detailsPaneMenuItem"
@@ -350,7 +350,7 @@
                                     </content>
                                 </CustomMenuItem>
 
-                                <CustomMenuItem hideOnClick="false">
+                                <CustomMenuItem fx:id="previewPaneRowItem" hideOnClick="false">
                                     <content>
                                         <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
                                             <RadioButton fx:id="previewPaneMenuItem"
@@ -366,9 +366,9 @@
 
                                 <Menu fx:id="viewShowMenu" text="Show" styleClass="view-menu-submenu">
                                     <graphic>
-                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-leading">
+                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-leading view-menu-submenu-row">
                                             <CheckBox opacity="0.0" disable="true" focusTraversable="false" styleClass="view-menu-checkbox"/>
-                                            <Label text="&#xE8A7;" opacity="0.0" styleClass="fluent-icon view-menu-icon"/>
+                                            <Region styleClass="view-menu-icon-placeholder"/>
                                         </HBox>
                                     </graphic>
                                     <items>
@@ -601,11 +601,11 @@
                                                maxWidth="Infinity"
                                                maxHeight="Infinity">
                                         <columns>
-                                            <TableColumn fx:id="colName" prefWidth="320" text="Name"/>
+                                            <TableColumn fx:id="colName" prefWidth="336" text="Name"/>
                                             <TableColumn fx:id="colStatus" prefWidth="42" text="Status"/>
-                                            <TableColumn fx:id="colType" prefWidth="180" text="Type"/>
-                                            <TableColumn fx:id="colSize" prefWidth="110" text="Size"/>
-                                            <TableColumn fx:id="colModified" prefWidth="190" text="Date modified"/>
+                                            <TableColumn fx:id="colType" prefWidth="176" text="Type"/>
+                                            <TableColumn fx:id="colSize" prefWidth="108" text="Size"/>
+                                            <TableColumn fx:id="colModified" prefWidth="184" text="Date modified"/>
                                         </columns>
                                         <placeholder>
                                             <Label text="This folder is empty" styleClass="details-empty-placeholder"/>

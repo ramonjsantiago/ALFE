@@ -75,7 +75,7 @@
 /* Dark theme root */
 .theme-dark {
     -fx-background-color: #202020;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
 }
 
 /* Text color for common controls */
@@ -96,7 +96,7 @@
 .theme-dark .text-area,
 .theme-dark .tree-view,
 .theme-dark .table-view {
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
 }
 
 /************************************************************
@@ -109,7 +109,7 @@
 }
 
 .theme-light .explorer-background {
-    -fx-background-color: #ffffff;
+    -fx-background-color: #191919;
     -fx-border-color: #d0d0d0;
     -fx-border-radius: 8;
 }
@@ -228,7 +228,7 @@
 .theme-dark .fluent-toolbar .toggle-button,
 .theme-dark .fluent-toolbar .menu-button {
     -fx-background-color: transparent;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
 }
 
 .theme-dark .fluent-command-button:hover,
@@ -244,7 +244,7 @@
 .theme-dark .fluent-toolbar .toggle-button:armed,
 .theme-dark .fluent-toolbar .toggle-button:selected {
     -fx-background-color: rgba(126, 167, 245, 0.22);
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
 }
 
 
@@ -311,7 +311,7 @@
 /* Dark */
 .theme-dark .breadcrumb-button {
     -fx-background-color: transparent;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
 }
 
 .theme-dark .breadcrumb-button:hover {
@@ -334,8 +334,8 @@
 
 /* Backgrounds */
 .theme-light .tree-view {
-    -fx-background-color: #ffffff;
-    -fx-control-inner-background: #ffffff;
+    -fx-background-color: #191919;
+    -fx-control-inner-background: #191919;
     -fx-border-color: #e0e0e0;
 }
 
@@ -354,13 +354,13 @@
 .theme-light .tree-cell:filled:selected,
 .theme-light .tree-cell:filled:selected:focused {
     -fx-background-color: #0078d4;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
 }
 
 .theme-dark .tree-cell:filled:selected,
 .theme-dark .tree-cell:filled:selected:focused {
     -fx-background-color: #0078d4;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
 }
 
 /************************************************************
@@ -373,8 +373,8 @@
 
 /* Backgrounds */
 .theme-light .table-view {
-    -fx-background-color: #ffffff;
-    -fx-control-inner-background: #ffffff;
+    -fx-background-color: #191919;
+    -fx-control-inner-background: #191919;
     -fx-border-color: #e0e0e0;
 }
 
@@ -402,13 +402,13 @@
 .theme-light .table-row-cell:filled:selected,
 .theme-light .table-row-cell:filled:selected:focused {
     -fx-background-color: #0078d4;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
 }
 
 .theme-dark .table-row-cell:filled:selected,
 .theme-dark .table-row-cell:filled:selected:focused {
     -fx-background-color: #0078d4;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
 }
 
 /* Column header background – NO gradient */
@@ -490,13 +490,13 @@
 
 /* Preview text area */
 .theme-light .text-area {
-    -fx-control-inner-background: #ffffff;
+    -fx-control-inner-background: #191919;
     -fx-text-fill: #202020;
 }
 
 .theme-dark .text-area {
     -fx-control-inner-background: #1c1c1c;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
 }
 
 /************************************************************
@@ -562,7 +562,7 @@
 }
 
 .theme-light .text-field {
-    -fx-background-color: #ffffff;
+    -fx-background-color: #191919;
     -fx-border-color: #d0d0d0;
     -fx-text-fill: #202020;
 }
@@ -570,7 +570,7 @@
 .theme-dark .text-field {
     -fx-background-color: #1f1f1f;
     -fx-border-color: #3a3a3a;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
 }
 
 .text-field:focused {
@@ -624,11 +624,34 @@
     -fx-spacing: 10;
 }
 
+.view-menu-submenu-row {
+    -fx-alignment: CENTER_LEFT;
+    -fx-padding: 0.2em 0.1em 0.2em 0.1em;
+}
+
+.view-menu-icon-placeholder {
+    -fx-min-width: 14px;
+    -fx-pref-width: 14px;
+    -fx-max-width: 14px;
+    -fx-min-height: 16px;
+    -fx-pref-height: 16px;
+    -fx-max-height: 16px;
+}
+
+.context-menu .view-menu-submenu {
+    -fx-graphic-text-gap: 10px;
+}
+
+.context-menu .view-menu-submenu > .graphic-container {
+    -fx-padding: 0 10 0 6;
+}
+
 .context-menu .view-menu-submenu > .label {
-    -fx-padding: 0;
+    -fx-padding: 0 0 0 2;
     -fx-font-family: "Segoe UI Variable Text";
     -fx-font-size: 13px;
     -fx-font-weight: normal;
+    -fx-opacity: 1;
 }
 
 /************************************************************
@@ -643,7 +666,7 @@
     -fx-border-radius: 8;
     -fx-border-width: 1;
     -fx-padding: 6 10 6 10;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
 }
 
 .tooltip .label,
@@ -652,16 +675,16 @@
 .tooltip.explorer-rich-tooltip .label,
 .tooltip.explorer-rich-tooltip > .label,
 .tooltip.explorer-rich-tooltip .explorer-tooltip-label {
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
 }
 
 .tooltip .text,
 .tooltip.explorer-rich-tooltip .text {
-    -fx-fill: #ffffff;
+    -fx-fill: #191919;
 }
 
 .tooltip.explorer-rich-tooltip .explorer-tooltip-label {
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
     -fx-font-family: "Segoe UI Variable Text";
     -fx-font-size: 13px;
     -fx-font-weight: normal;

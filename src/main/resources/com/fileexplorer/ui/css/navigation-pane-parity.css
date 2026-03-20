@@ -104,7 +104,7 @@
 
 .theme-dark .explorer-navigation-pane .tree-cell:selected {
     -fx-background-color: rgba(255,255,255,0.085);
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
 }
 
 .theme-dark .explorer-navigation-pane:focused .tree-cell:selected {

@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import javafx.stage.Screen;
@@ -46,6 +47,7 @@ import javafx.css.PseudoClass;
 import javafx.fxml.Initializable;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.Cursor;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
@@ -54,6 +56,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Labeled;
 import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.ContextMenu;
+import javafx.scene.control.CustomMenuItem;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableCell;
@@ -105,6 +108,7 @@ import com.fileexplorer.util.StartupTrace;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import javafx.animation.Animation;
 import javafx.animation.PauseTransition;
 import javafx.util.Duration;
 import javafx.scene.control.TextInputControl;
@@ -209,15 +213,20 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     private TableColumn<FileItem, String> colTags;
     private TableColumn<FileItem, String> colTitle;
     private static final String PROP_DETAIL_COLUMN_KEY = "fileexplorer.detailColumnKey";
+    private static final String PROP_DETAILS_HEADER_INTERACTION_INSTALLED = "fileexplorer.detailsHeaderInteractionInstalled";
+    private static final double DETAILS_HEADER_RESIZE_EDGE_PX = 6.0;
     private final java.util.LinkedHashMap<String, javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?>> lazyDetailColumns = new java.util.LinkedHashMap<>();
     private java.util.List<com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec> chooseDetailSpecs = java.util.List.of();
     private java.util.Map<String, com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec> chooseDetailSpecsByKey = java.util.Map.of();
     private static final PseudoClass PSEUDO_EXPLORER_HOVER = PseudoClass.getPseudoClass("explorer-hover");
+    private static final String PROP_DETAILS_ROW_STYLE_CACHE = "fileexplorer.detailsRowStyleCache";
     private final IntegerProperty detailsHoverRowIndex = new SimpleIntegerProperty(-1);
     private final ObjectProperty<TableRow<FileItem>> activeDetailsHoverRow = new SimpleObjectProperty<>(null);
     private boolean stableDetailsHoverTrackingInstalled = false;
     private final java.util.Map<String, Double> detailColumnWidths = new java.util.HashMap<>();
     private final java.util.List<String> detailOrderedKeys = new java.util.ArrayList<>();
+    private final javafx.animation.PauseTransition detailsColumnsPersistDebounce = new javafx.animation.PauseTransition(javafx.util.Duration.millis(180));
+    private final ObjectProperty<Node> activeDetailsResizeHotHeader = new SimpleObjectProperty<>(null);
     private boolean detailsColumnsPersistenceWired = false;
     @FXML private ToggleButton themeToggle;
     @FXML private ToggleButton detailsToggle;
@@ -234,6 +243,9 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     @FXML private RadioButton viewDetails;
     @FXML private RadioButton viewTiles;
     @FXML private RadioButton viewContent;
+    @FXML private CustomMenuItem viewContentItem;
+    @FXML private CustomMenuItem detailsPaneRowItem;
+    @FXML private CustomMenuItem previewPaneRowItem;
     @FXML private RadioButton detailsPaneMenuItem;
     @FXML private RadioButton previewPaneMenuItem;
     @FXML private CheckBox showNavigationPaneMenuItem;
@@ -440,6 +452,11 @@ private final ExecutorService hoverPrefetchExecutor;
     );
     private final java.util.concurrent.atomic.AtomicLong previewLoadSeq = new java.util.concurrent.atomic.AtomicLong(0L);
     private volatile java.nio.file.Path pendingPreviewPath;
+    // Phase 4O.6: warm only the current folder's thumbnail candidates after navigation settles.
+    private final javafx.animation.PauseTransition folderThumbnailWarmupDebounce = new javafx.animation.PauseTransition(
+            javafx.util.Duration.millis(Long.getLong("fileexplorer.thumb.warmup.delayMs", 220L))
+    );
+    private final java.util.concurrent.atomic.AtomicLong folderThumbnailWarmupSeq = new java.util.concurrent.atomic.AtomicLong(0L);
     // Phase 4I: coalesce expensive table.refresh() calls triggered by metadata fill.
     private final javafx.animation.PauseTransition tableRefreshDebounce = new javafx.animation.PauseTransition(
             javafx.util.Duration.millis(Long.getLong("fileexplorer.table.refreshDebounceMs", 75L))
@@ -455,6 +472,9 @@ private final ExecutorService hoverPrefetchExecutor;
     private double explorerMetadataPopupScreenX = Double.NaN;
     private double explorerMetadataPopupScreenY = Double.NaN;
     private int explorerMetadataPopupDetailsRowIndex = -1;
+    private final java.util.concurrent.ConcurrentHashMap<Path, String> explorerMetadataTextCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.HashMap<String, String> detailsRowStyleTemplateCache = new java.util.HashMap<>();
+    private String explorerMetadataPopupLastText = "";
 private boolean hoverPrefetchEnabled;
     private int focusCycleIndex;
 /**
@@ -498,8 +518,10 @@ private boolean hoverPrefetchEnabled;
         this.hoverPrefetchEnabled = !SAFE_MODE;
         // Phase 4B.2+: coalesce metadata UI updates.
         this.metadataFlushDebounce.setOnFinished(_ -> flushPendingMetadataUpdates());
+        this.detailsColumnsPersistDebounce.setOnFinished(_ -> persistDetailsColumnsState());
         this.commandBarCompactionDebounce.setOnFinished(_ -> applyCommandBarCompactionNow(pendingCommandBarWidth));
         this.previewLoadDebounce.setOnFinished(_ -> loadPreviewThumbnailNow(previewLoadSeq.get(), pendingPreviewPath));
+        this.folderThumbnailWarmupDebounce.setOnFinished(_ -> warmCurrentFolderThumbnailsNow(folderThumbnailWarmupSeq.get()));
         this.tableRefreshDebounce.setOnFinished(_ -> {
             tableRefreshQueued.set(false);
             if (fileTable == null || isIconMode(viewMode)) {
@@ -1091,9 +1113,11 @@ private void initializeWithContext() {
         LogSupport.enter(LOG, "onPreviewToggle");
         boolean show = previewToggle != null && previewToggle.isSelected();
         if (show) {
-            setSidePaneMasterVisible(true);
+            setMenuSidePaneSelection(false, true);
+        } else {
+            boolean keepDetails = detailsBox != null && detailsBox.isVisible();
+            setMenuSidePaneSelection(keepDetails, false);
         }
-        setPreviewPaneVisible(show);
         updateTopChromeState();
     }
     @FXML
@@ -1306,11 +1330,42 @@ private void initializeWithContext() {
         LogSupport.enter(LOG, "onDetailsPaneRadioToggle");
         boolean show = detailsPaneMenuItem != null && detailsPaneMenuItem.isSelected();
         if (show) {
-            setSidePaneMasterVisible(true);
+            setMenuSidePaneSelection(true, false);
+        } else {
+            boolean keepPreview = previewBox != null && previewBox.isVisible();
+            setMenuSidePaneSelection(false, keepPreview);
         }
-        setDetailsPaneVisible(show);
         updateTopChromeState();
     }
+
+    private void setMenuSidePaneSelection(boolean showDetails, boolean showPreview) {
+        LogSupport.enter(LOG, "setMenuSidePaneSelection");
+        if (detailsBox != null) {
+            detailsBox.setVisible(showDetails);
+            detailsBox.setManaged(showDetails);
+        }
+        if (previewBox != null) {
+            previewBox.setVisible(showPreview);
+            previewBox.setManaged(showPreview);
+        }
+        if (detailsPaneMenuItem != null) {
+            detailsPaneMenuItem.setSelected(showDetails);
+        }
+        if (previewPaneMenuItem != null) {
+            previewPaneMenuItem.setSelected(showPreview);
+        }
+        sidePaneMasterVisible = showDetails || showPreview;
+        if (detailsToggle != null) {
+            detailsToggle.setSelected(sidePaneMasterVisible && !homeActive);
+        }
+        updateSidePaneVisibility();
+        if (sidePaneMasterVisible && fileTable != null) {
+            FileItem fi = fileTable.getSelectionModel().getSelectedItem();
+            updateSelectionDetails(fi != null ? fi.path() : null);
+        }
+        syncPaneTogglesFromUiState();
+    }
+
     @FXML
 /**
  * onPreviewPaneRadioToggle.
@@ -1321,9 +1376,30 @@ private void initializeWithContext() {
         LogSupport.enter(LOG, "onPreviewPaneRadioToggle");
         boolean show = previewPaneMenuItem != null && previewPaneMenuItem.isSelected();
         if (show) {
-            setSidePaneMasterVisible(true);
+            setMenuSidePaneSelection(false, true);
+        } else {
+            boolean keepDetails = detailsBox != null && detailsBox.isVisible();
+            setMenuSidePaneSelection(keepDetails, false);
         }
-        setPreviewPaneVisible(show);
+        updateTopChromeState();
+    }
+    @FXML
+    private void onDetailsPaneRowAction(ActionEvent e) {
+        LogSupport.enter(LOG, "onDetailsPaneRowAction");
+        if (detailsPaneMenuItem == null) {
+            return;
+        }
+        detailsPaneMenuItem.setSelected(!detailsPaneMenuItem.isSelected());
+        onDetailsPaneRadioToggle(e);
+    }
+    @FXML
+    private void onPreviewPaneRowAction(ActionEvent e) {
+        LogSupport.enter(LOG, "onPreviewPaneRowAction");
+        if (previewPaneMenuItem == null) {
+            return;
+        }
+        previewPaneMenuItem.setSelected(!previewPaneMenuItem.isSelected());
+        onPreviewPaneRadioToggle(e);
     }
     @FXML
 /**
@@ -2308,10 +2384,10 @@ private void configureTable() {
                 "fileexplorer.ui.table.prefWidth", -1);
         // Stretch columns to the end of the container (last column flexes).
         fileTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-        // FIX: TableView sorting does not work when bound directly to a FilteredList.
-        // Use a SortedList wrapper and bind its comparator to the TableView.
-        sortedTableItems.comparatorProperty().bind(fileTable.comparatorProperty());
+        // Phase 4L.1: keep a SortedList wrapper, but drive it with a FileItem-aware sort policy
+        // so Details header sorting can use real file semantics (numeric size, actual mtime, etc.).
         fileTable.setItems(sortedTableItems);
+        configureDetailsSortPolicy();
         fileTable.setEditable(true);
         fileTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         // Step 7: delegate TableView wiring
@@ -2420,14 +2496,41 @@ colType.setCellValueFactory(param -> {
         if (fileTable != null && !fileTable.getStyleClass().contains("explorer-details-table")) {
             fileTable.getStyleClass().add("explorer-details-table");
         }
-        if (fileTable != null) {
-            fileTable.setFixedCellSize(Math.max(fileTable.getFixedCellSize(), 34.0));
+        if (colName != null && !colName.getStyleClass().contains("details-col-name")) {
+            colName.getStyleClass().add("details-col-name");
         }
+        if (colType != null && !colType.getStyleClass().contains("details-col-type")) {
+            colType.getStyleClass().add("details-col-type");
+        }
+        if (colSize != null && !colSize.getStyleClass().contains("details-col-size")) {
+            colSize.getStyleClass().add("details-col-size");
+        }
+        if (colModified != null && !colModified.getStyleClass().contains("details-col-modified")) {
+            colModified.getStyleClass().add("details-col-modified");
+        }
+        if (colName != null && colName.getPrefWidth() < 336.0) {
+            colName.setPrefWidth(336.0);
+        }
+        if (colType != null && colType.getPrefWidth() < 176.0) {
+            colType.setPrefWidth(176.0);
+        }
+        if (colSize != null && colSize.getPrefWidth() < 108.0) {
+            colSize.setPrefWidth(108.0);
+        }
+        if (colModified != null && colModified.getPrefWidth() < 184.0) {
+            colModified.setPrefWidth(184.0);
+        }
+        if (fileTable != null) {
+            fileTable.setFixedCellSize(32.0);
+        }
+        syncDetailsSortHeaderState();
         fileTable.getSelectionModel().selectedItemProperty().addListener((_, oldSel, newSel) -> {
             Path p = newSel != null ? newSel.path() : null;
             updateSelectionDetails(p);
             updateSelectionCommandState();
             refreshVisibleIconTileSelectionState();
+            refreshVisibleDetailsSelectionPresentation();
+            refreshExplorerMetadataPopupForSelection(newSel);
             if (p != null) {
                 requestMetadataForFocus(p);
             }
@@ -2439,6 +2542,7 @@ colType.setCellValueFactory(param -> {
         });
         fileTable.getSelectionModel().getSelectedItems().addListener((ListChangeListener<FileItem>) change -> {
             refreshVisibleIconTileSelectionState();
+            refreshVisibleDetailsSelectionPresentation();
         });
 
         // Phase 4B.2 (lowest CPU): metadata for Size/Modified is lazy. Without this,
@@ -2482,8 +2586,176 @@ colType.setCellValueFactory(param -> {
         // Explorer-like header context menu (column visibility + sizing + Choose Details)
         ensureOptionalDetailsColumns();
         installHeaderDetailsMenu();
+        installDetailsHeaderInteractionParity();
         configureFileOperationsUi();
 }
+
+    private void configureDetailsSortPolicy() {
+        if (fileTable == null) {
+            return;
+        }
+        fileTable.setSortPolicy(table -> {
+            sortedTableItems.setComparator(buildExplorerTableComparator(table));
+            syncDetailsSortHeaderState();
+            return true;
+        });
+        fileTable.getSortOrder().addListener((ListChangeListener<TableColumn<FileItem, ?>>) change -> syncDetailsSortHeaderState());
+        for (TableColumn<FileItem, ?> column : List.of(colName, colType, colSize, colModified)) {
+            if (column != null) {
+                column.sortTypeProperty().addListener((obs, oldType, newType) -> syncDetailsSortHeaderState());
+            }
+        }
+        Platform.runLater(this::syncDetailsSortHeaderState);
+    }
+
+    private Comparator<FileItem> buildExplorerTableComparator(TableView<FileItem> table) {
+        if (table == null || table.getSortOrder().isEmpty()) {
+            return null;
+        }
+
+        Comparator<FileItem> comparator = Comparator.comparingInt(this::detailsDirectoryBucket);
+        for (TableColumn<FileItem, ?> column : table.getSortOrder()) {
+            Comparator<FileItem> nextComparator = comparatorForDetailsColumn(column);
+            if (column.getSortType() == TableColumn.SortType.DESCENDING) {
+                nextComparator = nextComparator.reversed();
+            }
+            comparator = comparator.thenComparing(nextComparator);
+        }
+
+        return comparator
+                .thenComparing(this::detailsSortNameKey, String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(item -> item != null && item.path() != null ? item.path().toAbsolutePath().toString() : "",
+                        String.CASE_INSENSITIVE_ORDER);
+    }
+
+    private Comparator<FileItem> comparatorForDetailsColumn(TableColumn<FileItem, ?> column) {
+        if (column == colName) {
+            return Comparator.comparing(this::detailsSortNameKey, String.CASE_INSENSITIVE_ORDER);
+        }
+        if (column == colType) {
+            return Comparator.comparing(this::detailsSortTypeKey, String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(this::detailsSortNameKey, String.CASE_INSENSITIVE_ORDER);
+        }
+        if (column == colSize) {
+            return Comparator.comparingLong(this::detailsSortSizeKey)
+                    .thenComparing(this::detailsSortNameKey, String.CASE_INSENSITIVE_ORDER);
+        }
+        if (column == colModified) {
+            return Comparator.comparingLong(this::detailsSortModifiedKey)
+                    .thenComparing(this::detailsSortNameKey, String.CASE_INSENSITIVE_ORDER);
+        }
+        return Comparator.comparing(this::detailsSortNameKey, String.CASE_INSENSITIVE_ORDER);
+    }
+
+    private void syncDetailsSortHeaderState() {
+        syncDetailsVisibleColumnRoleClasses();
+        updateDetailsSortHeaderClasses(colName);
+        updateDetailsSortHeaderClasses(colType);
+        updateDetailsSortHeaderClasses(colSize);
+        updateDetailsSortHeaderClasses(colModified);
+    }
+
+    private void updateDetailsSortHeaderClasses(TableColumn<FileItem, ?> column) {
+        if (column == null) {
+            return;
+        }
+        ObservableList<String> styleClasses = column.getStyleClass();
+        styleClasses.removeAll("details-sorted", "details-sorted-asc", "details-sorted-desc", "details-primary-sort",
+                "details-secondary-sort");
+
+        int sortIndex = fileTable != null ? fileTable.getSortOrder().indexOf(column) : -1;
+        if (sortIndex < 0) {
+            return;
+        }
+        styleClasses.add("details-sorted");
+        styleClasses.add(column.getSortType() == TableColumn.SortType.DESCENDING ? "details-sorted-desc" : "details-sorted-asc");
+        styleClasses.add(sortIndex == 0 ? "details-primary-sort" : "details-secondary-sort");
+    }
+
+    private void syncDetailsVisibleColumnRoleClasses() {
+        if (fileTable == null) {
+            return;
+        }
+        java.util.List<TableColumn<FileItem, ?>> detailColumns = new java.util.ArrayList<>();
+        for (TableColumn<FileItem, ?> column : fileTable.getColumns()) {
+            if (detailsColKey(column) != null && column.isVisible()) {
+                detailColumns.add(column);
+            }
+        }
+        for (TableColumn<FileItem, ?> column : detailColumns) {
+            ObservableList<String> styleClasses = column.getStyleClass();
+            styleClasses.removeAll("details-first-visible-column", "details-last-visible-column", "details-only-visible-column");
+        }
+        if (detailColumns.isEmpty()) {
+            return;
+        }
+        detailColumns.get(0).getStyleClass().add("details-first-visible-column");
+        detailColumns.get(detailColumns.size() - 1).getStyleClass().add("details-last-visible-column");
+        if (detailColumns.size() == 1) {
+            detailColumns.get(0).getStyleClass().add("details-only-visible-column");
+        }
+    }
+
+    private int detailsDirectoryBucket(FileItem item) {
+        Path path = item != null ? item.path() : null;
+        return isDirectoryForDetailsSort(path) ? 0 : 1;
+    }
+
+    private boolean isDirectoryForDetailsSort(Path path) {
+        if (path == null) {
+            return false;
+        }
+        try {
+            return Files.isDirectory(path);
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    private String detailsSortNameKey(FileItem item) {
+        Path path = item != null ? item.path() : null;
+        String name = path != null ? displayNameForTable(path) : null;
+        if (name == null || name.isBlank()) {
+            name = item != null ? item.name() : "";
+        }
+        return name == null ? "" : name.toLowerCase(Locale.ROOT);
+    }
+
+    private String detailsSortTypeKey(FileItem item) {
+        String type = item != null ? item.type() : "";
+        if ((type == null || type.isBlank()) && item != null && item.path() != null) {
+            try {
+                type = fileMetadataService.detectFileType(item.path());
+            } catch (Exception ignored) {
+                type = "";
+            }
+        }
+        return type == null ? "" : type.toLowerCase(Locale.ROOT);
+    }
+
+    private long detailsSortSizeKey(FileItem item) {
+        Path path = item != null ? item.path() : null;
+        if (path == null || isDirectoryForDetailsSort(path)) {
+            return -1L;
+        }
+        try {
+            return Files.size(path);
+        } catch (Exception ex) {
+            return -1L;
+        }
+    }
+
+    private long detailsSortModifiedKey(FileItem item) {
+        Path path = item != null ? item.path() : null;
+        if (path == null) {
+            return Long.MIN_VALUE;
+        }
+        try {
+            return Files.getLastModifiedTime(path).toMillis();
+        } catch (Exception ex) {
+            return Long.MIN_VALUE;
+        }
+    }
 
 
     private TableRow<FileItem> createExplorerDetailsTableRow() {
@@ -2534,7 +2806,6 @@ colType.setCellValueFactory(param -> {
             updateDetailsRowHoverState(row);
         });
         row.selectedProperty().addListener((obs, oldV, newV) -> updateDetailsRowHoverState(row));
-        row.hoverProperty().addListener((obs, oldV, newV) -> updateDetailsRowHoverState(row));
         row.sceneProperty().addListener((obs, oldScene, newScene) -> updateDetailsRowHoverState(row));
         row.addEventFilter(MouseEvent.MOUSE_PRESSED, ev -> {
             if (ev.getButton() != MouseButton.SECONDARY || row.isEmpty()) {
@@ -2573,7 +2844,7 @@ colType.setCellValueFactory(param -> {
         }
         stableDetailsHoverTrackingInstalled = true;
 
-        detailsHoverRowIndex.addListener((obs, oldValue, newValue) -> syncVisibleDetailsHoverRows());
+        detailsHoverRowIndex.addListener((obs, oldValue, newValue) -> updateDetailsHoverRowsForIndexChange(oldValue == null ? -1 : oldValue.intValue(), newValue == null ? -1 : newValue.intValue()));
         fileTable.addEventFilter(MouseEvent.MOUSE_MOVED, this::handleDetailsTableMouseMoved);
         fileTable.addEventFilter(MouseEvent.MOUSE_DRAGGED, this::handleDetailsTableMouseMoved);
         fileTable.addEventFilter(MouseEvent.MOUSE_EXITED, event -> {
@@ -2636,6 +2907,33 @@ colType.setCellValueFactory(param -> {
         armExplorerMetadataPopupForDetailsRow(row.getIndex(), () -> buildExplorerItemTooltipText(row.getItem()), event.getScreenX(), event.getScreenY());
     }
 
+    private void handleDetailsRowTooltipEntered(TableRow<FileItem> row, MouseEvent event) {
+        if (row == null || event == null || row.isEmpty() || row.getItem() == null || viewMode != ViewMode.DETAILS) {
+            return;
+        }
+        setDetailsHoveredRow(row);
+        armExplorerMetadataPopupForDetailsRow(row.getIndex(), () -> buildExplorerItemTooltipText(row.getItem()), event.getScreenX(), event.getScreenY());
+    }
+
+    private void handleDetailsRowTooltipMoved(TableRow<FileItem> row, MouseEvent event) {
+        if (row == null || event == null || row.isEmpty() || row.getItem() == null || viewMode != ViewMode.DETAILS) {
+            return;
+        }
+        setDetailsHoveredRow(row);
+        armExplorerMetadataPopupForDetailsRow(row.getIndex(), () -> buildExplorerItemTooltipText(row.getItem()), event.getScreenX(), event.getScreenY());
+    }
+
+    private void handleDetailsRowTooltipExited(TableRow<FileItem> row, MouseEvent event) {
+        if (row == null || row.isEmpty() || row.getItem() == null) {
+            hideExplorerMetadataPopup();
+            return;
+        }
+        if (detailsHoverRowIndex.get() == row.getIndex()) {
+            clearDetailsHoveredRow();
+        }
+        hideExplorerMetadataPopup();
+    }
+
     @SuppressWarnings("unchecked")
     private TableRow<FileItem> findDetailsTableRowAt(double sceneX, double sceneY) {
         if (fileTable == null || fileTable.getScene() == null) {
@@ -2671,6 +2969,25 @@ colType.setCellValueFactory(param -> {
         return null;
     }
 
+    private void updateDetailsHoverRowsForIndexChange(int oldIndex, int newIndex) {
+        if (oldIndex == newIndex) {
+            updateDetailsHoverRowStateByIndex(newIndex);
+            return;
+        }
+        updateDetailsHoverRowStateByIndex(oldIndex);
+        updateDetailsHoverRowStateByIndex(newIndex);
+    }
+
+    private void updateDetailsHoverRowStateByIndex(int rowIndex) {
+        if (rowIndex < 0) {
+            return;
+        }
+        TableRow<FileItem> row = findVisibleDetailsRowByIndex(rowIndex);
+        if (row != null) {
+            updateDetailsRowHoverState(row);
+        }
+    }
+
     private void syncVisibleDetailsHoverRows() {
         if (fileTable == null) {
             return;
@@ -2684,8 +3001,18 @@ colType.setCellValueFactory(param -> {
         }
     }
 
+    private void refreshVisibleDetailsSelectionPresentation() {
+        if (viewMode != ViewMode.DETAILS || fileTable == null) {
+            return;
+        }
+        Platform.runLater(this::syncVisibleDetailsHoverRows);
+    }
+
     private void setDetailsHoveredRow(TableRow<FileItem> row) {
         int newIndex = (row == null || row.isEmpty() || row.getItem() == null) ? -1 : row.getIndex();
+        if (newIndex >= 0 && detailsHoverRowIndex.get() == newIndex && activeDetailsHoverRow.get() == row) {
+            return;
+        }
         detailsHoverRowIndex.set(newIndex);
         activeDetailsHoverRow.set(newIndex >= 0 ? row : null);
         if (newIndex < 0) {
@@ -2715,7 +3042,7 @@ colType.setCellValueFactory(param -> {
         }
         explorerMetadataPopup = new Popup();
         explorerMetadataPopup.setAutoFix(true);
-        explorerMetadataPopup.setAutoHide(true);
+        explorerMetadataPopup.setAutoHide(false);
         explorerMetadataPopup.setHideOnEscape(true);
         explorerMetadataPopup.setConsumeAutoHidingEvents(false);
 
@@ -2724,11 +3051,13 @@ colType.setCellValueFactory(param -> {
         explorerMetadataPopupLabel.setWrapText(true);
         explorerMetadataPopupLabel.setMaxWidth(440.0);
         explorerMetadataPopupLabel.setTextFill(Color.WHITE);
+        explorerMetadataPopupLabel.setMouseTransparent(true);
         explorerMetadataPopupLabel.setStyle("-fx-text-fill: white; -fx-font-family: 'Segoe UI Variable Text'; -fx-font-size: 13px; -fx-font-weight: normal; -fx-line-spacing: 2px;");
 
         explorerMetadataPopupRoot = new StackPane(explorerMetadataPopupLabel);
         explorerMetadataPopupRoot.getStyleClass().add("explorer-rich-tooltip-popup");
         explorerMetadataPopupRoot.setPickOnBounds(false);
+        explorerMetadataPopupRoot.setMouseTransparent(true);
         explorerMetadataPopupRoot.setPadding(new Insets(8, 12, 8, 12));
         explorerMetadataPopupRoot.setMaxWidth(460.0);
         explorerMetadataPopupRoot.setStyle("-fx-background-color: #101010; -fx-background-radius: 8; -fx-border-color: #2f2f2f; -fx-border-width: 1; -fx-border-radius: 8;");
@@ -2741,6 +3070,7 @@ colType.setCellValueFactory(param -> {
         if (anchor == null || textSupplier == null) {
             return;
         }
+        boolean sameAnchorArmed = explorerMetadataPopupAnchor == anchor && explorerMetadataPopupDetailsRowIndex < 0;
         explorerMetadataPopupAnchor = anchor;
         explorerMetadataPopupDetailsRowIndex = -1;
         explorerMetadataPopupTextSupplier = textSupplier;
@@ -2752,6 +3082,9 @@ colType.setCellValueFactory(param -> {
             refreshExplorerMetadataPopupNow();
             return;
         }
+        if (sameAnchorArmed && explorerMetadataPopupDelay.getStatus() == Animation.Status.RUNNING) {
+            return;
+        }
         explorerMetadataPopupDelay.stop();
         explorerMetadataPopupDelay.setOnFinished(_ev -> refreshExplorerMetadataPopupNow());
         explorerMetadataPopupDelay.playFromStart();
@@ -2761,6 +3094,7 @@ colType.setCellValueFactory(param -> {
         if (fileTable == null || textSupplier == null || rowIndex < 0) {
             return;
         }
+        boolean sameRowArmed = explorerMetadataPopupAnchor == fileTable && explorerMetadataPopupDetailsRowIndex == rowIndex;
         explorerMetadataPopupAnchor = fileTable;
         explorerMetadataPopupDetailsRowIndex = rowIndex;
         explorerMetadataPopupTextSupplier = textSupplier;
@@ -2770,6 +3104,9 @@ colType.setCellValueFactory(param -> {
         Popup popup = ensureExplorerMetadataPopup();
         if (popup.isShowing()) {
             refreshExplorerMetadataPopupNow();
+            return;
+        }
+        if (sameRowArmed && explorerMetadataPopupDelay.getStatus() == Animation.Status.RUNNING) {
             return;
         }
         explorerMetadataPopupDelay.stop();
@@ -2803,6 +3140,21 @@ colType.setCellValueFactory(param -> {
         }
     }
 
+    private void refreshExplorerMetadataPopupForSelection(FileItem item) {
+        if (item == null || explorerMetadataPopup == null || !explorerMetadataPopup.isShowing()) {
+            return;
+        }
+        explorerMetadataPopupTextSupplier = () -> buildExplorerItemTooltipText(item);
+        if (viewMode == ViewMode.DETAILS && fileTable != null && fileTable.getSelectionModel() != null) {
+            explorerMetadataPopupAnchor = fileTable;
+            explorerMetadataPopupDetailsRowIndex = fileTable.getSelectionModel().getSelectedIndex();
+        } else {
+            explorerMetadataPopupDetailsRowIndex = -1;
+        }
+        refreshExplorerMetadataPopupNow();
+    }
+
+
     private void refreshExplorerMetadataPopupNow() {
         Popup popup = ensureExplorerMetadataPopup();
         if (explorerMetadataPopupAnchor == null || explorerMetadataPopupTextSupplier == null) {
@@ -2827,19 +3179,35 @@ colType.setCellValueFactory(param -> {
             hideExplorerMetadataPopup();
             return;
         }
+        if (explorerMetadataPopupDetailsRowIndex >= 0 && detailsHoverRowIndex.get() != explorerMetadataPopupDetailsRowIndex) {
+            hideExplorerMetadataPopup();
+            return;
+        }
         String text = explorerMetadataPopupTextSupplier.get();
         if (text == null || text.isBlank()) {
             hideExplorerMetadataPopup();
             return;
         }
 
-        explorerMetadataPopupLabel.setText(text);
-        explorerMetadataPopupLabel.applyCss();
-        explorerMetadataPopupRoot.applyCss();
-        explorerMetadataPopupRoot.autosize();
+        boolean popupTextChanged = !Objects.equals(explorerMetadataPopupLastText, text)
+                || !Objects.equals(explorerMetadataPopupLabel.getText(), text);
+        if (popupTextChanged || !popup.isShowing()) {
+            explorerMetadataPopupLabel.setText(text);
+            explorerMetadataPopupLastText = text;
+            explorerMetadataPopupLabel.applyCss();
+            explorerMetadataPopupRoot.applyCss();
+            explorerMetadataPopupRoot.autosize();
+        }
 
-        double anchorX = Double.isNaN(explorerMetadataPopupScreenX) ? screenBounds.getMinX() + 16.0 : explorerMetadataPopupScreenX + 16.0;
-        double anchorY = Double.isNaN(explorerMetadataPopupScreenY) ? screenBounds.getMinY() + 22.0 : explorerMetadataPopupScreenY + 22.0;
+        double anchorX;
+        double anchorY;
+        if (explorerMetadataPopupDetailsRowIndex >= 0) {
+            anchorX = screenBounds.getMinX() + 20.0;
+            anchorY = screenBounds.getMaxY() + 6.0;
+        } else {
+            anchorX = Double.isNaN(explorerMetadataPopupScreenX) ? screenBounds.getMinX() + 16.0 : explorerMetadataPopupScreenX + 18.0;
+            anchorY = Double.isNaN(explorerMetadataPopupScreenY) ? screenBounds.getMinY() + 24.0 : explorerMetadataPopupScreenY + 22.0;
+        }
 
         if (!popup.isShowing()) {
             popup.show(owner, anchorX, anchorY);
@@ -2859,6 +3227,7 @@ colType.setCellValueFactory(param -> {
         explorerMetadataPopupTextSupplier = null;
         explorerMetadataPopupScreenX = Double.NaN;
         explorerMetadataPopupScreenY = Double.NaN;
+        explorerMetadataPopupLastText = "";
         if (explorerMetadataPopupLabel != null) {
             explorerMetadataPopupLabel.setText("");
         }
@@ -2887,7 +3256,40 @@ colType.setCellValueFactory(param -> {
         });
     }
 
-    private String buildExplorerItemTooltipText(FileItem item) {
+    private void clearExplorerMetadataTextCache() {
+        explorerMetadataTextCache.clear();
+    }
+
+    private void invalidateExplorerMetadataTextCache(Path path) {
+        if (path == null) {
+            return;
+        }
+        explorerMetadataTextCache.remove(path);
+    }
+
+    private String cachedExplorerMetadataText(Path path, java.util.function.Supplier<String> uncachedBuilder) {
+        if (uncachedBuilder == null) {
+            return "";
+        }
+        if (path == null) {
+            String uncached = uncachedBuilder.get();
+            return uncached == null ? "" : uncached;
+        }
+        String cached = explorerMetadataTextCache.get(path);
+        if (cached != null && !cached.isBlank()) {
+            return cached;
+        }
+        String built = uncachedBuilder.get();
+        if (built == null) {
+            built = "";
+        }
+        if (!built.isBlank()) {
+            explorerMetadataTextCache.put(path, built);
+        }
+        return built;
+    }
+
+    private String buildExplorerItemTooltipTextUncached(FileItem item) {
         if (item == null) {
             return "";
         }
@@ -2900,7 +3302,7 @@ colType.setCellValueFactory(param -> {
                 + (path != null ? "\nPath: " + path : "");
     }
 
-    private String buildExplorerItemTooltipText(Path path) {
+    private String buildExplorerItemTooltipTextUncached(Path path) {
         if (path == null) {
             return "";
         }
@@ -2909,6 +3311,47 @@ colType.setCellValueFactory(param -> {
         String size = firstNonBlank(sizeForTable(path), "—");
         String modified = firstNonBlank(modifiedForTable(path), "—");
         return name + "\nType: " + type + "\nSize: " + size + "\nDate modified: " + modified + "\nPath: " + path;
+    }
+
+    private String detailsRowStyleForState(int rowIndex, boolean darkTheme, boolean focusedWindow, boolean selected, boolean hovered) {
+        String key = (darkTheme ? "D" : "L")
+                + (focusedWindow ? "F" : "B")
+                + (selected ? "S" : "N")
+                + (hovered ? "H" : "N")
+                + (((rowIndex & 1) == 1) ? "O" : "E");
+        return detailsRowStyleTemplateCache.computeIfAbsent(key, _k -> {
+            String innerFill = selected
+                    ? detailsSelectionFill(darkTheme, focusedWindow, hovered)
+                    : (hovered ? detailsHoverFill(darkTheme) : detailsBaseFillForRow(rowIndex, darkTheme));
+            String border = selected || hovered
+                    ? detailsSelectionBorder(darkTheme, focusedWindow, selected)
+                    : "transparent";
+            String focusRing = detailsSelectionFocusRing(darkTheme, focusedWindow, selected);
+            String focusRingWidth = (selected && focusedWindow) ? "1" : "0";
+            return String.join(" ",
+                    "-fx-background-insets: 0, 2 8 2 8;",
+                    "-fx-background-radius: 0, 8;",
+                    "-fx-border-insets: 0, 2 8 2 8, 1 7 1 7;",
+                    "-fx-border-radius: 0, 8, 9;",
+                    "-fx-border-width: 0, 1, " + focusRingWidth + ";",
+                    "-fx-background-color: transparent, " + innerFill + ";",
+                    "-fx-border-color: transparent, " + border + ", " + focusRing + ";");
+        });
+    }
+
+    private String buildExplorerItemTooltipText(FileItem item) {
+        if (item == null) {
+            return "";
+        }
+        Path path = item.path();
+        return cachedExplorerMetadataText(path, () -> buildExplorerItemTooltipTextUncached(item));
+    }
+
+    private String buildExplorerItemTooltipText(Path path) {
+        if (path == null) {
+            return "";
+        }
+        return cachedExplorerMetadataText(path, () -> buildExplorerItemTooltipTextUncached(path));
     }
 
     private String firstNonBlank(String... values) {
@@ -2959,34 +3402,29 @@ colType.setCellValueFactory(param -> {
         if (darkTheme) {
             return odd ? "rgba(20,24,31,0.995)" : "rgba(18,22,29,0.995)";
         }
-        return odd ? "#fbfbfb" : "#ffffff";
+        return odd ? "#fbfbfb" : "#191919";
     }
 
     private String detailsHoverFill(boolean darkTheme) {
-        return darkTheme ? "rgba(255,255,255,0.050)" : "rgba(0,0,0,0.042)";
+        return "rgba(80,80,80,0.50)";
     }
 
     private String detailsSelectionFill(boolean darkTheme, boolean focusedWindow, boolean hovered) {
-        if (focusedWindow) {
-            if (darkTheme) {
-                return hovered ? "rgba(113,162,255,0.305)" : "rgba(113,162,255,0.260)";
-            }
-            return hovered ? "rgba(33,99,214,0.188)" : "rgba(33,99,214,0.158)";
-        }
-        if (darkTheme) {
-            return "rgba(255,255,255,0.088)";
-        }
-        return "rgba(33,99,214,0.102)";
+        return focusedWindow ? "rgba(80,80,80,0.50)" : "rgba(80,80,80,0.38)";
     }
 
     private String detailsSelectionBorder(boolean darkTheme, boolean focusedWindow, boolean selected) {
         if (!selected) {
-            return darkTheme ? "rgba(255,255,255,0.035)" : "rgba(0,0,0,0.045)";
+            return "#505050";
         }
-        if (focusedWindow) {
-            return darkTheme ? "rgba(113,162,255,0.360)" : "rgba(33,99,214,0.205)";
+        return focusedWindow ? "#c3c3c3" : "#8e8e8e";
+    }
+
+    private String detailsSelectionFocusRing(boolean darkTheme, boolean focusedWindow, boolean selected) {
+        if (!selected || !focusedWindow) {
+            return "transparent";
         }
-        return darkTheme ? "rgba(255,255,255,0.095)" : "rgba(33,99,214,0.135)";
+        return "rgba(195,195,195,0.22)";
     }
 
     private void updateDetailsRowHoverState(TableRow<FileItem> row) {
@@ -2998,28 +3436,22 @@ colType.setCellValueFactory(param -> {
                 && row.getIndex() >= 0
                 && row.getIndex() == detailsHoverRowIndex.get();
         row.pseudoClassStateChanged(PSEUDO_EXPLORER_HOVER, active);
+        Object cachedStyle = row.getProperties().get(PROP_DETAILS_ROW_STYLE_CACHE);
         if (row.isEmpty() || row.getItem() == null || row.getIndex() < 0 || viewMode != ViewMode.DETAILS) {
-            row.setStyle("");
+            if (!Objects.equals(cachedStyle, "")) {
+                row.setStyle("");
+                row.getProperties().put(PROP_DETAILS_ROW_STYLE_CACHE, "");
+            }
             return;
         }
         boolean darkTheme = themeService != null && themeService.isDarkPreferred();
         boolean selected = row.isSelected();
         boolean focusedWindow = isWindowFocusedForDetailsPaint();
-        String innerFill = selected
-                ? detailsSelectionFill(darkTheme, focusedWindow, active)
-                : (active ? detailsHoverFill(darkTheme) : detailsBaseFillForRow(row.getIndex(), darkTheme));
-        String border = selected || active
-                ? detailsSelectionBorder(darkTheme, focusedWindow, selected)
-                : "transparent";
-        String style = String.join(" ",
-                "-fx-background-insets: 0, 2 8 2 8;",
-                "-fx-background-radius: 0, 8;",
-                "-fx-border-insets: 2 8 2 8;",
-                "-fx-border-radius: 8;",
-                "-fx-border-width: 0, 1;",
-                "-fx-background-color: transparent, " + innerFill + ";",
-                "-fx-border-color: transparent, " + border + ";");
-        row.setStyle(style);
+        String style = detailsRowStyleForState(row.getIndex(), darkTheme, focusedWindow, selected, active);
+        if (!Objects.equals(cachedStyle, style)) {
+            row.setStyle(style);
+            row.getProperties().put(PROP_DETAILS_ROW_STYLE_CACHE, style);
+        }
         if (active) {
             FileItem fi = row.getItem();
             scheduleHoverPrefetch(fi != null ? fi.path() : null);
@@ -3246,9 +3678,19 @@ colType.setCellValueFactory(param -> {
     }
 
     private void refreshVisibleIconTileSelectionState() {
-        refreshVisibleIconTileSelectionState(iconFlow);
-        refreshVisibleIconTileSelectionState(virtualIconGridView);
-        refreshVisibleIconTileSelectionState(virtualIconListView);
+        if (viewMode == ViewMode.DETAILS) {
+            return;
+        }
+        switch (viewMode) {
+            case EXTRA_LARGE_ICONS, LARGE_ICONS, MEDIUM_ICONS, SMALL_ICONS, LIST, TILES, CONTENT -> {
+                refreshVisibleIconTileSelectionState(iconFlow);
+                refreshVisibleIconTileSelectionState(virtualIconGridView);
+                refreshVisibleIconTileSelectionState(virtualIconListView);
+            }
+            default -> {
+                // no-op
+            }
+        }
     }
 
     private void refreshVisibleIconTileSelectionState(Node node) {
@@ -3295,6 +3737,8 @@ colType.setCellValueFactory(param -> {
         if (column.getText() == null || column.getText().isBlank()) {
             column.setText(label);
         }
+        column.setMinWidth(detailMinWidthForKey(key));
+        column.setMaxWidth(detailMaxWidthForKey(key));
         lazyDetailColumns.putIfAbsent(key, column);
         applyRememberedDetailWidth(key, column);
     }
@@ -3305,13 +3749,16 @@ colType.setCellValueFactory(param -> {
             return;
         }
         column.getProperties().put("fileexplorer.detailColumn.persistenceWired", Boolean.TRUE);
-        column.visibleProperty().addListener((obs, ov, nv) -> persistDetailsColumnsState());
+        column.visibleProperty().addListener((obs, ov, nv) -> {
+            syncDetailsSortHeaderState();
+            armPersistDetailsColumnsState();
+        });
         column.widthProperty().addListener((obs, ov, nv) -> {
             String key = detailsColKey(column);
             if (key != null) {
                 detailColumnWidths.put(key, column.getWidth());
             }
-            persistDetailsColumnsState();
+            armPersistDetailsColumnsState();
         });
     }
 
@@ -3338,7 +3785,9 @@ colType.setCellValueFactory(param -> {
                 }
             });
         }
-        double prefWidth = Math.max(96.0, Math.min(320.0, spec.label().length() * 8.5 + 32.0));
+        double prefWidth = Math.max(detailMinWidthForKey(key), Math.min(detailMaxWidthForKey(key), spec.label().length() * 8.5 + 32.0));
+        column.setMinWidth(detailMinWidthForKey(key));
+        column.setMaxWidth(detailMaxWidthForKey(key));
         column.setPrefWidth(prefWidth);
         applyRememberedDetailWidth(key, column);
         wireDetailColumnPersistence(column);
@@ -3356,8 +3805,27 @@ colType.setCellValueFactory(param -> {
         Double remembered = detailColumnWidths.get(key);
         if (remembered == null) return;
         if (remembered >= 24.0 && remembered <= 2000.0) {
-            column.setPrefWidth(remembered);
+            double clamped = Math.max(detailMinWidthForKey(key), Math.min(detailMaxWidthForKey(key), remembered));
+            column.setPrefWidth(clamped);
         }
+    }
+
+    private double detailMinWidthForKey(String key) {
+        return switch (key == null ? "" : key) {
+            case "name" -> 240.0;
+            case "modified", "dateCreated", "dateAccessed" -> 156.0;
+            case "type", "authors", "tags", "title", "path", "folder", "fileLocation" -> 128.0;
+            case "size", "index" -> 84.0;
+            default -> 72.0;
+        };
+    }
+
+    private double detailMaxWidthForKey(String key) {
+        return switch (key == null ? "" : key) {
+            case "size", "index" -> 240.0;
+            case "modified", "dateCreated", "dateAccessed" -> 360.0;
+            default -> 1600.0;
+        };
     }
 
     private String detailsColKey(javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?> c) {
@@ -3477,6 +3945,7 @@ colType.setCellValueFactory(param -> {
         }
         fileTable.getColumns().setAll(nonDetails);
         fileTable.getColumns().addAll(orderedVisibleColumns);
+        syncDetailsSortHeaderState();
     }
 
     private void syncDetailOrderKeysFromTable() {
@@ -3540,10 +4009,19 @@ colType.setCellValueFactory(param -> {
             while (ch.next()) {
                 if (ch.wasAdded() || ch.wasRemoved() || ch.wasPermutated() || ch.wasReplaced()) {
                     syncDetailOrderKeysFromTable();
-                    persistDetailsColumnsState();
+                    syncDetailsSortHeaderState();
+                    armPersistDetailsColumnsState();
                 }
             }
         });
+    }
+
+    private void armPersistDetailsColumnsState() {
+        if (detailsColumnsPersistDebounce == null) {
+            persistDetailsColumnsState();
+            return;
+        }
+        detailsColumnsPersistDebounce.playFromStart();
     }
 
     private java.util.Map<String, javafx.scene.control.TableColumn<?, ?>> currentHeaderDetailsColumns() {
@@ -3558,10 +4036,210 @@ colType.setCellValueFactory(param -> {
         return out;
     }
 
+    private java.util.Map<String, javafx.scene.control.TableColumn<?, ?>> allHeaderDetailsColumns() {
+        java.util.LinkedHashMap<String, javafx.scene.control.TableColumn<?, ?>> out = new java.util.LinkedHashMap<>();
+        ensureChooseDetailsCatalog();
+        java.util.LinkedHashSet<String> orderedKeys = new java.util.LinkedHashSet<>();
+        orderedKeys.add("name");
+        orderedKeys.addAll(detailOrderedKeys);
+        for (com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec spec : chooseDetailSpecs) {
+            orderedKeys.add(spec.key());
+        }
+        for (String key : orderedKeys) {
+            javafx.scene.control.TableColumn<com.fileexplorer.model.FileItem, ?> column = ensureDetailColumnByKey(key);
+            if (column == null) {
+                continue;
+            }
+            out.put(DetailColumnCatalog.labelForKey(key), column);
+        }
+        return out;
+    }
+
+    private String detailKeyForHeaderLabel(String label) {
+        if (label == null || label.isBlank()) {
+            return null;
+        }
+        ensureChooseDetailsCatalog();
+        for (com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec spec : chooseDetailSpecs) {
+            if (label.equals(spec.label())) {
+                return spec.key();
+            }
+        }
+        return null;
+    }
+
+    private boolean isHeaderDetailColumnVisible(String label) {
+        String key = detailKeyForHeaderLabel(label);
+        if (key == null) {
+            return false;
+        }
+        if ("name".equals(key)) {
+            return true;
+        }
+        return currentVisibleDetailKeys().contains(key);
+    }
+
+    private void setHeaderDetailColumnVisible(String label, boolean visible) {
+        String key = detailKeyForHeaderLabel(label);
+        if (key == null || "name".equals(key) || fileTable == null) {
+            return;
+        }
+        ensureChooseDetailsCatalog();
+        syncDetailOrderKeysFromTable();
+
+        java.util.LinkedHashSet<String> visibleKeys = new java.util.LinkedHashSet<>(currentVisibleDetailKeys());
+        if (visible) {
+            visibleKeys.add(key);
+            if (!detailOrderedKeys.contains(key)) {
+                detailOrderedKeys.add(key);
+            }
+        } else {
+            visibleKeys.remove(key);
+        }
+        visibleKeys.add("name");
+        rebuildActiveDetailColumns(visibleKeys);
+        armPersistDetailsColumnsState();
+    }
+
+    private void restoreDefaultDetailsColumns() {
+        if (fileTable == null) {
+            return;
+        }
+        ensureChooseDetailsCatalog();
+        detailOrderedKeys.clear();
+        detailOrderedKeys.addAll(DetailColumnCatalog.defaultOrderedKeys());
+
+        detailColumnWidths.clear();
+        detailColumnWidths.put("name", 336.0);
+        detailColumnWidths.put("modified", 184.0);
+        detailColumnWidths.put("type", 176.0);
+        detailColumnWidths.put("size", 108.0);
+
+        rebuildActiveDetailColumns(new java.util.LinkedHashSet<>(java.util.List.of("name", "modified", "type", "size")));
+        applyRememberedDetailWidth("name", colName);
+        applyRememberedDetailWidth("modified", colModified);
+        applyRememberedDetailWidth("type", colType);
+        applyRememberedDetailWidth("size", colSize);
+        syncDetailsSortHeaderState();
+        armPersistDetailsColumnsState();
+    }
+
+    private void installDetailsHeaderInteractionParity() {
+        if (fileTable == null) return;
+        if (Boolean.TRUE.equals(fileTable.getProperties().get(PROP_DETAILS_HEADER_INTERACTION_INSTALLED))) {
+            return;
+        }
+        fileTable.getProperties().put(PROP_DETAILS_HEADER_INTERACTION_INSTALLED, Boolean.TRUE);
+
+        fileTable.addEventFilter(MouseEvent.MOUSE_MOVED, this::handleDetailsHeaderMouseMoved);
+        fileTable.addEventFilter(MouseEvent.MOUSE_EXITED_TARGET, evt -> clearDetailsHeaderResizeHotState());
+        fileTable.addEventFilter(MouseEvent.MOUSE_PRESSED, evt -> {
+            if (evt.getButton() == MouseButton.PRIMARY && evt.getClickCount() == 2) {
+                TableColumn<FileItem, ?> resizeColumn = findDetailsResizeColumn(evt);
+                if (resizeColumn != null) {
+                    com.fileexplorer.ui.table.ColumnAutoFitUtil.sizeToFit(fileTable, resizeColumn);
+                    armPersistDetailsColumnsState();
+                    evt.consume();
+                }
+            }
+        });
+    }
+
+    private void handleDetailsHeaderMouseMoved(MouseEvent evt) {
+        if (fileTable == null || evt == null) {
+            return;
+        }
+        Node headerNode = findDetailsHeaderNode(evt);
+        if (headerNode == null || !isNearHeaderResizeEdge(headerNode, evt)) {
+            clearDetailsHeaderResizeHotState();
+            return;
+        }
+        TableColumn<FileItem, ?> resizeColumn = resolveDetailsHeaderColumn(headerNode);
+        if (resizeColumn == null || detailsColKey(resizeColumn) == null) {
+            clearDetailsHeaderResizeHotState();
+            return;
+        }
+        Node previous = activeDetailsResizeHotHeader.get();
+        if (previous != headerNode) {
+            if (previous != null) {
+                setStyleClass(previous, "details-resize-hot", false);
+                previous.setCursor(Cursor.DEFAULT);
+            }
+            activeDetailsResizeHotHeader.set(headerNode);
+        }
+        setStyleClass(headerNode, "details-resize-hot", true);
+        headerNode.setCursor(Cursor.H_RESIZE);
+    }
+
+    private void clearDetailsHeaderResizeHotState() {
+        Node previous = activeDetailsResizeHotHeader.get();
+        activeDetailsResizeHotHeader.set(null);
+        if (previous != null) {
+            setStyleClass(previous, "details-resize-hot", false);
+            previous.setCursor(Cursor.DEFAULT);
+        }
+    }
+
+    private Node findDetailsHeaderNode(MouseEvent evt) {
+        Node target = (evt.getPickResult() != null) ? evt.getPickResult().getIntersectedNode() : null;
+        if (target == null) {
+            return null;
+        }
+        for (Node node = target; node != null; node = node.getParent()) {
+            String cn = node.getClass().getName();
+            if (cn.contains("NestedTableColumnHeader")) {
+                continue;
+            }
+            if (cn.contains("TableColumnHeader")) {
+                return node;
+            }
+            if (node instanceof TableView) {
+                break;
+            }
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private TableColumn<FileItem, ?> resolveDetailsHeaderColumn(Node headerNode) {
+        if (headerNode == null) {
+            return null;
+        }
+        try {
+            var method = headerNode.getClass().getMethod("getTableColumn");
+            Object value = method.invoke(headerNode);
+            return value instanceof TableColumn<?, ?> column ? (TableColumn<FileItem, ?>) column : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private boolean isNearHeaderResizeEdge(Node headerNode, MouseEvent evt) {
+        if (headerNode == null || evt == null) {
+            return false;
+        }
+        javafx.geometry.Point2D local = headerNode.screenToLocal(evt.getScreenX(), evt.getScreenY());
+        if (local == null) {
+            return false;
+        }
+        double width = headerNode.getLayoutBounds().getWidth();
+        return local.getX() >= Math.max(0.0, width - DETAILS_HEADER_RESIZE_EDGE_PX)
+                && local.getX() <= width + DETAILS_HEADER_RESIZE_EDGE_PX;
+    }
+
+    private TableColumn<FileItem, ?> findDetailsResizeColumn(MouseEvent evt) {
+        Node headerNode = findDetailsHeaderNode(evt);
+        if (headerNode == null || !isNearHeaderResizeEdge(headerNode, evt)) {
+            return null;
+        }
+        return resolveDetailsHeaderColumn(headerNode);
+    }
+
     private void installHeaderDetailsMenu() {
         if (fileTable == null) return;
         ensureChooseDetailsCatalog();
         restoreDetailsColumnsState();
+        syncDetailsSortHeaderState();
         wireDetailsColumnsPersistence();
         if (Boolean.TRUE.equals(fileTable.getProperties().get("fileexplorer.headerMenuInstalled"))) {
             return;
@@ -3569,7 +4247,10 @@ colType.setCellValueFactory(param -> {
         fileTable.getProperties().put("fileexplorer.headerMenuInstalled", Boolean.TRUE);
         TableHeaderContextMenuInstaller.install(
                 fileTable,
-                this::currentHeaderDetailsColumns,
+                this::allHeaderDetailsColumns,
+                this::isHeaderDetailColumnVisible,
+                this::setHeaderDetailColumnVisible,
+                this::restoreDefaultDetailsColumns,
                 this::showChooseDetailsDialog
         );
     }
@@ -3645,6 +4326,7 @@ colType.setCellValueFactory(param -> {
         for (var entry : lazyDetailColumns.entrySet()) {
             applyRememberedDetailWidth(entry.getKey(), entry.getValue());
         }
+        syncDetailsSortHeaderState();
         persistDetailsColumnsState();
     }
 
@@ -5379,6 +6061,8 @@ private void loadDirectoryIntoTableAsync(Path directory, boolean keepExistingUnt
     // If callers pass a directory without having updated currentDirectory first, the table would
     // appear empty because the loader runs against the previous directory.
     currentDirectory = directory;
+    clearExplorerMetadataTextCache();
+    hideExplorerMetadataPopup();
     updateNavigationButtonsState();
     // Phase 4B.1: reset huge-folder paging state for this navigation.
     resetHugeFolderPaging(directory);
@@ -5387,6 +6071,8 @@ private void loadDirectoryIntoTableAsync(Path directory, boolean keepExistingUnt
         com.fileexplorer.service.icon.AsyncThumbnailService.getInstance().cancelAll();
     } catch (Exception ignored) {
     }
+    folderThumbnailWarmupSeq.incrementAndGet();
+    folderThumbnailWarmupDebounce.stop();
     // Bump progressive request token (stale completions ignored).
     final long token = progressiveLoadSeq.incrementAndGet();
     // Phase 4C.1: per-folder cancellation scope for budgeted metadata work.
@@ -5540,6 +6226,7 @@ if (hugeMode.get()) {
                     // Keep table responsive; avoid heavy sort during stream.
                     fileTable.refresh();
                 }
+                scheduleCurrentFolderThumbnailWarmup();
             }),
             () -> javafx.application.Platform.runLater(() -> {
                 if (token != progressiveLoadSeq.get()) return;
@@ -5578,6 +6265,7 @@ if (hugeMode.get()) {
                     iconRebuildDebounce.stop();
                     rebuildIconTiles();
                 }
+                scheduleCurrentFolderThumbnailWarmup();
             }),
             err -> javafx.application.Platform.runLater(() -> {
                 if (token != progressiveLoadSeq.get()) return;
@@ -5870,6 +6558,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         FileItem updated = new FileItem(old.path(), old.name(), type, size, mod, old.status());
         tableItems.set(idx, updated);
         tableIndexByPath.put(p, idx);
+        invalidateExplorerMetadataTextCache(p);
     }
     private static boolean isBlank(String s) {
         return s == null || s.isBlank();
@@ -5944,7 +6633,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         final long stamp = ticket;
         previewImage.getProperties().put("previewStamp", stamp);
         AsyncThumbnailService.getInstance()
-                .request(captured, px)
+                .request(captured, px, AsyncThumbnailService.RequestPriority.USER_ACTION)
                 .thenAccept(img -> Platform.runLater(() -> {
                     if (img == null || previewImage == null) {
                         return;
@@ -5959,6 +6648,92 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                         previewText.setManaged(false);
                     }
                 }));
+    }
+
+    private void scheduleCurrentFolderThumbnailWarmup() {
+        if (SAFE_MODE) {
+            return;
+        }
+        if (!Boolean.parseBoolean(System.getProperty("fileexplorer.thumb.warmup.enabled", "true"))) {
+            return;
+        }
+        folderThumbnailWarmupSeq.incrementAndGet();
+        folderThumbnailWarmupDebounce.playFromStart();
+    }
+
+    private void warmCurrentFolderThumbnailsNow(long ticket) {
+        if (ticket != folderThumbnailWarmupSeq.get()) {
+            return;
+        }
+        if (SAFE_MODE) {
+            return;
+        }
+        if (!Boolean.parseBoolean(System.getProperty("fileexplorer.thumb.warmup.enabled", "true"))) {
+            return;
+        }
+        int maxItems = Integer.getInteger("fileexplorer.thumb.warmup.maxItems", isIconMode(viewMode) ? 96 : 48);
+        if (maxItems <= 0) {
+            return;
+        }
+        int warmPx = currentFolderWarmupThumbnailSizePx();
+        if (warmPx <= 0) {
+            return;
+        }
+
+        java.util.List<Path> candidates = new java.util.ArrayList<>(Math.min(maxItems, 128));
+        javafx.collections.ObservableList<FileItem> visibleItems = null;
+        try {
+            if (fileTable != null) {
+                visibleItems = fileTable.getItems();
+            }
+        } catch (Exception ignored) {
+        }
+        Iterable<FileItem> source = (visibleItems != null && !visibleItems.isEmpty()) ? visibleItems : tableItems;
+        if (source == null) {
+            return;
+        }
+
+        for (FileItem fi : source) {
+            if (fi == null) {
+                continue;
+            }
+            Path p = fi.path();
+            if (p == null) {
+                continue;
+            }
+            if ("Folder".equalsIgnoreCase(java.util.Objects.requireNonNullElse(fi.type(), ""))) {
+                continue;
+            }
+            if (!ImageSupport.isThumbCandidate(p)) {
+                continue;
+            }
+            candidates.add(p);
+            if (candidates.size() >= maxItems) {
+                break;
+            }
+        }
+
+        if (candidates.isEmpty()) {
+            return;
+        }
+        AsyncThumbnailService.getInstance().warm(candidates, warmPx);
+    }
+
+    private int currentFolderWarmupThumbnailSizePx() {
+        if (viewMode == null) {
+            return 18;
+        }
+        return switch (viewMode) {
+            case DETAILS -> 18;
+            case LIST -> 20;
+            case SMALL_ICONS -> 64;
+            case MEDIUM_ICONS -> 88;
+            case LARGE_ICONS -> 120;
+            case EXTRA_LARGE_ICONS -> 160;
+            case TILES -> 96;
+            case CONTENT -> 72;
+            default -> (int) Math.round(Math.max(18.0, Math.min(160.0, iconSizePx)));
+        };
     }
 
     private void configureSidePaneParity() {
@@ -7096,13 +7871,13 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                 }
             }
         }
-        // If the file is a supported image type, lazily upgrade to a thumbnail.
+        // If the file is a supported thumbnail candidate, lazily upgrade to a generated thumbnail.
         if (p != null && ImageSupport.isThumbCandidate(p)) {
             Path captured = p;
             final long thumbStamp = System.nanoTime();
             iv.getProperties().put("thumbStamp", thumbStamp);
             AsyncThumbnailService.getInstance()
-                    .request(captured, px)
+                    .request(captured, px, AsyncThumbnailService.RequestPriority.VISIBLE)
                     .thenAccept(img -> Platform.runLater(() -> {
                         if (img == null) return;
                         Object s = iv.getProperties().get("thumbStamp");
@@ -8413,6 +9188,42 @@ private void expandNavigationTreeLimited(TreeItem<Path> root, int maxDepth, int 
  * wireViewMenuHandlers.
  *
  */
+    private void wireMenuItemContentAction(CustomMenuItem item, Runnable action, boolean hideParentPopup) {
+        LogSupport.enter(LOG, "wireMenuItemContentAction");
+        if (item == null || action == null) {
+            return;
+        }
+        item.setOnAction(evt -> {
+            action.run();
+            if (hideParentPopup && item.getParentPopup() != null) {
+                item.getParentPopup().hide();
+            }
+        });
+        Node content = item.getContent();
+        if (content != null) {
+            content.setOnMouseReleased(evt -> {
+                if (!evt.isStillSincePress()) {
+                    return;
+                }
+                Object target = evt.getTarget();
+                if (target instanceof Node targetNode) {
+                    Node n = targetNode;
+                    while (n != null) {
+                        if (n instanceof RadioButton || n instanceof CheckBox) {
+                            return;
+                        }
+                        n = n.getParent();
+                    }
+                }
+                action.run();
+                if (hideParentPopup && item.getParentPopup() != null) {
+                    item.getParentPopup().hide();
+                }
+                evt.consume();
+            });
+        }
+    }
+
     private void wireViewMenuHandlers() {
         LogSupport.enter(LOG, "wireViewMenuHandlers");
         // Wire view mode radio items (mutually exclusive).
@@ -8424,6 +9235,7 @@ private void expandNavigationTreeLimited(TreeItem<Path> root, int maxDepth, int 
         wireViewModeRadio(viewDetails, ViewMode.DETAILS);
         wireViewModeRadio(viewTiles, ViewMode.TILES);
         wireViewModeRadio(viewContent, ViewMode.CONTENT);
+        wireMenuItemContentAction(viewContentItem, () -> setViewMode(ViewMode.CONTENT), true);
         // Wire pane radios (independent "dot toggles" by design).
         if (detailsPaneMenuItem != null) {
             detailsPaneMenuItem.setOnAction(this::onDetailsPaneRadioToggle);
@@ -8431,6 +9243,18 @@ private void expandNavigationTreeLimited(TreeItem<Path> root, int maxDepth, int 
         if (previewPaneMenuItem != null) {
             previewPaneMenuItem.setOnAction(this::onPreviewPaneRadioToggle);
         }
+        wireMenuItemContentAction(detailsPaneRowItem, () -> {
+            if (detailsPaneMenuItem != null) {
+                detailsPaneMenuItem.setSelected(!detailsPaneMenuItem.isSelected());
+                onDetailsPaneRadioToggle(new ActionEvent(detailsPaneRowItem, detailsPaneRowItem));
+            }
+        }, false);
+        wireMenuItemContentAction(previewPaneRowItem, () -> {
+            if (previewPaneMenuItem != null) {
+                previewPaneMenuItem.setSelected(!previewPaneMenuItem.isSelected());
+                onPreviewPaneRadioToggle(new ActionEvent(previewPaneRowItem, previewPaneRowItem));
+            }
+        }, false);
         // Wire "Show" submenu checkboxes.
         if (showNavigationPaneMenuItem != null) {
             showNavigationPaneMenuItem.setOnAction(this::onShowNavigationPaneToggle);

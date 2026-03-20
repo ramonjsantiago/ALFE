@@ -12,7 +12,7 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Centralized helpers for determining whether a file is an image we should attempt to thumbnail.
+ * Centralized helpers for determining whether a file is a thumbnail candidate we should attempt to render.
  */
 public final class ImageSupport {
 
@@ -23,11 +23,16 @@ public final class ImageSupport {
             "png", "jpg", "jpeg", "gif", "bmp"
     );
 
-    /** Extensions we will attempt to decode via ImageIO (TwelveMonkeys on classpath expands this). */
+    /** Extensions we will attempt to decode via ImageIO (TwelveMonkeys + JAI Image I/O Tools on the classpath expand this). */
     private static final Set<String> IMAGEIO_FALLBACK = Set.of(
             "tif", "tiff", "psd", "ico", "cur",
             "pbm", "pgm", "ppm", "pnm",
-            "jpe", "jfif"
+            "jpe", "jfif", "pcx"
+    );
+
+    /** Extensions handled via thumbnails4j document renderers. */
+    private static final Set<String> DOCUMENT_THUMBNAILS = Set.of(
+            "doc", "docx", "pdf", "pptx", "xls", "xlsx"
     );
 
     public static boolean isJavaFxNativeExtension(String ext) {
@@ -35,10 +40,15 @@ public final class ImageSupport {
         return JAVAFX_NATIVE.contains(ext.toLowerCase(Locale.ROOT));
     }
 
+    public static boolean isDocumentThumbnailExtension(String ext) {
+        if (ext == null) return false;
+        return DOCUMENT_THUMBNAILS.contains(ext.toLowerCase(Locale.ROOT));
+    }
+
     public static boolean isThumbCandidateExtension(String ext) {
         if (ext == null) return false;
         String e = ext.toLowerCase(Locale.ROOT);
-        return JAVAFX_NATIVE.contains(e) || IMAGEIO_FALLBACK.contains(e);
+        return JAVAFX_NATIVE.contains(e) || IMAGEIO_FALLBACK.contains(e) || DOCUMENT_THUMBNAILS.contains(e);
     }
 
     public static String extensionOf(Path p) {

@@ -1,0 +1,6 @@
+Phase 4N.1 — Preview Pane Activation and Show Menu Alignment
+
+Included:
+- View menu Preview pane now activates the preview pane directly.
+- Details pane and Preview pane selections are now mutually exclusive in the View menu and preview toggle flow.
+- Show submenu row uses a full aligned row graphic with a right chevron and matches the other View menu rows more closely.

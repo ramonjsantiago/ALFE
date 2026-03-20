@@ -193,14 +193,14 @@
 }
 
 .theme-light .choose-details-command-button {
-    -fx-background-color: linear-gradient(to bottom, #ffffff, #f4f4f4);
+    -fx-background-color: linear-gradient(to bottom, #191919, #f4f4f4);
     -fx-border-color: rgba(0,0,0,0.12);
     -fx-border-width: 1;
     -fx-text-fill: #1f1f1f;
 }
 
 .theme-light .choose-details-command-button:hover {
-    -fx-background-color: linear-gradient(to bottom, #ffffff, #ececec);
+    -fx-background-color: linear-gradient(to bottom, #191919, #ececec);
 }
 
 .theme-light .choose-details-command-button:disabled {
@@ -247,4 +247,79 @@
 .choose-details-button-bar .button {
     -fx-min-width: 76px;
     -fx-pref-width: 76px;
+}
+
+
+.choose-details-hint {
+    -fx-font-size: 11px;
+    -fx-padding: 0;
+    -fx-opacity: 0.82;
+}
+
+.theme-dark .choose-details-hint {
+    -fx-text-fill: rgba(255,255,255,0.78);
+}
+
+.theme-light .choose-details-hint {
+    -fx-text-fill: rgba(0,0,0,0.72);
+}
+
+.choose-details-command-buttons {
+    -fx-pref-width: 112px;
+}
+
+.choose-details-command-button {
+    -fx-min-width: 100px;
+    -fx-pref-width: 100px;
+}
+
+
+.choose-details-filter-row {
+    -fx-padding: 0 0 2 0;
+    -fx-alignment: center-left;
+}
+
+.choose-details-search-field {
+    -fx-font-size: 12px;
+    -fx-pref-width: 168px;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-padding: 5 10 5 10;
+}
+
+.theme-dark .choose-details-search-field {
+    -fx-background-color: #141414;
+    -fx-border-color: rgba(255,255,255,0.18);
+    -fx-text-fill: #f5f5f5;
+    -fx-prompt-text-fill: rgba(255,255,255,0.48);
+}
+
+.theme-light .choose-details-search-field {
+    -fx-background-color: white;
+    -fx-border-color: rgba(0,0,0,0.18);
+    -fx-text-fill: #1f1f1f;
+    -fx-prompt-text-fill: rgba(0,0,0,0.42);
+}
+
+.choose-details-filter-status {
+    -fx-font-size: 11px;
+    -fx-padding: 0 0 0 2;
+}
+
+.theme-dark .choose-details-filter-status {
+    -fx-text-fill: rgba(255,255,255,0.68);
+}
+
+.theme-light .choose-details-filter-status {
+    -fx-text-fill: rgba(0,0,0,0.62);
+}
+
+.choose-details-command-buttons {
+    -fx-pref-width: 112px;
+    -fx-min-width: 112px;
+}
+
+.choose-details-command-button {
+    -fx-min-width: 100px;
+    -fx-pref-width: 100px;
 }

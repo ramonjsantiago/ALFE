@@ -1,0 +1,11 @@
+HOTFIX69 / Phase 4L.13 — Outside-Click Dismissal For Header Menus
+
+Summary
+- Dismisses the Details header right-edge preset menus when the user clicks elsewhere in the window.
+- Dismisses the full Details header context menu on outside clicks as well, keeping both header-menu entry points consistent.
+- Preserves the hover-only chevron behavior and all HOTFIX68 column-specific preset row sets.
+
+Implementation
+- Added a scene-level mouse-press dismiss handler for the table header menus.
+- Kept header hot-zone clicks exempt so clicking the right-edge trigger still opens or retargets the menu normally.
+- Added a table-level fallback dismissal path for non-trigger primary clicks inside the table.

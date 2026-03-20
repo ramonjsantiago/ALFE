@@ -5,6 +5,7 @@ import com.fileexplorer.service.template.SchedulerSettings;
 import com.fileexplorer.service.template.SchedulerSettingsService;
 
 import com.fileexplorer.service.diag.CrashReportService;
+import com.fileexplorer.service.icon.AsyncThumbnailService;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -67,6 +68,12 @@ public final class DiagnosticsBundleService {
             // scheduler settings snapshot
             SchedulerSettings settings = new SchedulerSettingsService().load();
             writeString(zos, "scheduler/settings.json", toJson(settings));
+
+            // thumbnail diagnostics snapshot
+            writeString(zos, "thumbs/thumbnail-cache.txt",
+                    AsyncThumbnailService.getInstance().thumbnailDiagnosticsSnapshot());
+            writeString(zos, "thumbs/thumbnail-cache-manifest.properties",
+                    AsyncThumbnailService.getInstance().diskCacheManifestSnapshot());
 
             for (Path p : candidateFiles) {
                 if (p == null) continue;

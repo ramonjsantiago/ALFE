@@ -1,0 +1,7 @@
+HOTFIX47 / Phase 4L.5 — Choose Details Search and Bulk Visibility Actions
+- added a search field to filter the Choose Details catalog by column name or key
+- added a live filtered-count status line
+- added Show All and Hide All actions that apply to the current filtered result set
+- preserved reorder behavior while filtered by moving within the matching visible subset
+- added Ctrl+F to focus search and Escape in search to clear the filter
+- kept width editing, default width reset, and existing keyboard toggles intact

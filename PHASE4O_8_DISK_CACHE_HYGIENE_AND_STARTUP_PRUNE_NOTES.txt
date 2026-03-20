@@ -1,0 +1,12 @@
+Phase 4O.8 hardens the new safe document disk cache with hygiene and self-healing.
+
+Scope
+- deferred startup prune so stale cache files are cleaned even before the next write burst
+- self-healing cache reads: empty/corrupt cached PNGs are deleted on read failure
+- best-effort clearPersistentDiskCache() utility for future troubleshooting/reset flows
+- extra diagnostics for prune runs, startup prune runs, and corrupt cache deletions
+
+Tuning
+- -Dfileexplorer.thumb.diskCache.startupPrune.enabled=true|false
+- -Dfileexplorer.thumb.diskCache.startupPrune.delayMs=<ms>
+- -Dfileexplorer.thumb.diskCache.deleteCorruptOnRead=true|false

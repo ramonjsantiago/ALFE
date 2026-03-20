@@ -6,10 +6,14 @@ import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseButton;
 import javafx.scene.layout.*;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -39,15 +43,32 @@ public final class ChooseDetailsDialog {
         Objects.requireNonNull(defaultSpecs, "defaultSpecs");
         Objects.requireNonNull(currentWidths, "currentWidths");
 
+        Map<String, DetailSpec> defaultSpecsByKey = new LinkedHashMap<>();
+        for (DetailSpec spec : defaultSpecs) {
+            if (spec != null && spec.key() != null && !spec.key().isBlank()) {
+                defaultSpecsByKey.put(spec.key(), spec);
+            }
+        }
+
+
         ObservableList<ModelRow> rows = FXCollections.observableArrayList();
         for (DetailSpec s : initial) {
             int widthPx = clampWidth((int) Math.round(currentWidths.getOrDefault(s.key(), (double) defaultWidthForLabel(s.label()))));
             rows.add(new ModelRow(s.key(), s.label(), s.visible(), s.locked(), widthPx));
         }
 
-        ListView<ModelRow> list = new ListView<>(rows);
+        FilteredList<ModelRow> filteredRows = new FilteredList<>(rows, row -> true);
+
+        TextField searchField = new TextField();
+        searchField.getStyleClass().add("choose-details-search-field");
+        searchField.setPromptText("Search details");
+        searchField.setPrefColumnCount(18);
+
+        Label visibleCountLabel = new Label();
+        visibleCountLabel.getStyleClass().add("choose-details-filter-status");
+
+        ListView<ModelRow> list = new ListView<>(filteredRows);
         list.getStyleClass().add("choose-details-list");
-        list.setCellFactory(v -> new DetailCell());
         list.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
         list.setPrefWidth(246);
         list.setMinWidth(246);
@@ -58,43 +79,142 @@ public final class ChooseDetailsDialog {
         Button moveDown = dialogButton("Move Down");
         Button show = dialogButton("Show");
         Button hide = dialogButton("Hide");
+        Button showAll = dialogButton("Show All");
+        Button hideAll = dialogButton("Hide All");
+        Button defaultWidth = dialogButton("Default Width");
 
         TextField widthField = new TextField();
         widthField.getStyleClass().add("choose-details-width-field");
         widthField.setAlignment(Pos.CENTER_RIGHT);
         widthField.setPrefColumnCount(5);
         widthField.setTextFormatter(new TextFormatter<>(change -> change.getControlNewText().matches("\\d{0,4}") ? change : null));
+        final Runnable[] syncSelectionStateRef = new Runnable[1];
+
 
         Runnable syncSelectionState = () -> {
             int idx = list.getSelectionModel().getSelectedIndex();
             ModelRow row = list.getSelectionModel().getSelectedItem();
             boolean hasSelection = row != null;
+            boolean anyHiddenInFilter = filteredRows.stream().anyMatch(r -> !r.locked && !r.visibleProperty().get());
+            boolean anyShownInFilter = filteredRows.stream().anyMatch(r -> !r.locked && r.visibleProperty().get());
+
             moveUp.setDisable(!hasSelection || idx <= 0);
-            moveDown.setDisable(!hasSelection || idx < 0 || idx >= rows.size() - 1);
+            moveDown.setDisable(!hasSelection || idx < 0 || idx >= filteredRows.size() - 1);
             show.setDisable(!hasSelection || row.locked || row.visibleProperty().get());
             hide.setDisable(!hasSelection || row.locked || !row.visibleProperty().get());
+            showAll.setDisable(filteredRows.isEmpty() || !anyHiddenInFilter);
+            hideAll.setDisable(filteredRows.isEmpty() || !anyShownInFilter);
+            defaultWidth.setDisable(!hasSelection);
             widthField.setDisable(!hasSelection);
             widthField.setText(hasSelection ? Integer.toString(row.widthProperty().get()) : "");
+
+            int shown = filteredRows.size();
+            int total = rows.size();
+            visibleCountLabel.setText(shown == total
+                    ? "Showing all " + total + " details"
+                    : "Showing " + shown + " of " + total + " details");
         };
+        syncSelectionStateRef[0] = syncSelectionState;
+
+        list.setCellFactory(v -> new DetailCell(syncSelectionStateRef[0]));
 
         list.getSelectionModel().selectedIndexProperty().addListener((obs, ov, nv) -> syncSelectionState.run());
         list.getSelectionModel().selectedItemProperty().addListener((obs, ov, nv) -> syncSelectionState.run());
 
-        moveUp.setOnAction(ae -> {
-            int idx = list.getSelectionModel().getSelectedIndex();
-            if (idx > 0) {
-                Collections.swap(rows, idx, idx - 1);
-                list.getSelectionModel().select(idx - 1);
-                list.scrollTo(Math.max(0, idx - 2));
+        searchField.textProperty().addListener((obs, oldValue, newValue) -> {
+            ModelRow selectedBefore = list.getSelectionModel().getSelectedItem();
+            String needle = newValue == null ? "" : newValue.trim().toLowerCase(Locale.ROOT);
+            filteredRows.setPredicate(row -> needle.isBlank()
+                    || row.label.toLowerCase(Locale.ROOT).contains(needle)
+                    || row.key.toLowerCase(Locale.ROOT).contains(needle));
+            if (selectedBefore != null && filteredRows.contains(selectedBefore)) {
+                list.getSelectionModel().select(selectedBefore);
+                list.scrollTo(Math.max(0, filteredRows.indexOf(selectedBefore) - 1));
+            } else if (!filteredRows.isEmpty()) {
+                list.getSelectionModel().select(0);
+            } else {
+                list.getSelectionModel().clearSelection();
             }
+            syncSelectionState.run();
         });
-        moveDown.setOnAction(ae -> {
-            int idx = list.getSelectionModel().getSelectedIndex();
-            if (idx >= 0 && idx < rows.size() - 1) {
-                Collections.swap(rows, idx, idx + 1);
-                list.getSelectionModel().select(idx + 1);
-                list.scrollTo(Math.max(0, idx - 1));
+
+
+        Runnable commitWidth = () -> {
+            ModelRow row = list.getSelectionModel().getSelectedItem();
+            if (row == null) {
+                widthField.setText("");
+                return;
             }
+            String raw = widthField.getText();
+            int width = (raw == null || raw.isBlank()) ? row.widthProperty().get() : clampWidth(parseWidth(raw, row.widthProperty().get()));
+            row.widthProperty().set(width);
+            widthField.setText(Integer.toString(width));
+        };
+
+        Runnable toggleSelectedRow = () -> {
+            ModelRow row = list.getSelectionModel().getSelectedItem();
+            if (row == null || row.locked) {
+                return;
+            }
+            row.visibleProperty().set(!row.visibleProperty().get());
+            list.refresh();
+            syncSelectionState.run();
+        };
+
+
+        java.util.function.IntConsumer moveSelection = delta -> {
+            ModelRow row = list.getSelectionModel().getSelectedItem();
+            if (row == null) {
+                return;
+            }
+            int actualIndex = rows.indexOf(row);
+            if (actualIndex < 0) {
+                return;
+            }
+            int targetIndex = actualIndex;
+            if (delta < 0) {
+                for (int i = actualIndex - 1; i >= 0; i--) {
+                    if (filteredRows.contains(rows.get(i))) {
+                        targetIndex = i;
+                        break;
+                    }
+                }
+            } else if (delta > 0) {
+                for (int i = actualIndex + 1; i < rows.size(); i++) {
+                    if (filteredRows.contains(rows.get(i))) {
+                        targetIndex = i;
+                        break;
+                    }
+                }
+            }
+            if (targetIndex == actualIndex) {
+                return;
+            }
+            Collections.swap(rows, actualIndex, targetIndex);
+            list.getSelectionModel().select(row);
+            list.scrollTo(Math.max(0, filteredRows.indexOf(row) - 1));
+            syncSelectionState.run();
+        };
+
+        moveUp.setOnAction(ae -> moveSelection.accept(-1));
+        moveDown.setOnAction(ae -> moveSelection.accept(1));
+        showAll.setOnAction(ae -> {
+            for (ModelRow candidate : filteredRows) {
+                if (!candidate.locked) {
+                    candidate.visibleProperty().set(true);
+                }
+            }
+            list.refresh();
+            syncSelectionState.run();
+        });
+        hideAll.setOnAction(ae -> {
+            for (ModelRow candidate : filteredRows) {
+                if (!candidate.locked) {
+                    candidate.visibleProperty().set(false);
+                }
+            }
+            list.refresh();
+            syncSelectionState.run();
         });
         show.setOnAction(ae -> {
             ModelRow row = list.getSelectionModel().getSelectedItem();
@@ -112,18 +232,17 @@ public final class ChooseDetailsDialog {
                 syncSelectionState.run();
             }
         });
-
-        Runnable commitWidth = () -> {
+        defaultWidth.setOnAction(ae -> {
             ModelRow row = list.getSelectionModel().getSelectedItem();
             if (row == null) {
-                widthField.setText("");
                 return;
             }
-            String raw = widthField.getText();
-            int width = (raw == null || raw.isBlank()) ? row.widthProperty().get() : clampWidth(parseWidth(raw, row.widthProperty().get()));
+            int width = clampWidth(defaultWidthForLabel(row.label));
             row.widthProperty().set(width);
             widthField.setText(Integer.toString(width));
-        };
+            syncSelectionState.run();
+        });
+
         widthField.setOnAction(ae -> commitWidth.run());
         widthField.focusedProperty().addListener((obs, oldV, newV) -> {
             if (!newV) {
@@ -131,11 +250,88 @@ public final class ChooseDetailsDialog {
             }
         });
 
-        VBox commandButtons = new VBox(8.0, moveUp, moveDown, spacer(8.0), show, hide);
+        searchField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (event.getCode() == KeyCode.ESCAPE && !searchField.getText().isBlank()) {
+                searchField.clear();
+                event.consume();
+                return;
+            }
+            if (event.getCode() == KeyCode.DOWN) {
+                if (!filteredRows.isEmpty()) {
+                    list.requestFocus();
+                    if (list.getSelectionModel().getSelectedIndex() < 0) {
+                        list.getSelectionModel().select(0);
+                    }
+                }
+                event.consume();
+            }
+        });
+
+        list.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            ModelRow row = list.getSelectionModel().getSelectedItem();
+            if ((event.isControlDown() || event.isShortcutDown()) && event.getCode() == KeyCode.F) {
+                searchField.requestFocus();
+                searchField.selectAll();
+                event.consume();
+                return;
+            }
+            if (event.getCode() == KeyCode.SPACE || event.getCode() == KeyCode.ENTER) {
+                toggleSelectedRow.run();
+                event.consume();
+                return;
+            }
+            if (event.isAltDown() && event.getCode() == KeyCode.UP) {
+                moveSelection.accept(-1);
+                event.consume();
+                return;
+            }
+            if (event.isAltDown() && event.getCode() == KeyCode.DOWN) {
+                moveSelection.accept(1);
+                event.consume();
+                return;
+            }
+            if (event.getCode() == KeyCode.INSERT && row != null && !row.locked) {
+                row.visibleProperty().set(true);
+                list.refresh();
+                syncSelectionState.run();
+                event.consume();
+                return;
+            }
+            if ((event.getCode() == KeyCode.DELETE || event.getCode() == KeyCode.BACK_SPACE) && row != null && !row.locked) {
+                row.visibleProperty().set(false);
+                list.refresh();
+                syncSelectionState.run();
+                event.consume();
+                return;
+            }
+            if ((event.isControlDown() || event.isShortcutDown()) && event.getCode() == KeyCode.DIGIT0) {
+                ModelRow selected = list.getSelectionModel().getSelectedItem();
+                if (selected != null) {
+                    int width = clampWidth(defaultWidthForLabel(selected.label));
+                    selected.widthProperty().set(width);
+                    widthField.setText(Integer.toString(width));
+                    syncSelectionState.run();
+                }
+                event.consume();
+            }
+        });
+
+        list.setOnMouseClicked(event -> {
+            if (event.getButton() == MouseButton.PRIMARY && event.getClickCount() == 2) {
+                ModelRow row = list.getSelectionModel().getSelectedItem();
+                if (row != null && !row.locked) {
+                    row.visibleProperty().set(!row.visibleProperty().get());
+                    list.refresh();
+                    syncSelectionState.run();
+                }
+            }
+        });
+
+        VBox commandButtons = new VBox(8.0, moveUp, moveDown, spacer(8.0), show, hide, showAll, hideAll, defaultWidth);
         commandButtons.getStyleClass().add("choose-details-command-buttons");
         commandButtons.setAlignment(Pos.TOP_CENTER);
         commandButtons.setPadding(new Insets(1, 0, 0, 12));
-        commandButtons.setPrefWidth(96);
+        commandButtons.setPrefWidth(112);
 
         Label lead = new Label("Select the details you want to display for the items in this folder.");
         lead.getStyleClass().add("choose-details-lead");
@@ -143,6 +339,11 @@ public final class ChooseDetailsDialog {
 
         Label detailsLabel = new Label("Details:");
         detailsLabel.getStyleClass().add("choose-details-section-label");
+
+        HBox filterRow = new HBox(8.0, searchField, visibleCountLabel);
+        filterRow.getStyleClass().add("choose-details-filter-row");
+        filterRow.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(searchField, Priority.ALWAYS);
 
         HBox listArea = new HBox(list, commandButtons);
         listArea.setAlignment(Pos.TOP_LEFT);
@@ -152,6 +353,10 @@ public final class ChooseDetailsDialog {
         HBox widthRow = new HBox(12.0, widthLabel, spacer(), widthField);
         widthRow.getStyleClass().add("choose-details-width-row");
         widthRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label keyboardHint = new Label("Tips: Ctrl+F searches, Space toggles, Alt+Up/Alt+Down reorders, Ctrl+0 resets width.");
+        keyboardHint.getStyleClass().add("choose-details-hint");
+        keyboardHint.setWrapText(true);
 
         Separator separator = new Separator();
         separator.getStyleClass().add("choose-details-separator");
@@ -165,10 +370,10 @@ public final class ChooseDetailsDialog {
         buttonBar.getStyleClass().add("choose-details-button-bar");
         buttonBar.setAlignment(Pos.CENTER_RIGHT);
 
-        VBox root = new VBox(12.0, lead, detailsLabel, listArea, widthRow, separator, buttonBar);
+        VBox root = new VBox(12.0, lead, detailsLabel, filterRow, listArea, widthRow, keyboardHint, separator, buttonBar);
         root.getStyleClass().addAll("explorer-root", "choose-details-dialog-root");
         root.setPadding(new Insets(14, 12, 12, 12));
-        root.setPrefWidth(338);
+        root.setPrefWidth(366);
 
         Stage stage = new Stage();
         stage.initModality(Modality.WINDOW_MODAL);
@@ -229,7 +434,7 @@ public final class ChooseDetailsDialog {
             stage.close();
         });
 
-        if (!rows.isEmpty()) {
+        if (!filteredRows.isEmpty()) {
             list.getSelectionModel().select(0);
         }
         syncSelectionState.run();
@@ -284,8 +489,10 @@ public final class ChooseDetailsDialog {
         private final Label label = new Label();
         private final Region spacer = spacer();
         private final HBox box = new HBox(8.0, checkBox, label, spacer);
+        private final Runnable onStateChanged;
 
-        DetailCell() {
+        DetailCell(Runnable onStateChanged) {
+            this.onStateChanged = onStateChanged;
             getStyleClass().add("choose-details-list-cell");
             box.getStyleClass().add("choose-details-row-box");
             box.setAlignment(Pos.CENTER_LEFT);
@@ -316,7 +523,11 @@ public final class ChooseDetailsDialog {
                 item.visibleProperty().set(checkBox.isSelected());
                 ListView<ModelRow> lv = getListView();
                 if (lv != null) {
+                    lv.getSelectionModel().select(item);
                     lv.refresh();
+                }
+                if (onStateChanged != null) {
+                    onStateChanged.run();
                 }
             });
             setGraphic(box);
@@ -327,7 +538,7 @@ public final class ChooseDetailsDialog {
         Button button = new Button(text);
         button.getStyleClass().add("choose-details-command-button");
         button.setMaxWidth(Double.MAX_VALUE);
-        button.setPrefWidth(92);
+        button.setPrefWidth(100);
         return button;
     }
 

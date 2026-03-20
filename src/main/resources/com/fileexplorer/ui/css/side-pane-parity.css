@@ -34,7 +34,7 @@
 }
 
 .theme-light .side-pane-card {
-    -fx-background-color: linear-gradient(to bottom, #ffffff, #f8f9fb);
+    -fx-background-color: linear-gradient(to bottom, #191919, #f8f9fb);
     -fx-border-color: rgba(0,0,0,0.09);
 }
 
@@ -124,14 +124,14 @@
 }
 
 .theme-light .side-pane-text {
-    -fx-background-color: #ffffff;
+    -fx-background-color: #191919;
     -fx-border-color: rgba(0,0,0,0.08);
     -fx-text-fill: #202020;
     -fx-prompt-text-fill: rgba(32,32,32,0.5);
 }
 
 .theme-light .side-pane-text .content {
-    -fx-background-color: #ffffff;
+    -fx-background-color: #191919;
 }
 
 .preview-pane-text {

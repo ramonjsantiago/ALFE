@@ -4,37 +4,41 @@
  */
 
 .theme-dark.explorer-root {
-    -fx-explorer-selection-hover-bg: rgba(255,255,255,0.050);
-    -fx-explorer-selection-active-bg: rgba(113,162,255,0.260);
-    -fx-explorer-selection-active-bg-strong: rgba(113,162,255,0.305);
-    -fx-explorer-selection-inactive-bg: rgba(255,255,255,0.088);
-    -fx-explorer-selection-active-border: rgba(113,162,255,0.360);
-    -fx-explorer-selection-inactive-border: rgba(255,255,255,0.095);
-    -fx-explorer-selection-text-selected: #ffffff;
-    -fx-explorer-selection-focus-ring: rgba(165,201,255,0.56);
+    -fx-explorer-selection-hover-bg: rgba(80,80,80,0.50);
+    -fx-explorer-selection-active-bg: rgba(80,80,80,0.50);
+    -fx-explorer-selection-active-bg-strong: rgba(80,80,80,0.50);
+    -fx-explorer-selection-inactive-bg: rgba(80,80,80,0.38);
+    -fx-explorer-selection-active-border: #c3c3c3;
+    -fx-explorer-selection-inactive-border: #8e8e8e;
+    -fx-explorer-selection-hover-border: #505050;
+    -fx-explorer-selection-text-selected: #dedede;
+    -fx-explorer-selection-focus-ring: rgba(195,195,195,0.22);
 }
 
 .theme-light.explorer-root {
-    -fx-explorer-selection-hover-bg: rgba(0,0,0,0.042);
-    -fx-explorer-selection-active-bg: rgba(33,99,214,0.158);
-    -fx-explorer-selection-active-bg-strong: rgba(33,99,214,0.188);
-    -fx-explorer-selection-inactive-bg: rgba(33,99,214,0.102);
-    -fx-explorer-selection-active-border: rgba(33,99,214,0.205);
-    -fx-explorer-selection-inactive-border: rgba(33,99,214,0.135);
-    -fx-explorer-selection-text-selected: #111111;
-    -fx-explorer-selection-focus-ring: rgba(33,99,214,0.42);
+    -fx-explorer-selection-hover-bg: rgba(80,80,80,0.50);
+    -fx-explorer-selection-active-bg: rgba(80,80,80,0.50);
+    -fx-explorer-selection-active-bg-strong: rgba(80,80,80,0.50);
+    -fx-explorer-selection-inactive-bg: rgba(80,80,80,0.38);
+    -fx-explorer-selection-active-border: #c3c3c3;
+    -fx-explorer-selection-inactive-border: #8e8e8e;
+    -fx-explorer-selection-hover-border: #505050;
+    -fx-explorer-selection-text-selected: #dedede;
+    -fx-explorer-selection-focus-ring: rgba(195,195,195,0.22);
 }
 
 .theme-dark.explorer-root.window-inactive {
-    -fx-explorer-selection-active-bg: rgba(255,255,255,0.092);
-    -fx-explorer-selection-active-bg-strong: rgba(255,255,255,0.105);
-    -fx-explorer-selection-active-border: rgba(255,255,255,0.100);
+    -fx-explorer-selection-active-bg: rgba(80,80,80,0.38);
+    -fx-explorer-selection-active-bg-strong: rgba(80,80,80,0.38);
+    -fx-explorer-selection-active-border: #8e8e8e;
+    -fx-explorer-selection-hover-border: #505050;
 }
 
 .theme-light.explorer-root.window-inactive {
-    -fx-explorer-selection-active-bg: rgba(0,0,0,0.060);
-    -fx-explorer-selection-active-bg-strong: rgba(0,0,0,0.074);
-    -fx-explorer-selection-active-border: rgba(0,0,0,0.090);
+    -fx-explorer-selection-active-bg: rgba(80,80,80,0.38);
+    -fx-explorer-selection-active-bg-strong: rgba(80,80,80,0.38);
+    -fx-explorer-selection-active-border: #8e8e8e;
+    -fx-explorer-selection-hover-border: #505050;
 }
 
 /* Phase 4K.2: details-row visuals now live in details-view-parity.css.
@@ -104,11 +108,13 @@
 
 .explorer-icon-tile.explorer-hover {
     -fx-background-color: -fx-explorer-selection-hover-bg;
+    -fx-border-color: -fx-explorer-selection-hover-border;
 }
 
 .explorer-icon-tile.explorer-selected {
     -fx-background-color: -fx-explorer-selection-inactive-bg;
     -fx-border-color: -fx-explorer-selection-inactive-border;
+    -fx-effect: null;
 }
 
 .icon-flow:focused .explorer-icon-tile.explorer-selected,
@@ -116,6 +122,7 @@
 .icon-virtual-list:focused .explorer-icon-tile.explorer-selected {
     -fx-background-color: -fx-explorer-selection-active-bg;
     -fx-border-color: -fx-explorer-selection-active-border;
+    -fx-effect: dropshadow(three-pass-box, -fx-explorer-selection-focus-ring, 5, 0.15, 0, 0);
 }
 
 .icon-flow:focused .explorer-icon-tile.explorer-selected.explorer-hover,
@@ -127,6 +134,7 @@
 .root.window-inactive .explorer-icon-tile.explorer-selected {
     -fx-background-color: -fx-explorer-selection-inactive-bg;
     -fx-border-color: -fx-explorer-selection-inactive-border;
+    -fx-effect: null;
 }
 
 .theme-dark .explorer-icon-tile .label {
@@ -166,6 +174,12 @@
 
 .explorer-icon-tile.explorer-selected .label {
     -fx-text-fill: -fx-explorer-selection-text-selected;
+}
+
+.theme-dark .explorer-icon-tile.explorer-selected .label,
+.theme-dark .explorer-icon-tile.explorer-selected .explorer-icon-name-label,
+.theme-dark .explorer-icon-tile.explorer-selected .explorer-icon-meta-label {
+    -fx-text-fill: #dedede;
 }
 
 .explorer-icon-flow-xl .explorer-icon-tile-grid {

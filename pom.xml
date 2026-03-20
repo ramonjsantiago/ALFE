@@ -14,6 +14,9 @@
         <maven.compiler.target>25</maven.compiler.target>
         <maven.compiler.release>25</maven.compiler.release>
         <javafx.version>25</javafx.version>
+        <thumbnails4j.version>1.2.0</thumbnails4j.version>
+        <slf4j.version>1.7.25</slf4j.version>
+        <jai.imageio.version>1.4.0</jai.imageio.version>
         <app.xms>512m</app.xms>
         <app.xmx>4g</app.xmx>
         <fileexplorer.log.enter>false</fileexplorer.log.enter>
@@ -105,6 +108,27 @@
             <groupId>org.jclarion</groupId>
             <artifactId>image4j</artifactId>
             <version>0.7</version>
+        </dependency>
+
+        <!-- JAI Image I/O Tools: additional ImageIO SPI readers/writers (for example PCX) -->
+        <dependency>
+            <groupId>com.github.jai-imageio</groupId>
+            <artifactId>jai-imageio-core</artifactId>
+            <version>${jai.imageio.version}</version>
+        </dependency>
+
+        <!-- thumbnails4j: document thumbnails for doc/docx/pdf/pptx/xls/xlsx -->
+        <dependency>
+            <groupId>co.elastic.thumbnails4j</groupId>
+            <artifactId>thumbnails4j-all</artifactId>
+            <version>${thumbnails4j.version}</version>
+        </dependency>
+        <!-- Prevent noisy missing-binder warnings from thumbnails4j's SLF4J API usage. -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-nop</artifactId>
+            <version>${slf4j.version}</version>
+            <scope>runtime</scope>
         </dependency>
     </dependencies>
 

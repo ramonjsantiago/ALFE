@@ -125,11 +125,24 @@
 }
 
 .menu-button > .arrow-button > .arrow,
-.split-menu-button > .arrow-button > .arrow,
-.menu > .right-container > .arrow {
+.split-menu-button > .arrow-button > .arrow {
     -fx-background-insets: 0;
     -fx-padding: 0.25em;
     -fx-shape: "M 0 0 L 4 4 L 8 0";
+}
+
+.menu > .right-container {
+    -fx-padding: 0 8 0 10;
+}
+
+.view-menu-submenu > .right-container {
+    -fx-padding: 0 8 0 6;
+}
+
+.menu > .right-container > .arrow {
+    -fx-background-insets: 0;
+    -fx-padding: 0.30em 0.22em 0.30em 0.22em;
+    -fx-shape: "M 0 0 L 4 4 L 0 8";
 }
 
 .view-menu-row {
@@ -149,7 +162,7 @@
 }
 
 .theme-light .explorer-inline-rename-field {
-    -fx-background-color: #ffffff;
+    -fx-background-color: #191919;
     -fx-text-fill: #1d1d1d;
     -fx-border-color: #7aa7e8;
 }

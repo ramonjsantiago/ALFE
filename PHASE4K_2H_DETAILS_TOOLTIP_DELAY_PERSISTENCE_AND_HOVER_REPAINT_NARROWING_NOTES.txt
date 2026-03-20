@@ -1,0 +1,7 @@
+HOTFIX44 / Phase 4K.2H — Details Tooltip Delay Persistence and Hover Repaint Narrowing
+
+Changes:
+- Details tooltip arming no longer restarts its show-delay timer on every mouse-move event for the same row.
+- Details tooltip arming is now also driven from table-level row resolution, making the Details pane less dependent on volatile row-target hover events.
+- Details hover row updates are narrowed to old/new visible rows instead of repainting every visible row on each hover-index change.
+- Existing Details popup styling/content path is preserved; this pass focuses on visibility and churn reduction.

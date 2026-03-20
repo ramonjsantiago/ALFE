@@ -17,7 +17,7 @@
 .theme-light {
     -fx-base: #f3f3f3;
     -fx-background-color: #f3f3f3;
-    -fx-control-inner-background: #ffffff;
+    -fx-control-inner-background: #191919;
     -fx-text-fill: #111111;
 }
 
@@ -47,8 +47,8 @@
 
 /* TreeView */
 .theme-light .tree-view {
-    -fx-background-color: #ffffff;
-    -fx-control-inner-background: #ffffff;
+    -fx-background-color: #191919;
+    -fx-control-inner-background: #191919;
     -fx-cell-size: 24px;
 }
 
@@ -76,12 +76,12 @@
 }
 
 .theme-light .tab:selected {
-    -fx-background-color: #ffffff;
+    -fx-background-color: #191919;
 }
 
 /* TableView */
 .theme-light .table-view {
-    -fx-background-color: #ffffff;
+    -fx-background-color: #191919;
     -fx-table-cell-border-color: #e0e0e0;
     -fx-padding: 0;
 }
@@ -153,7 +153,7 @@
     -fx-base: #111827;               /* dark slate */
     -fx-background-color: #111827;
     -fx-control-inner-background: #111827;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
 }
 
 /* Toolbar / command bar */
@@ -220,7 +220,7 @@
 
 .theme-dark .tab:selected {
     -fx-background-color: #1f2937;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #191919;
 }
 
 /* TableView */
@@ -300,7 +300,7 @@
 
 .theme-light .text-field,
 .theme-light .text-area {
-    -fx-background-color: #ffffff;
+    -fx-background-color: #191919;
     -fx-text-fill: #111111;
     -fx-prompt-text-fill: #767676;
     -fx-border-color: #d0d0d0;

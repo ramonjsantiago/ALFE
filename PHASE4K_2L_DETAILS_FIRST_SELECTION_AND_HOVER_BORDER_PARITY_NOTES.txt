@@ -1,0 +1,7 @@
+Phase 4K.2L — Details First Selection and Hover Border Parity
+
+Included:
+- Details visible rows now resync their presentation after selection changes, fixing first-selection paint lag.
+- Details hover uses the same 50% #505050 fill as selection.
+- Hover border now uses #505050 while selected border remains #c3c3c3.
+- Icon/List/Tiles/Content hover surfaces now use the same fill plus the #505050 border.

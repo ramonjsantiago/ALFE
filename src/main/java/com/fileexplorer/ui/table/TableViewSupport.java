@@ -136,7 +136,7 @@ public final class TableViewSupport {
                                 iconView.setImage(img);
                             }));
 
-                    // If this is a supported image file, lazily replace the placeholder with a scaled thumbnail.
+                    // If this is a supported thumbnail candidate, lazily replace the placeholder with a generated thumbnail.
                     if (!isFolder && p != null && ImageSupport.isThumbCandidate(p)) {
                         // Register with the viewport-aware manager; it will request only after scroll-idle.
                         thumbMgr.register(this, p, iconPx, identity, iconView::setImage);

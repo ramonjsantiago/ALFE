@@ -103,6 +103,7 @@ public final class VisibleThumbnailManager {
     public void cancelAll() {
         regs.values().forEach(r -> {
             if (r.future != null) {
+                AsyncThumbnailService.getInstance().noteViewportCancellation();
                 r.future.cancel(false);
                 r.future = null;
             }
@@ -129,6 +130,7 @@ public final class VisibleThumbnailManager {
             if (!isCellVisible(cell)) {
                 // Cancel non-visible to avoid wasted decode.
                 if (r.future != null) {
+                    AsyncThumbnailService.getInstance().noteViewportCancellation();
                     r.future.cancel(false);
                     r.future = null;
                 }
@@ -144,6 +146,18 @@ public final class VisibleThumbnailManager {
 
             r.future = AsyncThumbnailService.getInstance().request(p, size, AsyncThumbnailService.RequestPriority.VISIBLE);
             final CompletableFuture<javafx.scene.image.Image> fut = r.future;
+            fut.whenComplete((img, ex) -> Platform.runLater(() -> {
+                Registration cur = regs.get(cell);
+                if (cur == null) {
+                    return;
+                }
+                if (cur.future != fut) {
+                    return;
+                }
+                if (fut.isCancelled() || ex != null || img == null) {
+                    cur.future = null;
+                }
+            }));
             fut.thenAccept(img -> Platform.runLater(() -> {
                 if (fut.isCancelled()) return;
                 // Ensure still bound to same file.
@@ -158,10 +172,14 @@ public final class VisibleThumbnailManager {
     }
 
     private void cancelNonVisible() {
-        for (Registration r : regs.values()) {
+        for (Map.Entry<TableCell<FileItem, ?>, Registration> e : regs.entrySet()) {
+            TableCell<FileItem, ?> cell = e.getKey();
+            Registration r = e.getValue();
             if (r == null || r.future == null) continue;
-            // We can only cancel by checking the cell during pump, but on scroll we don't have it.
-            // Best effort: leave running; pumpVisible will cancel when it detects non-visible.
+            if (cell != null && isCellVisible(cell)) continue;
+            AsyncThumbnailService.getInstance().noteViewportCancellation();
+            r.future.cancel(false);
+            r.future = null;
         }
     }
 

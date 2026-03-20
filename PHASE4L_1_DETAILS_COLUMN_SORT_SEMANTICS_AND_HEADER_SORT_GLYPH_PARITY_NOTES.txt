@@ -1,0 +1,7 @@
+HOTFIX41 / Phase 4L.1
+
+Scope:
+- FileItem-aware Details header sorting for Name / Type / Size / Date modified
+- numeric size sorting instead of lexicographic size text sorting
+- actual last-modified timestamp sorting instead of formatted text sorting
+- sorted header glyph/background parity polish for Details view

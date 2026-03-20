@@ -30,8 +30,8 @@
 -fx-body-color: #1c2027;
 -fx-color: #1c2027;
 
--fx-shadow-highlight-color: #ffffff1a;
--fx-shadow-color: #000000a6;
+-fx-shadow-highlight-color: #191919;
+-fx-shadow-color: #dedede;
 -fx-default-button: #2a4a7a;
 }
 
@@ -249,4 +249,56 @@
 .context-menu .check-menu-item:checked > .left-container > .check {
     -fx-scale-x: 0.92;
     -fx-scale-y: 0.92;
+}
+
+
+/* Phase 4L.3: Details header context menu parity */
+.context-menu.explorer-header-details-menu {
+    -fx-padding: 4 0 4 0;
+}
+
+.context-menu.explorer-header-details-menu .menu-item,
+.context-menu.explorer-header-details-menu .explorer-menu-plainitem,
+.context-menu.explorer-header-details-menu .explorer-menu-checkitem {
+    -fx-padding: 7 14 7 10;
+}
+
+.context-menu.explorer-header-details-menu .explorer-menu-checkrow {
+    -fx-spacing: 8;
+}
+
+/* Phase 4L.6: Details header drop-down sort preset alignment */
+.context-menu.explorer-header-details-menu .explorer-menu-item-icon {
+    -fx-alignment: center;
+    -fx-min-width: 16;
+    -fx-pref-width: 16;
+    -fx-max-width: 16;
+    -fx-text-fill: -fx-text-base-color;
+    -fx-opacity: 0.92;
+}
+
+/* Phase 4L.8: compact right-edge preset drop-down */
+.context-menu.explorer-header-details-preset-menu {
+    -fx-padding: 4 0 4 0;
+}
+
+.context-menu.explorer-header-details-preset-menu .menu-item,
+.context-menu.explorer-header-details-preset-menu .explorer-menu-checkitem {
+    -fx-padding: 7 12 7 10;
+}
+
+.context-menu.explorer-header-details-preset-menu .explorer-menu-checkrow {
+    -fx-spacing: 8;
+}
+
+.context-menu.explorer-header-details-preset-menu .explorer-menu-checkmark {
+    -fx-min-width: 18;
+    -fx-pref-width: 18;
+    -fx-max-width: 18;
+}
+
+.context-menu.explorer-header-details-preset-menu .explorer-menu-item-icon {
+    -fx-min-width: 16;
+    -fx-pref-width: 16;
+    -fx-max-width: 16;
 }

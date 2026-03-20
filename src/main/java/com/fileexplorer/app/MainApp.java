@@ -1460,7 +1460,7 @@ loadFontsFromResources(List.of(
         captions.getChildren().addAll(
                 buildShellCaptionButton(42, 28, "#2a2a2a", "—", "#d5d5d5"),
                 buildShellCaptionButton(42, 28, "#2a2a2a", "▢", "#d5d5d5"),
-                buildShellCaptionButton(48, 28, "#c42b1c", "×", "#ffffff")
+                buildShellCaptionButton(48, 28, "#c42b1c", "×", "#191919")
         );
 
         titleStrip.getChildren().addAll(appBadge, title, titleSpacer, captions);

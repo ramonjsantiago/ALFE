@@ -1,4 +1,4 @@
-/* Phase 4E - Details view parity */
+/* Phase 4E/4L - Details view parity + metrics/header tuning */
 
 .details-view-shell {
     -fx-padding: 0;
@@ -10,46 +10,47 @@
     -fx-padding: 0;
     -fx-border-width: 0;
     -fx-effect: null;
+    -fx-selection-bar: transparent;
+    -fx-selection-bar-non-focused: transparent;
 }
 
 .theme-dark .explorer-details-table {
-    -fx-background-color: linear-gradient(to bottom, rgba(22,26,33,0.98), rgba(18,22,29,0.99));
+    -fx-background-color: linear-gradient(to bottom, rgba(22,26,33,0.985), rgba(18,22,29,0.995));
     -fx-control-inner-background: rgba(18,22,29,0.995);
-    -fx-table-cell-border-color: rgba(255,255,255,0.055);
-    /* HOTFIX30: keep Details hover/selection paints self-contained so they do not depend on a later stylesheet pass. */
-    -fx-details-selection-hover-bg: rgba(255,255,255,0.050);
-    -fx-details-selection-active-bg: rgba(113,162,255,0.260);
-    -fx-details-selection-active-bg-strong: rgba(113,162,255,0.305);
-    -fx-details-selection-inactive-bg: rgba(255,255,255,0.088);
-    -fx-details-selection-active-border: rgba(113,162,255,0.360);
-    -fx-details-selection-inactive-border: rgba(255,255,255,0.095);
+    -fx-table-cell-border-color: rgba(255,255,255,0.050);
+    -fx-details-selection-hover-bg: rgba(80,80,80,0.50);
+    -fx-details-selection-active-bg: rgba(80,80,80,0.50);
+    -fx-details-selection-active-bg-strong: rgba(80,80,80,0.50);
+    -fx-details-selection-inactive-bg: rgba(80,80,80,0.38);
+    -fx-details-selection-active-border: #c3c3c3;
+    -fx-details-selection-inactive-border: #8e8e8e;
+    -fx-details-selection-focus-ring: rgba(195,195,195,0.22);
 }
 
 .theme-light .explorer-details-table {
     -fx-background-color: linear-gradient(to bottom, #fbfbfb, #f6f7f8);
     -fx-control-inner-background: #ffffff;
     -fx-table-cell-border-color: rgba(0,0,0,0.075);
-    /* HOTFIX30: keep Details hover/selection paints self-contained so they do not depend on a later stylesheet pass. */
-    -fx-details-selection-hover-bg: rgba(0,0,0,0.042);
-    -fx-details-selection-active-bg: rgba(33,99,214,0.158);
-    -fx-details-selection-active-bg-strong: rgba(33,99,214,0.188);
-    -fx-details-selection-inactive-bg: rgba(33,99,214,0.102);
-    -fx-details-selection-active-border: rgba(33,99,214,0.205);
-    -fx-details-selection-inactive-border: rgba(33,99,214,0.135);
+    -fx-details-selection-hover-bg: rgba(80,80,80,0.50);
+    -fx-details-selection-active-bg: rgba(80,80,80,0.50);
+    -fx-details-selection-active-bg-strong: rgba(80,80,80,0.50);
+    -fx-details-selection-inactive-bg: rgba(80,80,80,0.38);
+    -fx-details-selection-active-border: #c3c3c3;
+    -fx-details-selection-inactive-border: #8e8e8e;
+    -fx-details-selection-focus-ring: rgba(195,195,195,0.22);
 }
 
 .root.window-inactive.theme-dark.explorer-root .explorer-details-table {
-    -fx-details-selection-active-bg: rgba(255,255,255,0.092);
-    -fx-details-selection-active-bg-strong: rgba(255,255,255,0.105);
-    -fx-details-selection-active-border: rgba(255,255,255,0.100);
+    -fx-details-selection-active-bg: rgba(80,80,80,0.38);
+    -fx-details-selection-active-bg-strong: rgba(80,80,80,0.38);
+    -fx-details-selection-active-border: #8e8e8e;
 }
 
 .root.window-inactive.theme-light.explorer-root .explorer-details-table {
-    -fx-details-selection-active-bg: rgba(0,0,0,0.060);
-    -fx-details-selection-active-bg-strong: rgba(0,0,0,0.074);
-    -fx-details-selection-active-border: rgba(0,0,0,0.090);
+    -fx-details-selection-active-bg: rgba(80,80,80,0.38);
+    -fx-details-selection-active-bg-strong: rgba(80,80,80,0.38);
+    -fx-details-selection-active-border: #8e8e8e;
 }
-
 
 .explorer-details-table,
 .explorer-details-table .virtual-flow,
@@ -79,25 +80,26 @@
 .explorer-details-table .column-header-background {
     -fx-background-insets: 0;
     -fx-padding: 0;
-    -fx-min-height: 34px;
-    -fx-pref-height: 34px;
-    -fx-max-height: 34px;
+    -fx-min-height: 32px;
+    -fx-pref-height: 32px;
+    -fx-max-height: 32px;
 }
 
 .theme-dark .explorer-details-table .column-header-background {
-    -fx-background-color: linear-gradient(to bottom, rgba(28,33,41,0.98), rgba(24,29,36,0.98));
-    -fx-border-color: rgba(255,255,255,0.08);
+    -fx-background-color: linear-gradient(to bottom, rgba(29,34,42,0.985), rgba(24,29,36,0.985));
+    -fx-border-color: rgba(255,255,255,0.075);
     -fx-border-width: 0 0 1 0;
 }
 
 .theme-light .explorer-details-table .column-header-background {
-    -fx-background-color: linear-gradient(to bottom, #f7f7f7, #f0f1f2);
-    -fx-border-color: rgba(0,0,0,0.10);
+    -fx-background-color: linear-gradient(to bottom, #f7f7f7, #eff1f4);
+    -fx-border-color: rgba(0,0,0,0.095);
     -fx-border-width: 0 0 1 0;
 }
 
 .explorer-details-table .column-header,
-.explorer-details-table .filler {
+.explorer-details-table .filler,
+.explorer-details-table .show-hide-columns-button {
     -fx-background-insets: 0;
     -fx-padding: 0;
     -fx-background-radius: 0;
@@ -106,33 +108,75 @@
 }
 
 .theme-dark .explorer-details-table .column-header,
-.theme-dark .explorer-details-table .filler {
+.theme-dark .explorer-details-table .filler,
+.theme-dark .explorer-details-table .show-hide-columns-button {
     -fx-background-color: rgba(24,29,36,0.98);
-    -fx-border-color: rgba(255,255,255,0.06);
+    -fx-border-color: rgba(255,255,255,0.055);
 }
 
 .theme-light .explorer-details-table .column-header,
-.theme-light .explorer-details-table .filler {
-    -fx-background-color: #f0f1f2;
-    -fx-border-color: rgba(0,0,0,0.07);
+.theme-light .explorer-details-table .filler,
+.theme-light .explorer-details-table .show-hide-columns-button {
+    -fx-background-color: #eff1f4;
+    -fx-border-color: rgba(0,0,0,0.065);
 }
 
 .theme-dark .explorer-details-table .column-header:hover,
-.theme-dark .explorer-details-table .filler:hover {
+.theme-dark .explorer-details-table .show-hide-columns-button:hover {
     -fx-background-color: rgba(35,40,49,0.98);
 }
 
 .theme-light .explorer-details-table .column-header:hover,
-.theme-light .explorer-details-table .filler:hover {
-    -fx-background-color: #ebedef;
+.theme-light .explorer-details-table .show-hide-columns-button:hover {
+    -fx-background-color: #e8ebef;
 }
 
 .explorer-details-table .column-header .label {
-    -fx-padding: 0 14 0 14;
+    -fx-padding: 0 12 0 12;
     -fx-font-family: "Segoe UI Variable Text";
     -fx-font-size: 12px;
     -fx-font-weight: normal;
     -fx-alignment: center-left;
+}
+
+.explorer-details-table .column-header .arrow-button {
+    -fx-padding: 0 10 0 4;
+}
+
+.explorer-details-table .column-header .sort-order {
+    -fx-padding: 0 6 0 0;
+    -fx-spacing: 4;
+}
+
+.explorer-details-table .column-header.details-sorted {
+    -fx-border-width: 0 1 0 0, 0 0 1 0;
+}
+
+.theme-dark .explorer-details-table .column-header.details-sorted {
+    -fx-background-color: linear-gradient(to bottom, rgba(34,40,49,0.99), rgba(28,33,41,0.99));
+    -fx-border-color: rgba(255,255,255,0.055), rgba(113,162,255,0.30);
+}
+
+.theme-light .explorer-details-table .column-header.details-sorted {
+    -fx-background-color: linear-gradient(to bottom, #eef4ff, #e7eefc);
+    -fx-border-color: rgba(0,0,0,0.065), rgba(33,99,214,0.24);
+}
+
+.explorer-details-table .column-header.details-primary-sort .label {
+    -fx-font-weight: 600;
+}
+
+.explorer-details-table .column-header.details-secondary-sort .label {
+    -fx-opacity: 0.92;
+}
+
+.explorer-details-table .column-header.details-col-name .label {
+    -fx-padding: 0 12 0 14;
+}
+
+.explorer-details-table .column-header.details-col-size .label {
+    -fx-alignment: center-right;
+    -fx-padding: 0 12 0 8;
 }
 
 .theme-dark .explorer-details-table .column-header .label {
@@ -149,26 +193,75 @@
 }
 
 .theme-dark .explorer-details-table .column-header .arrow {
-    -fx-background-color: #dce7ff;
+    -fx-background-color: rgba(221,231,255,0.96);
 }
 
 .theme-light .explorer-details-table .column-header .arrow {
     -fx-background-color: #315fbe;
 }
 
-.explorer-details-table {
-    -fx-selection-bar: transparent;
-    -fx-selection-bar-non-focused: transparent;
+.theme-dark .explorer-details-table .column-header.details-sorted .arrow {
+    -fx-background-color: rgba(241,246,255,0.98);
+}
+
+.theme-light .explorer-details-table .column-header.details-sorted .arrow {
+    -fx-background-color: #204fba;
+}
+
+.explorer-details-table .column-header.details-col-size .arrow-button {
+    -fx-padding: 0 10 0 2;
+}
+
+.explorer-details-table .column-header.details-col-size .sort-order {
+    -fx-padding: 0 8 0 0;
+}
+
+.explorer-details-table .column-header .column-resize-line {
+    -fx-background-color: transparent;
+    -fx-pref-width: 1px;
+    -fx-min-width: 1px;
+    -fx-max-width: 1px;
+    -fx-opacity: 0.0;
+}
+
+.theme-dark .explorer-details-table .column-header .column-resize-line {
+    -fx-background-color: rgba(148, 187, 255, 0.82);
+}
+
+.theme-light .explorer-details-table .column-header .column-resize-line {
+    -fx-background-color: rgba(33, 99, 214, 0.88);
+}
+
+.explorer-details-table .column-header:hover .column-resize-line,
+.explorer-details-table .column-header.details-resize-hot .column-resize-line {
+    -fx-opacity: 0.82;
+}
+
+.theme-dark .explorer-details-table .column-header.details-resize-hot {
+    -fx-background-color: linear-gradient(to bottom, rgba(41,48,59,0.995), rgba(31,37,46,0.995));
+}
+
+.theme-light .explorer-details-table .column-header.details-resize-hot {
+    -fx-background-color: linear-gradient(to bottom, #eef4ff, #e5edf9);
+}
+
+.explorer-details-table .column-header.details-last-visible-column,
+.explorer-details-table .filler {
+    -fx-border-width: 0;
+}
+
+.explorer-details-table .column-header.details-only-visible-column {
+    -fx-border-width: 0;
 }
 
 .explorer-details-table .table-row-cell {
-    -fx-background-insets: 0, 2 8 2 8;
-    -fx-background-radius: 0, 8;
-    -fx-border-insets: 2 8 2 8;
-    -fx-border-radius: 8;
+    -fx-background-insets: 0, 1 6 1 6;
+    -fx-background-radius: 0, 7;
+    -fx-border-insets: 1 6 1 6;
+    -fx-border-radius: 7;
     -fx-border-width: 0, 1;
     -fx-padding: 0;
-    -fx-cell-size: 34px;
+    -fx-cell-size: 32px;
     -fx-background-color: transparent, transparent;
     -fx-border-color: transparent, transparent;
     -fx-selection-bar: transparent;
@@ -201,3 +294,40 @@
     -fx-border-color: transparent, transparent;
 }
 
+.explorer-details-table .table-cell {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 0 12 0 12;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 12px;
+}
+
+.explorer-details-table .table-cell.explorer-size-column-cell {
+    -fx-padding: 0 12 0 8;
+    -fx-alignment: center-right;
+}
+
+.theme-dark .explorer-details-table .table-row-cell:selected .table-cell,
+.theme-dark .explorer-details-table .table-row-cell:filled:selected .table-cell,
+.theme-dark .explorer-details-table .table-row-cell:filled:selected:explorer-hover .table-cell {
+    -fx-text-fill: #dedede;
+}
+
+.theme-light .explorer-details-table .table-row-cell:selected .table-cell,
+.theme-light .explorer-details-table .table-row-cell:filled:selected .table-cell,
+.theme-light .explorer-details-table .table-row-cell:filled:selected:explorer-hover .table-cell {
+    -fx-text-fill: #dedede;
+}
+
+/* Phase 4L.7: header menu hot-zone parity */
+.theme-dark .explorer-details-table .column-header.details-menu-hot {
+    -fx-background-color: linear-gradient(to bottom, rgba(44,50,60,0.995), rgba(33,39,48,0.995));
+}
+
+.theme-light .explorer-details-table .column-header.details-menu-hot {
+    -fx-background-color: linear-gradient(to bottom, #f1f5fb, #e6edf8);
+}
+
+.explorer-details-table .column-header.details-menu-hot .label {
+    -fx-padding: 0 22 0 12;
+}
