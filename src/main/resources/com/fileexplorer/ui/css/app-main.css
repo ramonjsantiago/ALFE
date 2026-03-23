@@ -659,14 +659,14 @@
  ************************************************************/
 .tooltip,
 .tooltip.explorer-rich-tooltip {
-    -fx-background-color: #101010;
+    -fx-background-color: #202020;
     -fx-background-insets: 0;
     -fx-background-radius: 8;
-    -fx-border-color: #2f2f2f;
+    -fx-border-color: #3A3A3A;
     -fx-border-radius: 8;
     -fx-border-width: 1;
     -fx-padding: 6 10 6 10;
-    -fx-text-fill: #191919;
+    -fx-text-fill: #E0DFDF;
 }
 
 .tooltip .label,
@@ -675,16 +675,16 @@
 .tooltip.explorer-rich-tooltip .label,
 .tooltip.explorer-rich-tooltip > .label,
 .tooltip.explorer-rich-tooltip .explorer-tooltip-label {
-    -fx-text-fill: #191919;
+    -fx-text-fill: #E0DFDF;
 }
 
 .tooltip .text,
 .tooltip.explorer-rich-tooltip .text {
-    -fx-fill: #191919;
+    -fx-fill: #E0DFDF;
 }
 
 .tooltip.explorer-rich-tooltip .explorer-tooltip-label {
-    -fx-text-fill: #191919;
+    -fx-text-fill: #E0DFDF;
     -fx-font-family: "Segoe UI Variable Text";
     -fx-font-size: 13px;
     -fx-font-weight: normal;

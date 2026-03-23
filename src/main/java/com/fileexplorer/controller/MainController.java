@@ -101,6 +101,8 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.ScrollBar;
+import javafx.geometry.Orientation;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 import com.fileexplorer.util.LogSupport;
@@ -235,6 +237,7 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
 @FXML private BorderPane root;
     @FXML private SplitPane mainSplitPane;
     @FXML private SplitPane contentSplitPane;
+    @FXML private StackPane navigationPaneShell;
     @FXML private RadioButton viewExtraLargeIcons;
     @FXML private RadioButton viewLargeIcons;
     @FXML private RadioButton viewMediumIcons;
@@ -277,6 +280,7 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     @FXML private Button currentTabButton;
     @FXML private Button newTabButton;
     @FXML private ScrollPane iconScroll;
+    @FXML private StackPane viewHost;
     @FXML private FlowPane iconFlow;
     @FXML private StackPane detailsViewShell;
     @FXML private VBox homePane;
@@ -321,6 +325,13 @@ private FileMetadataService fileMetadataService;
     // Phase 4A: progressive directory load for fast first render
     private final java.util.concurrent.atomic.AtomicLong progressiveLoadSeq = new java.util.concurrent.atomic.AtomicLong(0L);
     private final javafx.animation.PauseTransition iconRebuildDebounce = new javafx.animation.PauseTransition(javafx.util.Duration.millis(90));
+    private final javafx.animation.PauseTransition iconViewportLayoutDebounce = new javafx.animation.PauseTransition(javafx.util.Duration.millis(75));
+    private final javafx.animation.PauseTransition tableViewportLayoutDebounce = new javafx.animation.PauseTransition(javafx.util.Duration.millis(55));
+    private volatile double lastResponsiveIconViewportWidth = -1.0;
+    private volatile double lastAppliedResponsiveIconViewportWidth = -1.0;
+    private volatile double lastResponsiveTableViewportWidth = -1.0;
+    private volatile double lastAppliedResponsiveTableViewportWidth = -1.0;
+    private volatile double lastVirtualIconGridScrollValue = Double.NaN;
 
     // Phase 4B.2 (lowest CPU): debounce metadata requests for "visible" rows after scroll/input idle.
     private javafx.animation.PauseTransition visibleMetadataDebounce;
@@ -422,8 +433,15 @@ private final AtomicLong hoverPrefetchSeq;
 private PauseTransition hoverPrefetchTimer;
 private volatile Path hoverPrefetchTarget;
 private final ExecutorService hoverPrefetchExecutor;
-    // Navigation tree sizing: prevent the pane from collapsing to icon-only width.
-    private static final double NAV_TREE_MIN_WIDTH_PX = 275.0;
+    private boolean navigationPaneGrowthLockInstalled;
+    private boolean navigationPaneDividerAdjustPending;
+    private double pendingNavigationPaneShellWidthPx = -1.0;
+    private double lastKnownNavigationPaneShellWidthPx = NAV_TREE_PREF_WIDTH_PX + (NAV_TREE_SHELL_PADDING_PX * 2.0);
+    private double lastKnownMainSplitWidthPx = -1.0;
+    // Navigation tree sizing: preserve the current width when the window grows, but allow shrink down to a compact minimum.
+    private static final double NAV_TREE_MIN_WIDTH_PX = 54.0;
+    private static final double NAV_TREE_SHELL_PADDING_PX = 3.0;
+    private static final double NAV_TREE_SHELL_MIN_WIDTH_PX = NAV_TREE_MIN_WIDTH_PX + (NAV_TREE_SHELL_PADDING_PX * 2.0);
     private static final double SIDE_PANE_MIN_WIDTH_PX = 304.0;
     private static final double SIDE_PANE_PREF_WIDTH_PX = 356.0;
     private static final double NAV_TREE_PREF_WIDTH_PX = 320.0;
@@ -522,6 +540,8 @@ private boolean hoverPrefetchEnabled;
         this.commandBarCompactionDebounce.setOnFinished(_ -> applyCommandBarCompactionNow(pendingCommandBarWidth));
         this.previewLoadDebounce.setOnFinished(_ -> loadPreviewThumbnailNow(previewLoadSeq.get(), pendingPreviewPath));
         this.folderThumbnailWarmupDebounce.setOnFinished(_ -> warmCurrentFolderThumbnailsNow(folderThumbnailWarmupSeq.get()));
+        this.iconViewportLayoutDebounce.setOnFinished(_ -> applyResponsiveIconViewportLayoutNow());
+        this.tableViewportLayoutDebounce.setOnFinished(_ -> applyResponsiveTableViewportLayoutNow());
         this.tableRefreshDebounce.setOnFinished(_ -> {
             tableRefreshQueued.set(false);
             if (fileTable == null || isIconMode(viewMode)) {
@@ -691,25 +711,32 @@ public void attach(ExplorerContext context) {
                 mi.setOnAction(e -> createNewFolder());
             }
         });
+        configureCommandBarIconOnlyControl(newMenuButton);
     }
     if (cutButton != null) {
+        configureCommandBarIconOnlyControl(cutButton);
         cutButton.setOnAction(e -> cutSelection());
     }
     if (copyButton != null) {
+        configureCommandBarIconOnlyControl(copyButton);
         copyButton.setOnAction(e -> copySelection());
     }
     if (pasteButton != null) {
+        configureCommandBarIconOnlyControl(pasteButton);
         pasteButton.setOnAction(e -> pasteIntoCurrentFolder());
     }
     if (renameButton != null) {
+        configureCommandBarIconOnlyControl(renameButton);
         renameButton.setOnAction(e -> renameSelection());
     }
     // Optional / not yet implemented features in this codebase:
     if (shareButton != null) {
+        configureCommandBarIconOnlyControl(shareButton);
         shareButton.setOnAction(e -> setStatus("Share: not implemented yet."));
     }
     if (deleteButton != null) {
-            deleteButton.setOnAction(e -> moveSelectionToTrash());
+        configureCommandBarIconOnlyControl(deleteButton);
+        deleteButton.setOnAction(e -> moveSelectionToTrash());
     }
     if (backButton != null) {
         if (!backButton.getStyleClass().contains("icon-only")) {
@@ -735,7 +762,14 @@ public void attach(ExplorerContext context) {
         }
         refreshButton.setOnAction(e -> refresh());
     }
+    if (sortMenuButton != null) {
+        configureCommandBarIconOnlyControl(sortMenuButton);
+    }
+    if (viewMenuButton != null) {
+        configureCommandBarIconOnlyControl(viewMenuButton);
+    }
     if (previewToggle != null) {
+        syncCommandBarTooltip(previewToggle);
         previewToggle.setOnAction(e -> setPreviewPaneVisible(previewToggle.isSelected()));
     }
     wireSeeMoreMenuActions();
@@ -744,6 +778,40 @@ public void attach(ExplorerContext context) {
     updateTopChromeState();
     // sortMenuButton and viewMenuButton actions are handled by their MenuItems' onAction in FXML.
 }
+
+    private void configureCommandBarIconOnlyControl(javafx.scene.control.Labeled control) {
+        if (control == null) {
+            return;
+        }
+        syncCommandBarTooltip(control);
+        if (!control.getStyleClass().contains("icon-only")) {
+            control.getStyleClass().add("icon-only");
+        }
+        String label = control.getText();
+        if (label != null && !label.isBlank()) {
+            control.setAccessibleText(label.trim());
+        }
+    }
+
+    private void syncCommandBarTooltip(javafx.scene.control.Labeled control) {
+        if (control == null) {
+            return;
+        }
+        String label = control.getText();
+        if (label == null) {
+            return;
+        }
+        label = label.trim();
+        if (label.isEmpty()) {
+            return;
+        }
+        javafx.scene.control.Tooltip tooltip = control.getTooltip();
+        if (tooltip == null) {
+            control.setTooltip(new javafx.scene.control.Tooltip(label));
+        } else {
+            tooltip.setText(label);
+        }
+    }
 
     private void configureCommandFlyoutParity() {
         styleCommandFlyout(newMenuButton);
@@ -836,6 +904,7 @@ private void initializeWithContext() {
         configureTree();
         configureNavigationPaneParity();
         configureTable();
+        configureResponsiveTableViewportLayout();
         configureThemeToggle();
         configureBreadcrumbs();
         configureSearch();
@@ -2012,6 +2081,9 @@ private double clamp(double v, double lo, double hi) {
     // ---------------------------------------------------------------------
     private void configureNavigationPaneParity() {
         LogSupport.enter(LOG, "configureNavigationPaneParity");
+        if (navigationPaneShell != null) {
+            navigationPaneShell.setMinWidth(NAV_TREE_SHELL_MIN_WIDTH_PX);
+        }
         if (folderTree != null) {
             if (!folderTree.getStyleClass().contains("explorer-navigation-pane")) {
                 folderTree.getStyleClass().add("explorer-navigation-pane");
@@ -2032,11 +2104,81 @@ private double clamp(double v, double lo, double hi) {
                             mainSplitPane.setDividerPositions(0.235);
                         }
                     }
+                    installNavigationPaneGrowthLock();
                 } catch (Exception ex) {
                     LOG.log(Level.FINE, "Unable to normalize navigation divider position", ex);
                 }
             });
         }
+    }
+
+    private void installNavigationPaneGrowthLock() {
+        if (navigationPaneGrowthLockInstalled || mainSplitPane == null || navigationPaneShell == null) {
+            return;
+        }
+        navigationPaneGrowthLockInstalled = true;
+        navigationPaneShell.setMinWidth(NAV_TREE_SHELL_MIN_WIDTH_PX);
+        navigationPaneShell.widthProperty().addListener((obs, oldWidth, newWidth) -> {
+            if (newWidth != null && newWidth.doubleValue() > 0.0) {
+                lastKnownNavigationPaneShellWidthPx = Math.max(NAV_TREE_SHELL_MIN_WIDTH_PX, newWidth.doubleValue());
+            }
+        });
+        mainSplitPane.widthProperty().addListener((obs, oldWidth, newWidth) -> {
+            if (!showNavigationPane || newWidth == null) {
+                return;
+            }
+            double previousWidth = oldWidth == null ? lastKnownMainSplitWidthPx : oldWidth.doubleValue();
+            double currentWidth = newWidth.doubleValue();
+            if (currentWidth <= 0.0) {
+                return;
+            }
+            if (previousWidth <= 0.0) {
+                lastKnownMainSplitWidthPx = currentWidth;
+                return;
+            }
+            lastKnownMainSplitWidthPx = currentWidth;
+            if (currentWidth > previousWidth + 0.5) {
+                double targetWidth = navigationPaneShell.getWidth() > 0.0
+                        ? navigationPaneShell.getWidth()
+                        : lastKnownNavigationPaneShellWidthPx;
+                scheduleNavigationPaneDividerForShellWidth(targetWidth);
+            }
+        });
+        Platform.runLater(() -> {
+            if (navigationPaneShell.getWidth() > 0.0) {
+                lastKnownNavigationPaneShellWidthPx = Math.max(NAV_TREE_SHELL_MIN_WIDTH_PX, navigationPaneShell.getWidth());
+            }
+            if (mainSplitPane.getWidth() > 0.0) {
+                lastKnownMainSplitWidthPx = mainSplitPane.getWidth();
+            }
+        });
+    }
+
+    private void scheduleNavigationPaneDividerForShellWidth(double targetShellWidthPx) {
+        if (mainSplitPane == null || mainSplitPane.getDividers().isEmpty()) {
+            return;
+        }
+        pendingNavigationPaneShellWidthPx = Math.max(NAV_TREE_SHELL_MIN_WIDTH_PX, targetShellWidthPx);
+        if (navigationPaneDividerAdjustPending) {
+            return;
+        }
+        navigationPaneDividerAdjustPending = true;
+        Platform.runLater(() -> {
+            navigationPaneDividerAdjustPending = false;
+            if (mainSplitPane == null || mainSplitPane.getDividers().isEmpty() || !showNavigationPane) {
+                return;
+            }
+            double totalWidth = mainSplitPane.getWidth();
+            if (totalWidth <= 0.0) {
+                return;
+            }
+            double ratio = clamp(pendingNavigationPaneShellWidthPx / totalWidth, 0.0, 0.95);
+            try {
+                mainSplitPane.setDividerPositions(ratio);
+            } catch (Exception ex) {
+                LOG.log(Level.FINE, "Unable to preserve navigation pane width on grow", ex);
+            }
+        });
     }
 /**
  * configureTree.
@@ -2058,7 +2200,10 @@ private double clamp(double v, double lo, double hi) {
                 "fileexplorer.ui.tree.prefHeight", 720,
                 "fileexplorer.ui.tree.prefWidth", 320);
         
-        // Enforce navigation tree minimum width (prevents icon-only sliver).
+        // Enforce navigation tree minimum width while allowing compact shrink on window squeeze.
+        if (navigationPaneShell != null) {
+            navigationPaneShell.setMinWidth(NAV_TREE_SHELL_MIN_WIDTH_PX);
+        }
         folderTree.setMinWidth(NAV_TREE_MIN_WIDTH_PX);
         folderTree.setPrefWidth(Math.max(folderTree.getPrefWidth(), NAV_TREE_PREF_WIDTH_PX));
 // Reset per-run counters used for runaway detection.
@@ -2259,10 +2404,69 @@ folderTree.setCellFactory(tv -> {
             });
         }
         if (iconScroll != null) {
-            iconScroll.viewportBoundsProperty().addListener((obs, oldBounds, newBounds) -> refreshIconFlowLayoutForCurrentView());
-            iconScroll.widthProperty().addListener((obs, oldValue, newValue) -> refreshIconFlowLayoutForCurrentView());
-            iconScroll.heightProperty().addListener((obs, oldValue, newValue) -> refreshIconFlowLayoutForCurrentView());
+            iconScroll.viewportBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveIconViewportLayoutRefresh());
+            iconScroll.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
+            iconScroll.heightProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
+            iconScroll.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveIconViewportLayoutRefresh());
         }
+        if (viewHost != null) {
+            viewHost.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
+            viewHost.heightProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
+            viewHost.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveIconViewportLayoutRefresh());
+            viewHost.sceneProperty().addListener((obs, oldScene, newScene) -> {
+                if (newScene != null) {
+                    newScene.widthProperty().addListener((obs2, oldValue2, newValue2) -> scheduleResponsiveIconViewportLayoutRefresh());
+                    newScene.heightProperty().addListener((obs2, oldValue2, newValue2) -> scheduleResponsiveIconViewportLayoutRefresh());
+                    Window window = newScene.getWindow();
+                    if (window != null) {
+                        wireResponsiveIconWindowListeners(window);
+                    }
+                    newScene.windowProperty().addListener((obs2, oldWindow, newWindow) -> wireResponsiveIconWindowListeners(newWindow));
+                }
+            });
+        }
+    }
+
+    private void configureResponsiveTableViewportLayout() {
+        if (fileTable == null) {
+            return;
+        }
+        fileTable.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
+        fileTable.heightProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
+        fileTable.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveTableViewportLayoutRefresh());
+        if (detailsViewShell != null) {
+            detailsViewShell.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
+            detailsViewShell.heightProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
+            detailsViewShell.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveTableViewportLayoutRefresh());
+        }
+        if (viewHost != null) {
+            viewHost.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
+            viewHost.heightProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
+            viewHost.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveTableViewportLayoutRefresh());
+            viewHost.sceneProperty().addListener((obs, oldScene, newScene) -> {
+                if (newScene != null) {
+                    newScene.widthProperty().addListener((obs2, oldValue2, newValue2) -> scheduleResponsiveTableViewportLayoutRefresh());
+                    newScene.heightProperty().addListener((obs2, oldValue2, newValue2) -> scheduleResponsiveTableViewportLayoutRefresh());
+                    Window window = newScene.getWindow();
+                    if (window != null) {
+                        wireResponsiveTableWindowListeners(window);
+                    }
+                    newScene.windowProperty().addListener((obs2, oldWindow, newWindow) -> wireResponsiveTableWindowListeners(newWindow));
+                }
+            });
+        }
+        if (contentSplitPane != null) {
+            contentSplitPane.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
+            contentSplitPane.heightProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
+            contentSplitPane.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveTableViewportLayoutRefresh());
+        }
+        if (sidePane != null) {
+            sidePane.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
+            sidePane.visibleProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
+            sidePane.managedProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
+            sidePane.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveTableViewportLayoutRefresh());
+        }
+        Platform.runLater(this::scheduleResponsiveTableViewportLayoutRefresh);
     }
 /**
  * activateFromTableSelection.
@@ -5763,6 +5967,8 @@ private String displayNameForTable(Path p) {
                         contentSplitPane.setDividerPositions(1.0);
                     } catch (Exception ignored) {
                     }
+                    scheduleResponsiveTableViewportLayoutRefresh();
+                    scheduleResponsiveIconViewportLayoutRefresh();
                 });
             }
             return;
@@ -5800,6 +6006,8 @@ private String displayNameForTable(Path p) {
                 } catch (Exception ex) {
                     // Ignore layout exceptions.
                 }
+                scheduleResponsiveTableViewportLayoutRefresh();
+                scheduleResponsiveIconViewportLayoutRefresh();
             });
         }
     }
@@ -5811,6 +6019,11 @@ private String displayNameForTable(Path p) {
     private void setNavigationPaneVisible(boolean show) {
         LogSupport.enter(LOG, "setNavigationPaneVisible");
         showNavigationPane = show;
+        if (navigationPaneShell != null) {
+            navigationPaneShell.setVisible(show);
+            navigationPaneShell.setManaged(show);
+            navigationPaneShell.setMinWidth(show ? NAV_TREE_SHELL_MIN_WIDTH_PX : 0.0);
+        }
         if (folderTree != null) {
             folderTree.setVisible(show);
             folderTree.setManaged(show);
@@ -5825,13 +6038,24 @@ private String displayNameForTable(Path p) {
         if (mainSplitPane != null) {
             Platform.runLater(() -> {
                 try {
-                    mainSplitPane.setDividerPositions(show ? 0.22 : 0.0);
+                    if (show) {
+                        double restoreWidth = lastKnownNavigationPaneShellWidthPx > 0.0
+                                ? lastKnownNavigationPaneShellWidthPx
+                                : (NAV_TREE_PREF_WIDTH_PX + (NAV_TREE_SHELL_PADDING_PX * 2.0));
+                        scheduleNavigationPaneDividerForShellWidth(restoreWidth);
+                    } else {
+                        mainSplitPane.setDividerPositions(0.0);
+                    }
                 } catch (Exception ex) {
                     // Ignore layout exceptions.
                 }
+                scheduleResponsiveTableViewportLayoutRefresh();
+                scheduleResponsiveIconViewportLayoutRefresh();
             });
         }
-    }private void setCompactView(boolean on) {
+    }
+
+    private void setCompactView(boolean on) {
         LogSupport.enter(LOG, "setCompactView");
         compactView = on;
         if (root == null) {
@@ -6911,8 +7135,12 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         syncViewMenuSelection();
         if (!homeActive && !SAFE_MODE && isIconMode(viewMode)) {
             rebuildIconTiles();
+            Platform.runLater(this::scheduleResponsiveIconViewportLayoutRefresh);
         } else {
             clearIconTiles();
+        }
+        if (showTable) {
+            Platform.runLater(this::scheduleResponsiveTableViewportLayoutRefresh);
         }
         setStatus("View: " + viewModeLabel(viewMode));
     }
@@ -6943,6 +7171,13 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                 || mode == ViewMode.CONTENT;
     }
 
+    private boolean isGridIconMode(ViewMode mode) {
+        return mode == ViewMode.EXTRA_LARGE_ICONS
+                || mode == ViewMode.LARGE_ICONS
+                || mode == ViewMode.MEDIUM_ICONS
+                || mode == ViewMode.SMALL_ICONS;
+    }
+
     private void configureIconFlowLayout(ViewMode mode) {
         if (iconFlow == null) {
             return;
@@ -6966,31 +7201,259 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         }
     }
 
-    private void refreshIconFlowLayoutForCurrentView() {
+    private void refreshIconFlowLayoutForCurrentView(double viewportWidth) {
         if (iconFlow == null || !isIconMode(viewMode)) {
             return;
         }
         configureIconFlowLayout(viewMode);
+        if (viewportWidth > 1.0 && iconFlow.getOrientation() == javafx.geometry.Orientation.HORIZONTAL) {
+            iconFlow.setPrefWrapLength(Math.max(1.0, viewportWidth));
+        }
+    }
+
+    private void scheduleResponsiveIconViewportLayoutRefresh() {
+        if (!isIconMode(viewMode)) {
+            return;
+        }
+        if (iconViewportLayoutDebounce != null) {
+            iconViewportLayoutDebounce.playFromStart();
+        } else {
+            applyResponsiveIconViewportLayoutNow();
+        }
+    }
+
+    private void applyResponsiveIconViewportLayoutNow() {
+        if (!isIconMode(viewMode)) {
+            return;
+        }
+        double viewportWidth = resolveResponsiveIconViewportWidth();
+        refreshIconFlowLayoutForCurrentView(viewportWidth);
+        if (!isUsingVirtualIconGridForCurrentView()) {
+            lastAppliedResponsiveIconViewportWidth = viewportWidth;
+            return;
+        }
+        applyResponsiveVirtualIconViewMetrics(viewportWidth);
+        int itemsPerRow = computeItemsPerIconRow(viewportWidth);
+        if (itemsPerRow < 1) {
+            itemsPerRow = 1;
+        }
+        Object current = virtualIconGridView == null ? null : virtualIconGridView.getProperties().get("iconGridItemsPerRow");
+        int currentItemsPerRow = (current instanceof Number n) ? n.intValue() : -1;
+        lastAppliedResponsiveIconViewportWidth = viewportWidth;
+        if (itemsPerRow != currentItemsPerRow) {
+            rebuildVirtualIconGridPreservingAnchor();
+        }
+    }
+
+    private void wireResponsiveIconWindowListeners(Window window) {
+        if (window == null) {
+            return;
+        }
+        window.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
+        window.heightProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
+        window.xProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
+        window.yProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
+    }
+
+    private void scheduleResponsiveTableViewportLayoutRefresh() {
+        if (viewMode != ViewMode.DETAILS || fileTable == null) {
+            return;
+        }
+        if (tableViewportLayoutDebounce != null) {
+            tableViewportLayoutDebounce.playFromStart();
+        } else {
+            applyResponsiveTableViewportLayoutNow();
+        }
+    }
+
+    private void applyResponsiveTableViewportLayoutNow() {
+        if (viewMode != ViewMode.DETAILS || fileTable == null) {
+            return;
+        }
+        double viewportWidth = resolveResponsiveTableViewportWidth();
+        if (viewportWidth <= 1.0) {
+            return;
+        }
+        double snappedWidth = Math.max(1.0, Math.floor(viewportWidth));
+        if (Math.abs(snappedWidth - lastAppliedResponsiveTableViewportWidth) < 1.0) {
+            return;
+        }
+        lastAppliedResponsiveTableViewportWidth = snappedWidth;
+        applyResponsiveTableViewportWidth(snappedWidth);
+        Platform.runLater(() -> {
+            if (viewMode != ViewMode.DETAILS || fileTable == null) {
+                return;
+            }
+            double refreshedWidth = resolveResponsiveTableViewportWidth();
+            double refreshedSnappedWidth = refreshedWidth > 1.0
+                    ? Math.max(1.0, Math.floor(refreshedWidth))
+                    : snappedWidth;
+            applyResponsiveTableViewportWidth(refreshedSnappedWidth);
+            fileTable.applyCss();
+            fileTable.layout();
+            syncDetailsVisibleColumnRoleClasses();
+            if (viewHost != null) {
+                viewHost.requestLayout();
+            }
+        });
+    }
+
+    private double resolveResponsiveTableViewportWidth() {
+        double width = resolvePrimaryResponsiveTableViewportWidth();
+        if (width > 1.0) {
+            lastResponsiveTableViewportWidth = width;
+            return width;
+        }
+        if (lastResponsiveTableViewportWidth > 1.0) {
+            return lastResponsiveTableViewportWidth;
+        }
+        return 900.0;
+    }
+
+    private void applyResponsiveTableViewportWidth(double targetWidth) {
+        double snappedWidth = Math.max(1.0, Math.floor(targetWidth));
+        if (detailsViewShell != null) {
+            detailsViewShell.setMinWidth(0.0);
+            detailsViewShell.setPrefWidth(snappedWidth);
+            detailsViewShell.setMaxWidth(Double.MAX_VALUE);
+            StackPane.setAlignment(detailsViewShell, Pos.TOP_LEFT);
+            detailsViewShell.requestLayout();
+        }
+        fileTable.setMinWidth(0.0);
+        fileTable.setPrefWidth(snappedWidth);
+        fileTable.setMaxWidth(Double.MAX_VALUE);
+        fileTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        fileTable.requestLayout();
+        if (viewHost != null) {
+            viewHost.requestLayout();
+        }
+    }
+
+
+    private double resolvePrimaryResponsiveTableViewportWidth() {
+        return firstPositiveWidth(
+                viewHost == null ? 0.0 : viewHost.getWidth(),
+                viewHost == null ? 0.0 : boundsWidth(viewHost.getLayoutBounds()),
+                detailsViewShell == null ? 0.0 : detailsViewShell.getWidth(),
+                detailsViewShell == null ? 0.0 : boundsWidth(detailsViewShell.getLayoutBounds()),
+                fileTable == null ? 0.0 : fileTable.getWidth(),
+                fileTable == null ? 0.0 : boundsWidth(fileTable.getLayoutBounds()),
+                contentSplitPane == null ? 0.0 : resolveResponsiveTableLeftSplitItemWidth(),
+                contentSplitPane == null ? 0.0 : contentSplitPane.getWidth(),
+                contentSplitPane == null ? 0.0 : boundsWidth(contentSplitPane.getLayoutBounds()));
+    }
+
+    private double resolveResponsiveTableLeftSplitItemWidth() {
+        if (contentSplitPane == null) {
+            return 0.0;
+        }
+        var items = contentSplitPane.getItems();
+        if (items == null || items.isEmpty()) {
+            return 0.0;
+        }
+        Node leftItem = items.get(0);
+        if (leftItem == null) {
+            return 0.0;
+        }
+        return firstPositiveWidth(boundsWidth(leftItem.getBoundsInParent()), boundsWidth(leftItem.getLayoutBounds()));
+    }
+
+    private void wireResponsiveTableWindowListeners(Window window) {
+        if (window == null) {
+            return;
+        }
+        window.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
+        window.heightProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
+        window.xProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
+        window.yProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
+    }
+
+    private void applyResponsiveVirtualIconViewMetrics(double viewportWidth) {
+        if (virtualIconGridView == null || viewportWidth <= 1.0) {
+            return;
+        }
+        double snappedWidth = Math.max(1.0, Math.floor(viewportWidth));
+        virtualIconGridView.setPrefWidth(snappedWidth);
+        virtualIconGridView.setMaxWidth(Double.MAX_VALUE);
+        if (virtualIconListView != null) {
+            virtualIconListView.setPrefWidth(snappedWidth);
+            virtualIconListView.setMaxWidth(Double.MAX_VALUE);
+        }
+    }
+
+    private void rebuildVirtualIconGridPreservingAnchor() {
+        double anchor = captureVirtualIconGridScrollAnchor();
+        rebuildIconTiles();
+        restoreVirtualIconGridScrollAnchor(anchor);
+    }
+
+    private double captureVirtualIconGridScrollAnchor() {
+        ScrollBar scrollBar = findVerticalScrollBar(virtualIconGridView);
+        if (scrollBar == null) {
+            return Double.isNaN(lastVirtualIconGridScrollValue) ? Double.NaN : lastVirtualIconGridScrollValue;
+        }
+        double value = scrollBar.getValue();
+        lastVirtualIconGridScrollValue = value;
+        return value;
+    }
+
+    private void restoreVirtualIconGridScrollAnchor(double anchor) {
+        double target = Double.isNaN(anchor) ? lastVirtualIconGridScrollValue : anchor;
+        if (Double.isNaN(target)) {
+            return;
+        }
+        Platform.runLater(() -> {
+            ScrollBar scrollBar = findVerticalScrollBar(virtualIconGridView);
+            if (scrollBar == null) {
+                return;
+            }
+            double clamped = Math.max(scrollBar.getMin(), Math.min(scrollBar.getMax(), target));
+            scrollBar.setValue(clamped);
+            lastVirtualIconGridScrollValue = clamped;
+        });
+    }
+
+    private ScrollBar findVerticalScrollBar(Node control) {
+        if (control == null) {
+            return null;
+        }
+        control.applyCss();
+        for (Node node : control.lookupAll(".scroll-bar")) {
+            if (node instanceof ScrollBar scrollBar && scrollBar.getOrientation() == Orientation.VERTICAL) {
+                return scrollBar;
+            }
+        }
+        return null;
+    }
+
+    private boolean isUsingVirtualIconGridForCurrentView() {
+        return isGridIconMode(viewMode)
+                && virtualIconGridView != null
+                && virtualIconGridView.isVisible()
+                && virtualIconGridView.isManaged();
     }
 
     private double resolveIconFlowWrapLength(ViewMode mode, boolean verticalFlow) {
-        if (iconScroll != null) {
+        if (!verticalFlow) {
+            return resolveResponsiveIconViewportWidth();
+        }
+        if (iconScroll != null && iconScroll.isVisible()) {
             Bounds viewport = iconScroll.getViewportBounds();
-            if (viewport != null) {
-                double candidate = verticalFlow ? viewport.getHeight() : viewport.getWidth();
-                if (candidate > 1.0) {
-                    return candidate;
-                }
+            if (viewport != null && viewport.getHeight() > 1.0) {
+                return viewport.getHeight();
             }
             Bounds scrollBounds = iconScroll.getLayoutBounds();
-            if (scrollBounds != null) {
-                double candidate = verticalFlow ? scrollBounds.getHeight() : scrollBounds.getWidth();
-                if (candidate > 1.0) {
-                    return candidate;
-                }
+            if (scrollBounds != null && scrollBounds.getHeight() > 1.0) {
+                return scrollBounds.getHeight();
             }
         }
-        return verticalFlow ? 720.0 : 900.0;
+        if (viewHost != null) {
+            Bounds hostBounds = viewHost.getLayoutBounds();
+            if (hostBounds != null && hostBounds.getHeight() > 1.0) {
+                return hostBounds.getHeight();
+            }
+        }
+        return 720.0;
     }
 
     private void applyIconFlowModeClasses(ViewMode mode) {
@@ -7491,12 +7954,11 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         virtualIconGridView.getStyleClass().add("icon-virtual-grid");
         virtualIconGridView.setVisible(false);
         virtualIconGridView.setManaged(false);
+        virtualIconGridView.setMaxWidth(Double.MAX_VALUE);
+        virtualIconGridView.setMaxHeight(Double.MAX_VALUE);
         virtualIconGridView.setCellFactory(_ -> new ListCell<>() {
             private final FlowPane rowPane = new FlowPane();
             {
-                rowPane.setHgap(16.0);
-                rowPane.setVgap(16.0);
-                rowPane.setPadding(new Insets(16.0));
                 rowPane.setAlignment(Pos.TOP_LEFT);
             }
             @Override
@@ -7514,6 +7976,9 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                     setGraphic(null);
                     return;
                 }
+                rowPane.setHgap(iconGridFlowHgapForMode(viewMode));
+                rowPane.setVgap(iconGridFlowVgapForMode(viewMode));
+                rowPane.setPadding(iconFlowPaddingForMode(viewMode));
                 for (Path p : row) {
                     if (p == null) {
                         continue;
@@ -7528,6 +7993,8 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         virtualIconListView.getStyleClass().add("icon-virtual-list");
         virtualIconListView.setVisible(false);
         virtualIconListView.setManaged(false);
+        virtualIconListView.setMaxWidth(Double.MAX_VALUE);
+        virtualIconListView.setMaxHeight(Double.MAX_VALUE);
         virtualIconListView.setCellFactory(_ -> new ListCell<>() {
             @Override
 /**
@@ -7569,6 +8036,18 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             }
         });
         // Insert into the same StackPane as the table and iconScroll (viewHost in FXML).
+        virtualIconGridView.prefWidthProperty().bind(host.widthProperty());
+        virtualIconGridView.prefHeightProperty().bind(host.heightProperty());
+        virtualIconListView.prefWidthProperty().bind(host.widthProperty());
+        virtualIconListView.prefHeightProperty().bind(host.heightProperty());
+        virtualIconGridView.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
+        virtualIconGridView.heightProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
+        virtualIconGridView.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveIconViewportLayoutRefresh());
+        virtualIconListView.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
+        virtualIconListView.heightProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
+        host.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
+        host.heightProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
+        host.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveIconViewportLayoutRefresh());
         host.getChildren().add(virtualIconGridView);
         host.getChildren().add(virtualIconListView);
     }
@@ -7582,6 +8061,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             virtualIconGridView.setVisible(false);
             virtualIconGridView.setManaged(false);
             virtualIconGridView.getItems().clear();
+            virtualIconGridView.getProperties().remove("iconGridItemsPerRow");
         }
         if (virtualIconListView != null) {
             virtualIconListView.setVisible(false);
@@ -7632,11 +8112,12 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         }
         virtualIconGridView.setVisible(true);
         virtualIconGridView.setManaged(true);
-        // Build row model (List<Path> per row) based on available width.
+        // Build row model (List<Path> per row) based on the current visible width.
         int itemsPerRow = computeItemsPerIconRow();
         if (itemsPerRow < 1) {
             itemsPerRow = 1;
         }
+        virtualIconGridView.getProperties().put("iconGridItemsPerRow", itemsPerRow);
         List<List<Path>> rows = new ArrayList<>();
         for (int i = 0; i < items.size(); i += itemsPerRow) {
             int j = Math.min(items.size(), i + itemsPerRow);
@@ -7681,24 +8162,76 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
  */
     private int computeItemsPerIconRow() {
         LogSupport.enter(LOG, "computeItemsPerIconRow");
-        double w = 900.0;
-        if (virtualIconGridView != null) {
-            w = virtualIconGridView.getWidth();
+        return computeItemsPerIconRow(resolveResponsiveIconViewportWidth());
+    }
+
+    private int computeItemsPerIconRow(double viewportWidth) {
+        Insets paddingInsets = iconFlowPaddingForMode(viewMode);
+        double padding = paddingInsets.getLeft() + paddingInsets.getRight();
+        double tileW = iconGridTileWidthForMode(viewMode);
+        double hgap = iconGridFlowHgapForMode(viewMode);
+        double usable = Math.max(1.0, viewportWidth - padding);
+        return (int) Math.max(1.0, Math.floor((usable + hgap) / (tileW + hgap)));
+    }
+
+    private double resolveResponsiveIconViewportWidth() {
+        double w = resolvePrimaryResponsiveIconViewportWidth();
+        if (w > 1.0) {
+            lastResponsiveIconViewportWidth = w;
+            return w;
         }
-        if (w <= 0.0 && iconScroll != null) {
-            w = iconScroll.getViewportBounds().getWidth();
+        if (lastResponsiveIconViewportWidth > 1.0) {
+            return lastResponsiveIconViewportWidth;
         }
-        if (w <= 0.0 && iconScroll != null && iconScroll.getParent() != null) {
-            w = iconScroll.getParent().getLayoutBounds().getWidth();
+        return 900.0;
+    }
+
+    private double resolvePrimaryResponsiveIconViewportWidth() {
+        if (isUsingVirtualIconGridForCurrentView()) {
+            double gridWidth = firstPositiveWidth(
+                    virtualIconGridView == null ? 0.0 : virtualIconGridView.getWidth(),
+                    virtualIconGridView == null ? 0.0 : boundsWidth(virtualIconGridView.getLayoutBounds()),
+                    viewHost == null ? 0.0 : viewHost.getWidth(),
+                    viewHost == null ? 0.0 : boundsWidth(viewHost.getLayoutBounds()));
+            if (gridWidth > 1.0) {
+                return gridWidth;
+            }
         }
-        if (w <= 0.0) {
-            w = 900.0;
+        if (iconScroll != null && iconScroll.isVisible()) {
+            double scrollWidth = firstPositiveWidth(
+                    boundsWidth(iconScroll.getViewportBounds()),
+                    iconScroll.getWidth(),
+                    boundsWidth(iconScroll.getLayoutBounds()),
+                    viewHost == null ? 0.0 : viewHost.getWidth(),
+                    viewHost == null ? 0.0 : boundsWidth(viewHost.getLayoutBounds()));
+            if (scrollWidth > 1.0) {
+                return scrollWidth;
+            }
         }
-        double tileW = Math.max(96.0, iconSizePx + 40.0);
-        double hgap = 16.0;
-        double padding = 32.0;
-        double usable = Math.max(1.0, w - padding);
-        return (int) Math.max(1.0, Math.floor(usable / (tileW + hgap)));
+        return firstPositiveWidth(
+                viewHost == null ? 0.0 : viewHost.getWidth(),
+                viewHost == null ? 0.0 : boundsWidth(viewHost.getLayoutBounds()),
+                virtualIconGridView == null ? 0.0 : virtualIconGridView.getWidth(),
+                virtualIconGridView == null ? 0.0 : boundsWidth(virtualIconGridView.getLayoutBounds()),
+                iconScroll == null ? 0.0 : boundsWidth(iconScroll.getViewportBounds()),
+                iconScroll == null ? 0.0 : iconScroll.getWidth(),
+                iconScroll == null ? 0.0 : boundsWidth(iconScroll.getLayoutBounds()));
+    }
+
+    private double firstPositiveWidth(double... candidates) {
+        if (candidates == null) {
+            return 0.0;
+        }
+        for (double candidate : candidates) {
+            if (candidate > 1.0) {
+                return candidate;
+            }
+        }
+        return 0.0;
+    }
+
+    private double boundsWidth(Bounds bounds) {
+        return bounds == null ? 0.0 : bounds.getWidth();
     }
 /**
  * buildIconTile.
@@ -7958,9 +8491,36 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         return ""; // generic document
     }
     private void configureTabsAndHome() {
+        applyExplorerTabChrome(homeTabButton, null);
+        applyExplorerTabChrome(currentTabButton, currentDirectory);
+        applyExplorerTabChrome(newTabButton, null);
         refreshHomeSurface();
         updateTabStrip();
         applyHomeModeVisibility();
+    }
+
+    private void applyExplorerTabChrome(Button button, Path iconPath) {
+        if (button == null) {
+            return;
+        }
+        button.setTranslateY(3.0);
+        button.setContentDisplay(ContentDisplay.LEFT);
+        button.setGraphicTextGap(6.0);
+        if (button == newTabButton) {
+            button.setGraphic(null);
+            return;
+        }
+        boolean dark = themeService != null && themeService.isDarkPreferred();
+        Image iconImage = iconPath != null
+                ? IconLoader.loadForPath(iconPath, dark, 16)
+                : IconLoader.load(IconLoader.IconType.FOLDER, dark, 16);
+        ImageView graphic = new ImageView(iconImage);
+        graphic.setFitWidth(16.0);
+        graphic.setFitHeight(16.0);
+        graphic.setPreserveRatio(true);
+        graphic.setSmooth(true);
+        graphic.setMouseTransparent(true);
+        button.setGraphic(graphic);
     }
 
     @FXML
@@ -8029,15 +8589,18 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
     private void updateTabStrip() {
         if (homeTabButton != null) {
             setStyleClass(homeTabButton, "selected-tab", homeActive);
+            applyExplorerTabChrome(homeTabButton, null);
             homeTabButton.setTooltip(new javafx.scene.control.Tooltip("Open Home"));
         }
         if (currentTabButton != null) {
             setStyleClass(currentTabButton, "selected-tab", !homeActive);
             currentTabButton.setText(directoryDisplayName(currentDirectory));
             currentTabButton.setDisable(currentDirectory == null);
+            applyExplorerTabChrome(currentTabButton, currentDirectory);
             currentTabButton.setTooltip(new javafx.scene.control.Tooltip(currentDirectory == null ? "Current folder" : currentDirectory.toString()));
         }
         if (newTabButton != null) {
+            applyExplorerTabChrome(newTabButton, null);
             newTabButton.setTooltip(new javafx.scene.control.Tooltip("Open current folder in a new window"));
         }
     }

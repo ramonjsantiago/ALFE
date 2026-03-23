@@ -1,0 +1,9 @@
+HOTFIX91 / Phase 4P.7 fixes the icon-view resize regression introduced by HOTFIX90.
+
+What changed:
+- added width/layout-bounds listeners for the real icon-view host, virtual icon grid, and scroll container
+- stopped transient zero-width measurements from collapsing the icon grid back to the old fallback column count
+- reused the last known good responsive viewport width during resize churn so icon views stay fluid after the first open
+
+Result:
+- Extra large icons, Large icons, Medium icons, and Small icons continue to reflow when the application window is resized, instead of snapping back to a fixed column count

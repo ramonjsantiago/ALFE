@@ -1,0 +1,20 @@
+Phase 4P.9B / HOTFIX95 - Navigation Pane Growth Lock and Metrics
+
+Summary
+- Keeps the navigation Tree View at its current width when the application grows horizontally.
+- Allows the navigation Tree View to shrink down to a compact 54px content width when the application is squeezed horizontally.
+- Sets navigation-pane shell padding to 3px on all sides.
+- Sets the dark navigation Tree View background to #191919.
+- Sets a 1px Tree View border with color #3A3A3A.
+
+Implementation
+- Added fx:id navigationPaneShell so the controller can preserve the left-pane shell width on growth.
+- Installed a mainSplitPane width listener that only reapplies the divider position when the app width increases.
+- Tracks the current navigation-pane shell width so later growth preserves the current width, including after manual divider drags.
+- Reduced the TreeView minimum width from the earlier wide minimum to 54px and set the shell minimum to 60px to preserve 3px padding on both sides.
+- Updated navigation-pane CSS metrics and dark styling.
+
+Changed files
+- src/main/java/com/fileexplorer/controller/MainController.java
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- src/main/resources/com/fileexplorer/ui/css/navigation-pane-parity.css

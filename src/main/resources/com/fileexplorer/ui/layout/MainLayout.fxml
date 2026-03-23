@@ -565,10 +565,10 @@
             <items>
                 <!-- Left: navigation pane shell + folder tree -->
                 <!-- Wrapped so the pane can match Explorer's dedicated left-surface background, padding, and separator. -->
-                <StackPane styleClass="navigation-pane-shell">
+                <StackPane fx:id="navigationPaneShell" minWidth="60.0" styleClass="navigation-pane-shell">
                     <children>
                         <!-- Taller rows (+12px from the original 36px target) for clearly visible separation between navigation items. -->
-                        <TreeView fx:id="folderTree" styleClass="tree-view-fixed explorer-tree explorer-navigation-pane" minWidth="275.0" prefWidth="320.0" fixedCellSize="42.0">
+                        <TreeView fx:id="folderTree" styleClass="tree-view-fixed explorer-tree explorer-navigation-pane" minWidth="54.0" prefWidth="320.0" fixedCellSize="42.0">
                             <contextMenu>
                                 <ContextMenu styleClass="explorer-tree-menu">
                                     <items>

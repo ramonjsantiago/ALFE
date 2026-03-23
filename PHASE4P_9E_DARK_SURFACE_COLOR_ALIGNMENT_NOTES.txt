@@ -1,0 +1,17 @@
+HOTFIX98 / Phase 4P.9E — Dark Surface Color Alignment
+
+This hotfix applies the requested dark-surface color adjustments without changing layout code.
+
+Applied dark-mode overrides:
+- Tree View background: #000000
+- Tree View border color: #3A3A3A
+- Separator color: #3A3A3A
+- Selected tab color: #2C2C2C
+- Unselected tab color: #202020
+- Toolbar background color: #2C2C2C
+- Table View background color: #000000
+
+Implementation notes:
+- Changes are isolated to explorer-override-everything.css so they win late in stylesheet precedence.
+- Navigation pane shell background is also forced to black in dark mode so the 3px shell padding blends with the Tree View.
+- Table overrides cover the TableView body and its VirtualFlow viewport/sheet surfaces to avoid gradient bleed-through.

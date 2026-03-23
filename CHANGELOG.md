@@ -1,3 +1,41 @@
+
+## HOTFIX102 / Phase 4P.9I — Tab Folder Icons and Vertical Offset
+- Added folder icons to the left of the Home and Current folder tab text.
+- Current folder tab now refreshes its folder icon alongside tab text updates.
+- Shifted tab buttons 3px downward to match the requested vertical placement.
+
+## HOTFIX102 — Phase 4P.9H Tab Folder Icons and Vertical Offset
+- removed the vertical gap between the tab strip and the top toolbar surface
+- aligned the bottom edge of the tabs with the top edge of the toolbar stack
+- kept the existing HOTFIX99/HOTFIX100 toolbar icon-only and tooltip styling intact
+
+## HOTFIX97 / Phase 4P.9D — Table View Right Edge Container Parity Compile Fix
+- Corrected the HOTFIX96 compile break by replacing the missing syncDetailsLastVisibleColumnClasses() call with syncDetailsVisibleColumnRoleClasses().
+- Corrected the invalid Node.getWidth() usage in responsive split-item width resolution by switching to bounds-based width probes that compile for javafx.scene.Node.
+- Preserved the HOTFIX96 right-edge container parity behavior while making the package compile-clean again.
+
+## HOTFIX92 / Phase 4P.8 — Icon View live resize anchor and metrics parity
+
+- hardened icon-view width resolution so responsive column counts follow the current visible host width instead of latching onto stale larger widths during later window resizes
+- bound the virtual icon views to the live view-host size and extended resize listeners to the Scene and Window so repeated resize cycles keep driving relayout
+- preserved the virtual icon-grid vertical scroll anchor across responsive row-count rebuilds to reduce jumpiness while the icon views reflow
+- kept the existing HOTFIX91 responsive relayout behavior for first-open icon views while extending it to later continuous resize passes
+
+
+## HOTFIX89 / Phase 4P.5 — View Menu icon-slot restore
+
+- backed out the HOTFIX88 native View menu mark-gutter parity changes because the result removed the dedicated icon slot the user preferred
+- restored the prior View menu implementation and spacing model from the HOTFIX87 baseline
+- kept the HOTFIX87 startup correction and the thumbnail/cache pipeline unchanged while undoing only the HOTFIX88 View menu experiment
+
+
+## HOTFIX88 / Phase 4P.4 — View Menu native mark-gutter parity
+
+- replaced the View menu CustomMenuItem rows with native `RadioMenuItem` / `CheckMenuItem` / `MenuItem` rows so JavaFX owns the mark column, submenu arrow, and popup row semantics again
+- locked the View menu mark gutter, graphic gutter, and label spacing in CSS to line up the text starts and submenu indentation against the supplied Windows reference screenshot
+- kept the existing view-mode, pane, and Show submenu behaviors wired through `MainController`, but removed the extra `Command Log...` row from View > Show so the submenu structure matches the supplied reference more closely
+
+
 ## HOTFIX87 / Phase 4P.3 — Single-Pass Styled Startup
 
 - removed the startup black pre-show placeholder scene and now build the lightweight shell root before `stage.show()`
@@ -190,3 +228,59 @@
 - Added a compatibility fingerprint for cache-affecting thumbnail pipeline settings and an optional startup clear path via `-Dfileexplorer.thumb.diskCache.clearOnManifestMismatch=true|false`.
 - Added manifest write, write-failure, mismatch-detected, and mismatch-clear counters to thumbnail diagnostics.
 - Included the manifest contents in generated support bundle zips for easier cache triage after future thumbnail pipeline changes.
+
+## HOTFIX90 / Phase 4P.6 — Icon View Responsive Horizontal Flow
+- Adjusted icon-mode responsive layout so Extra large icons, Large icons, Medium icons, and Small icons use the full visible width of the container instead of stopping at a stale low column count.
+- Added a debounced viewport-width refresh path that rebuilds the virtual icon grid when the computed items-per-row changes.
+- Updated virtualized icon-grid row spacing to follow the active mode's real flow padding and gaps.
+- Updated row-capacity calculation to use the active mode's actual tile width, horizontal gap, and padding for more accurate fill behavior.
+
+
+## HOTFIX91 / Phase 4P.7 — Icon View Resize Relayout Fix
+- Fixed the HOTFIX90 regression where grid icon views could re-open responsively once and then fall back to a stale fixed column count during later window resizes.
+- Added responsive layout listeners to the actual icon-view host, virtual icon grid, and scroll container so width changes keep retriggering the row-capacity refresh path.
+- Hardened width resolution so transient zero-width measurements reuse the last good viewport width instead of falling back to the old default three-column estimate.
+
+## HOTFIX93 / Phase 4P.9 — Table View Inner Viewport Resize Relayout Fix
+- Added a responsive Details/Table viewport relayout path that tracks the live inner content width instead of relying on a stale first-open measurement.
+- Wired table-width refresh listeners to the table, details shell, content host, split pane, side pane, scene, and window so repeated stretch/shrink cycles keep retriggering constrained-column layout.
+- Reapplied the constrained flex-last-column resize policy after split-pane, navigation-pane, and Details-pane visibility changes so the table occupies the full remaining center width when the right pane is hidden.
+
+
+## HOTFIX94 / Phase 4P.9A — Table View Resize Regression Fix
+- Corrected the HOTFIX93 regression that could pin Table View sizing by forcing pref widths during responsive relayout.
+- Kept the responsive Table/Details relayout trigger path, but switched the refresh to layout and constrained-column policy reapplication instead of writing fixed widths.
+- Reset the Details shell and TableView back to computed sizing during refresh and added a width-change guard to reduce self-triggered resize churn.
+
+
+## HOTFIX95 / Phase 4P.9B — Navigation Pane Growth Lock and Metrics
+- Changed navigation-pane resize behavior so horizontal window growth preserves the Tree View's current width instead of expanding it proportionally.
+- Allowed the navigation Tree View to shrink down to 54px content width while preserving a constant 3px shell padding around it.
+- Updated the dark navigation-pane visuals to use a #191919 Tree View background with a 1px #3A3A3A border.
+- Restored navigation-pane show/hide behavior using the last known shell width instead of forcing a fixed percentage divider on reopen.
+
+
+## HOTFIX97 / Phase 4P.9C — Table View Right Edge Container Parity
+- Reworked responsive Table View width resolution so it follows the live view container width first, instead of latching onto stale table-shell measurements during resize churn.
+- Applied the responsive width back onto the details shell and TableView so the table right edge stays aligned with the container while shrinking and growing the application window.
+- Kept constrained flex-last-column behavior in the responsive refresh path so the last visible column continues to absorb remaining width instead of leaving a dead area on the right.
+
+
+## HOTFIX98 / Phase 4P.9E — Dark Surface Color Alignment
+- Updated the dark navigation Tree View background to #000000 while keeping the requested 1px #3A3A3A border and 3px shell padding.
+- Updated dark toolbar surfaces to #2C2C2C.
+- Updated custom tab buttons so unselected tabs use #202020 and the selected tab uses #2C2C2C.
+- Updated dark Table View surfaces to #000000.
+- Unified separator lines to #3A3A3A across toolbar, generic, and context-menu separators.
+
+## HOTFIX99 / Phase 4P.9F — Toolbar Icon-Only and Color Parity
+- Made the leading command-bar actions up to See more render as icon-only controls while keeping their current actions and flyouts.
+- Moved those command-bar labels into exact-match tooltips so hover text now reflects the hidden toolbar label text directly.
+- Updated dark command-bar text and glyph color to #E0DFDF, changed toolbar separator lines to #272727, and flattened the dark toolbar surface corners.
+
+
+
+## HOTFIX100 / Phase 4P.9G — Toolbar Tooltip Visibility Fix
+- corrected tooltip contrast so icon-only toolbar button tooltips are readable again
+- aligned tooltip background/border colors with the dark palette
+- kept HOTFIX99 toolbar icon-only layout unchanged

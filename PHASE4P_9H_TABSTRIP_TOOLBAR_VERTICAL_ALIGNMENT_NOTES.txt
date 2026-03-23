@@ -1,0 +1,14 @@
+Phase 4P.9H — Tabstrip / Toolbar Vertical Alignment
+
+Goal
+- align the bottom of the tabs with the top of the toolbar stack
+- remove the visual vertical gap between the tab strip and the toolbar surface
+
+Implementation
+- set the top work-area VBox spacing to 0
+- removed the tab strip bottom padding so the tabs sit directly on the toolbar surface
+- kept the current toolbar styling and tooltip fixes unchanged
+
+Risk
+- stylesheet-only adjustment
+- no controller or FXML behavior changes

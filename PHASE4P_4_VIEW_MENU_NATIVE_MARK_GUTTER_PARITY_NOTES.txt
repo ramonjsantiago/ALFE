@@ -1,0 +1,21 @@
+HOTFIX88 / Phase 4P.4 — View menu native mark-gutter parity
+
+Scope
+- replace the custom embedded control rows in the View menu with native JavaFX RadioMenuItem / CheckMenuItem rows
+- lock the left mark gutter and graphic gutter widths so labels begin at a consistent x-position
+- tune View > Show submenu indentation and spacer graphics against the supplied Windows reference screenshot
+- remove the extra Command Log row from View > Show so the submenu structure matches the supplied Explorer reference more closely
+
+Implementation
+- MainLayout.fxml now defines the View menu with native RadioMenuItem / CheckMenuItem / Menu rows instead of CustomMenuItem rows containing RadioButton / CheckBox controls
+- MainController wires RadioMenuItem view modes through the existing ToggleGroup and continues to drive details/preview/show toggles through the same state update methods
+- app-main.css now contains View-menu-specific menu-item gutter overrides for:
+  - fixed left mark gutter width
+  - fixed graphic column width
+  - zeroed label padding for consistent text alignment
+  - radio-style dot marks for top-level view mode and pane rows
+  - preserved checkmark behavior for the Show submenu rows
+
+Notes
+- This hotfix intentionally restores native menu semantics and popup spacing instead of continuing the prior custom HBox-row approach
+- The View > Show submenu now ends with Operation History... to match the supplied Windows screenshot more closely

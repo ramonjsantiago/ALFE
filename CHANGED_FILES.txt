@@ -1,5 +1,7 @@
-PHASE_LABEL.txt
-CHANGELOG.md
-CHANGED_FILES.txt
-PHASE4P_3_SINGLE_PASS_STYLED_STARTUP_NOTES.txt
-src/main/java/com/fileexplorer/app/MainApp.java
+PHASE4P_9I_TAB_FOLDER_ICONS_AND_VERTICAL_OFFSET / HOTFIX102
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE4P_9I_TAB_FOLDER_ICONS_AND_VERTICAL_OFFSET_NOTES.txt
+- src/main/java/com/fileexplorer/controller/MainController.java
+- src/main/resources/com/fileexplorer/ui/css/explorer-override-everything.css

@@ -18,3 +18,151 @@
      -fx-border-radius: 0;
  }
 
+
+/* HOTFIX98 / Phase 4P.9E — Dark Surface Color Alignment */
+
+.theme-dark .navigation-pane-shell {
+    -fx-background-color: #000000;
+    -fx-border-color: transparent #3A3A3A transparent transparent;
+}
+
+.theme-dark .explorer-navigation-pane,
+.theme-dark .tree-view.explorer-navigation-pane {
+    -fx-background-color: #000000;
+    -fx-control-inner-background: #000000;
+    -fx-border-color: #3A3A3A;
+}
+
+.theme-dark .explorer-details-table,
+.theme-dark .table-view {
+    -fx-background-color: #000000;
+    -fx-control-inner-background: #000000;
+}
+
+.theme-dark .details-view-shell {
+    -fx-background-color: #000000;
+}
+
+.theme-dark .explorer-details-table .virtual-flow,
+.theme-dark .explorer-details-table .clipped-container,
+.theme-dark .explorer-details-table .sheet,
+.theme-dark .explorer-details-table .viewport,
+.theme-dark .explorer-details-table > .virtual-flow > .corner,
+.theme-dark .table-view .virtual-flow,
+.theme-dark .table-view .clipped-container,
+.theme-dark .table-view .sheet,
+.theme-dark .table-view .viewport,
+.theme-dark .table-view > .virtual-flow > .corner {
+    -fx-background-color: #000000;
+}
+
+.theme-dark .fluent-toolbar,
+.theme-dark .secondary-toolbar-surface,
+.theme-dark .secondary-toolbar,
+.theme-dark .command-bar {
+    -fx-background-color: #2C2C2C;
+}
+
+.explorer-tab-button {
+    -fx-background-color: #202020;
+    -fx-border-color: #3A3A3A;
+}
+
+.explorer-tab-button:hover {
+    -fx-background-color: #252525;
+    -fx-border-color: #3A3A3A;
+}
+
+.explorer-tab-button.selected-tab {
+    -fx-background-color: #2C2C2C;
+    -fx-border-color: #3A3A3A;
+}
+
+.separator .line,
+.command-bar .separator:vertical .line,
+.secondary-toolbar .separator:vertical .line,
+.separator-menu-item .line,
+.choose-details-separator .line {
+    -fx-background-color: #3A3A3A;
+    -fx-border-color: #3A3A3A;
+}
+
+/* HOTFIX99 / Phase 4P.9F — Toolbar Icon-Only and Color Parity */
+
+.theme-dark .top-chrome-surface,
+.theme-dark .top-chrome-surface .command-bar,
+.theme-dark .fluent-toolbar.command-bar {
+    -fx-background-color: #2C2C2C;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
+}
+
+.theme-dark .command-bar .button,
+.theme-dark .command-bar .toggle-button,
+.theme-dark .command-bar .menu-button {
+    -fx-text-fill: #E0DFDF;
+}
+
+.theme-dark .command-bar .text,
+.theme-dark .command-bar .label,
+.theme-dark .command-bar .fluent-icon,
+.theme-dark .command-bar .mdl2-icon {
+    -fx-fill: #E0DFDF;
+    -fx-text-fill: #E0DFDF;
+}
+
+.command-bar > .button.icon-only,
+.command-bar > .toggle-button.icon-only,
+.command-bar > .menu-button.icon-only {
+    -fx-min-width: 34px;
+    -fx-pref-width: 34px;
+    -fx-max-width: 34px;
+    -fx-padding: 0;
+    -fx-content-display: graphic-only;
+    -fx-graphic-text-gap: 0;
+    -fx-alignment: center;
+}
+
+.command-bar .separator:vertical .line,
+.secondary-toolbar .separator:vertical .line {
+    -fx-background-color: #272727;
+    -fx-border-color: #272727;
+}
+
+/* HOTFIX101 / Phase 4P.9H — Tabstrip / Toolbar Vertical Alignment */
+.window-top-stack.explorer-top-work-area {
+    -fx-spacing: 0;
+}
+
+.explorer-tabstrip {
+    -fx-padding: 0 8 0 8;
+}
+
+.top-chrome-surface.explorer-top-bands {
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
+}
+
+.theme-dark .top-chrome-surface.explorer-top-bands,
+.theme-light .top-chrome-surface.explorer-top-bands {
+    -fx-background-radius: 12 12 0 0;
+    -fx-border-radius: 12 12 0 0;
+}
+
+
+/* HOTFIX102 / Phase 4P.9I — Tab Folder Icons and Vertical Offset */
+.explorer-tab-button {
+    -fx-content-display: left;
+    -fx-graphic-text-gap: 6px;
+}
+
+.explorer-home-tab,
+.explorer-current-tab {
+    -fx-alignment: center-left;
+    -fx-padding: 0 12 0 10;
+}
+
+.explorer-home-tab .image-view,
+.explorer-current-tab .image-view {
+    -fx-opacity: 1.0;
+}

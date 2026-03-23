@@ -1,0 +1,13 @@
+HOTFIX99 / Phase 4P.9F — Toolbar Icon-Only and Color Parity
+
+Summary
+- Made the command-bar items up to the See more menu render as icon-only controls.
+- Moved the visible toolbar labels for those command-bar items into per-control tooltips.
+- Updated dark toolbar text/icon color to #E0DFDF.
+- Updated toolbar separator lines to #272727.
+- Removed rounded edges from the dark top toolbar surface.
+
+Changed behavior
+- New, Cut, Copy, Paste, Rename, Share, Delete, Sort, and View now use icon-only command-bar presentation while keeping their existing actions.
+- Their tooltips now use the control's label text directly, so hover help reads New, Cut, Copy, Paste, Rename, Share, Delete, Sort, and View.
+- Preview keeps its trailing position after See more and keeps its text label.

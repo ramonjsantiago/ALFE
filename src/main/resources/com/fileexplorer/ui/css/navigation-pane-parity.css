@@ -1,7 +1,7 @@
 /* Phase 4D - Navigation pane fidelity */
 
 .navigation-pane-shell {
-    -fx-padding: 8 6 8 6;
+    -fx-padding: 3;
 }
 
 .theme-dark .navigation-pane-shell {
@@ -34,10 +34,13 @@
 }
 
 .explorer-navigation-pane {
-    -fx-background-color: transparent;
-    -fx-control-inner-background: transparent;
+    -fx-background-color: #191919;
+    -fx-control-inner-background: #191919;
     -fx-background-insets: 0;
     -fx-padding: 0;
+    -fx-border-color: #3A3A3A;
+    -fx-border-width: 1;
+    -fx-border-insets: 0;
     -fx-indent: 14px;
     -fx-fixed-cell-size: 40px;
 }
