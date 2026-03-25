@@ -26,3 +26,17 @@ test
 ## CI
 
 This repo includes GitHub Actions workflows for build/test and release packaging.
+
+HOTFIX110 / Phase 4P.9P — Toolbar Native Menu Restore and Tab Strip Close/Plus Parity
+- src/main/java/com/fileexplorer/controller/MainController.java
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- src/main/resources/com/fileexplorer/ui/css/explorer-override-everything.css
+- src/main/resources/com/fileexplorer/ui/css/home-tabs-parity.css
+- PHASE4P_9P_TOOLBAR_NATIVE_MENU_RESTORE_AND_TAB_STRIP_CLOSE_PLUS_PARITY_NOTES.txt
+
+
+HOTFIX111 / Phase 4P.9Q — Inline Tab Close and Plus-After-Last-Tab Parity
+- src/main/java/com/fileexplorer/controller/MainController.java
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- src/main/resources/com/fileexplorer/ui/css/explorer-override-everything.css
+- PHASE4P_9Q_INLINE_TAB_CLOSE_AND_PLUS_AFTER_LAST_TAB_PARITY_NOTES.txt

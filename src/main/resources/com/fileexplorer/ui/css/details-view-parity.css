@@ -275,14 +275,24 @@
 .explorer-details-table .table-row-cell:selected,
 .explorer-details-table .table-row-cell:filled:selected,
 .explorer-details-table .table-row-cell:filled:selected:hover,
+.explorer-details-table .table-row-cell:explorer-selected,
+.explorer-details-table .table-row-cell:filled:explorer-selected,
+.explorer-details-table .table-row-cell:filled:explorer-selected:hover,
 .explorer-details-table .table-row-cell:filled:explorer-hover,
 .explorer-details-table .table-row-cell:filled:selected:explorer-hover,
+.explorer-details-table .table-row-cell:filled:explorer-selected:explorer-hover,
 .explorer-details-table:focused .table-row-cell:selected,
 .explorer-details-table:focused .table-row-cell:filled:selected,
+.explorer-details-table:focused .table-row-cell:explorer-selected,
+.explorer-details-table:focused .table-row-cell:filled:explorer-selected,
 .root.window-inactive .explorer-details-table .table-row-cell:selected,
 .root.window-inactive .explorer-details-table .table-row-cell:filled:selected,
+.root.window-inactive .explorer-details-table .table-row-cell:explorer-selected,
+.root.window-inactive .explorer-details-table .table-row-cell:filled:explorer-selected,
 .root.window-inactive .explorer-details-table:focused .table-row-cell:selected,
-.root.window-inactive .explorer-details-table:focused .table-row-cell:filled:selected {
+.root.window-inactive .explorer-details-table:focused .table-row-cell:filled:selected,
+.root.window-inactive .explorer-details-table:focused .table-row-cell:explorer-selected,
+.root.window-inactive .explorer-details-table:focused .table-row-cell:filled:explorer-selected {
     -fx-background-color: transparent, transparent;
     -fx-border-color: transparent, transparent;
     -fx-selection-bar: transparent;
@@ -309,13 +319,19 @@
 
 .theme-dark .explorer-details-table .table-row-cell:selected .table-cell,
 .theme-dark .explorer-details-table .table-row-cell:filled:selected .table-cell,
-.theme-dark .explorer-details-table .table-row-cell:filled:selected:explorer-hover .table-cell {
+.theme-dark .explorer-details-table .table-row-cell:explorer-selected .table-cell,
+.theme-dark .explorer-details-table .table-row-cell:filled:explorer-selected .table-cell,
+.theme-dark .explorer-details-table .table-row-cell:filled:selected:explorer-hover .table-cell,
+.theme-dark .explorer-details-table .table-row-cell:filled:explorer-selected:explorer-hover .table-cell {
     -fx-text-fill: #dedede;
 }
 
 .theme-light .explorer-details-table .table-row-cell:selected .table-cell,
 .theme-light .explorer-details-table .table-row-cell:filled:selected .table-cell,
-.theme-light .explorer-details-table .table-row-cell:filled:selected:explorer-hover .table-cell {
+.theme-light .explorer-details-table .table-row-cell:explorer-selected .table-cell,
+.theme-light .explorer-details-table .table-row-cell:filled:explorer-selected .table-cell,
+.theme-light .explorer-details-table .table-row-cell:filled:selected:explorer-hover .table-cell,
+.theme-light .explorer-details-table .table-row-cell:filled:explorer-selected:explorer-hover .table-cell {
     -fx-text-fill: #dedede;
 }
 

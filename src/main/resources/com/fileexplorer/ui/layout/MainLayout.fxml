@@ -51,10 +51,11 @@
                     <children>
                         <Button fx:id="homeTabButton" text="Home" focusTraversable="false" onAction="#onShowHomeTab" styleClass="explorer-tab-button, explorer-home-tab"/>
                         <Button fx:id="currentTabButton" text="Current folder" focusTraversable="false" onAction="#onShowCurrentTab" styleClass="explorer-tab-button, explorer-current-tab"/>
-                        <Region HBox.hgrow="ALWAYS"/>
                         <Button fx:id="newTabButton" text="+" focusTraversable="false" onAction="#onOpenNewTabButton" styleClass="explorer-tab-button, explorer-new-tab-button">
                             <tooltip><Tooltip text="Open current folder in a new window"/></tooltip>
                         </Button>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <Button fx:id="closeTabButton" text="×" focusTraversable="false" onAction="#onCloseCurrentTabButton" styleClass="explorer-tab-close-button" visible="false" managed="false"/>
                     </children>
                 </HBox>
 

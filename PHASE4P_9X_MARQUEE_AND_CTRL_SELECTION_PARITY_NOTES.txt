@@ -1,0 +1,18 @@
+HOTFIX118 / Phase 4P.9X — Marquee and Ctrl Selection Parity
+
+Goal
+- add click-and-drag marquee selection across the icon-based file views
+- add Ctrl-click toggle selection on file items in the icon-based file views
+- stop virtual icon-grid row clicks from behaving like whole-row selection when interacting with the last item in a row
+
+What changed
+- MainController now routes icon-tile clicks through an Explorer-style selection handler that supports single select, Ctrl-click toggle select, and Shift-range extension against the shared TableView selection model
+- added a viewHost-level marquee rectangle overlay that performs live hit-testing against visible tagged icon tiles and applies the result back into the shared file selection model
+- blank-space clicks in icon views now clear selection without selecting a virtual grid row, and the virtual icon-grid/list cells no longer rely on whole-row pick bounds
+- tile mouse events are consumed at the icon-tile level so ListView row selection does not leak through when selecting the last item in a virtual icon-grid row
+
+Expected result
+- Extra large, Large, Medium, Small, List, Tiles, and Content views should support Explorer-style click-drag selection over visible items
+- Ctrl-click should toggle individual items in those icon-based views without collapsing the rest of the selection
+- clicking the last item in a virtual icon-grid row should select only that item instead of visually selecting the entire row
+- Details view keeps using the existing TableView multi-selection behavior

@@ -1,0 +1,19 @@
+HOTFIX106 / Phase 4P.9M — Top Chrome and Command Bar Metrics Parity
+
+Scope
+- make the top chrome read closer to Windows File Explorer without destabilizing layout behavior
+- quiet the surface transitions between the tab strip, address row, and command bar
+- tighten command-bar and top-nav metrics so hover/open states feel less heavy
+
+Implemented
+- tightened the top work-area padding and reduced visual contrast between adjacent top surfaces
+- flattened the top chrome bands and aligned their border treatment with the existing dark palette
+- tuned Back / Forward / Up / Refresh wells for calmer hover, pressed, and disabled states
+- normalized top-nav glyph size and contrast to read closer to Windows File Explorer
+- refined command-bar item height, icon-only well size, hover/open states, and New / Sort / View spacing
+- kept the current toolbar structure, actions, and menu hierarchies intact
+
+Risk profile
+- stylesheet-only hotfix
+- no controller logic changes
+- no resize logic changes

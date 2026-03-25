@@ -23,6 +23,7 @@ import javafx.scene.control.OverrunStyle;
 import javafx.geometry.Rectangle2D;
 import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
+import javafx.geometry.Point2D;
 import java.util.prefs.Preferences;
 import java.util.Objects;
 import java.util.Optional;
@@ -118,6 +119,7 @@ import javafx.scene.input.MouseEvent;
 import java.awt.Desktop;
 import java.awt.HeadlessException;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
 import java.nio.charset.StandardCharsets;
 import com.fileexplorer.controller.breadcrumb.BreadcrumbController;
 import com.fileexplorer.util.IconLoader;
@@ -221,6 +223,7 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     private java.util.List<com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec> chooseDetailSpecs = java.util.List.of();
     private java.util.Map<String, com.fileexplorer.ui.dialog.ChooseDetailsDialog.DetailSpec> chooseDetailSpecsByKey = java.util.Map.of();
     private static final PseudoClass PSEUDO_EXPLORER_HOVER = PseudoClass.getPseudoClass("explorer-hover");
+    private static final PseudoClass PSEUDO_EXPLORER_SELECTED = PseudoClass.getPseudoClass("explorer-selected");
     private static final String PROP_DETAILS_ROW_STYLE_CACHE = "fileexplorer.detailsRowStyleCache";
     private final IntegerProperty detailsHoverRowIndex = new SimpleIntegerProperty(-1);
     private final ObjectProperty<TableRow<FileItem>> activeDetailsHoverRow = new SimpleObjectProperty<>(null);
@@ -278,6 +281,7 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     @FXML private HBox tabStrip;
     @FXML private Button homeTabButton;
     @FXML private Button currentTabButton;
+    @FXML private Button closeTabButton;
     @FXML private Button newTabButton;
     @FXML private ScrollPane iconScroll;
     @FXML private StackPane viewHost;
@@ -302,6 +306,8 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     private int pendingInlineRenameSelectionIndex = -1;
     private final java.util.List<Path> recentHomeLocations = new java.util.ArrayList<>();
     private boolean homeActive = false;
+    private boolean homeTabVisible = true;
+    private boolean currentTabVisible = true;
     private static final int HOME_RECENT_MAX = 8;
     @FXML private TextArea previewText;
     @FXML private javafx.scene.image.ImageView previewImage;
@@ -383,6 +389,17 @@ private volatile long hugeFolderScannedTotal = 0L;
     private static final double ICON_SCROLL_LOAD_MORE_THRESHOLD = 0.92;
     private ListView<List<Path>> virtualIconGridView;
     private ListView<Path> virtualIconListView;
+    private volatile Path iconSelectionAnchorPath;
+    private Rectangle iconMarqueeSelectionRect;
+    private boolean iconMarqueeInteractionInstalled = false;
+    private boolean iconMarqueePressArmed = false;
+    private boolean iconMarqueeDragStarted = false;
+    private boolean iconMarqueeAdditive = false;
+    private double iconMarqueePressSceneX = Double.NaN;
+    private double iconMarqueePressSceneY = Double.NaN;
+    private final java.util.LinkedHashSet<Path> iconMarqueeBaseSelection = new java.util.LinkedHashSet<>();
+    private ViewMode marqueeSelectionMode = null;
+    private final java.util.LinkedHashSet<Path> detailsPresentationSelectedPaths = new java.util.LinkedHashSet<>();
     private boolean virtualIconViewsInstalled;
     private boolean iconScrollPagingInstalled;
     private long iconBuildGeneration;
@@ -711,7 +728,7 @@ public void attach(ExplorerContext context) {
                 mi.setOnAction(e -> createNewFolder());
             }
         });
-        configureCommandBarIconOnlyControl(newMenuButton);
+        configureStructuredCommandBarMenuButton(newMenuButton);
     }
     if (cutButton != null) {
         configureCommandBarIconOnlyControl(cutButton);
@@ -763,10 +780,10 @@ public void attach(ExplorerContext context) {
         refreshButton.setOnAction(e -> refresh());
     }
     if (sortMenuButton != null) {
-        configureCommandBarIconOnlyControl(sortMenuButton);
+        configureStructuredCommandBarMenuButton(sortMenuButton);
     }
     if (viewMenuButton != null) {
-        configureCommandBarIconOnlyControl(viewMenuButton);
+        configureStructuredCommandBarMenuButton(viewMenuButton);
     }
     if (previewToggle != null) {
         syncCommandBarTooltip(previewToggle);
@@ -791,6 +808,227 @@ public void attach(ExplorerContext context) {
         if (label != null && !label.isBlank()) {
             control.setAccessibleText(label.trim());
         }
+    }
+
+    private void configureCommandBarIconAndTextControl(javafx.scene.control.Labeled control) {
+        if (control == null) {
+            return;
+        }
+        syncCommandBarTooltip(control);
+        control.getStyleClass().remove("icon-only");
+        if (!control.getStyleClass().contains("command-bar-icon-text")) {
+            control.getStyleClass().add("command-bar-icon-text");
+        }
+        control.setContentDisplay(ContentDisplay.LEFT);
+        control.setGraphicTextGap(6.0);
+        String label = control.getText();
+        if (label != null && !label.isBlank()) {
+            control.setAccessibleText(label.trim());
+        }
+    }
+
+    private void configureStructuredCommandBarMenuButton(javafx.scene.control.MenuButton menuButton) {
+        if (menuButton == null) {
+            return;
+        }
+        syncCommandBarTooltip(menuButton);
+        menuButton.getStyleClass().remove("icon-only");
+        menuButton.getStyleClass().remove("command-bar-icon-text");
+        menuButton.getStyleClass().remove("command-bar-native-menu-button");
+        if (!menuButton.getStyleClass().contains("command-bar-structured-menu-button")) {
+            menuButton.getStyleClass().add("command-bar-structured-menu-button");
+        }
+
+        String labelText = menuButton.getText();
+        if ((labelText == null || labelText.isBlank()) && menuButton.getProperties().get("commandBarOriginalText") instanceof String storedText) {
+            labelText = storedText;
+        }
+        if ((labelText == null || labelText.isBlank()) && menuButton.getAccessibleText() != null) {
+            labelText = menuButton.getAccessibleText();
+        }
+        if ((labelText == null || labelText.isBlank()) && menuButton.getTooltip() != null) {
+            labelText = menuButton.getTooltip().getText();
+        }
+        if (labelText == null) {
+            labelText = "";
+        }
+        labelText = labelText.trim();
+        menuButton.getProperties().put("commandBarOriginalText", labelText);
+        menuButton.setAccessibleText(labelText);
+
+        Object storedGraphic = menuButton.getProperties().get("commandBarOriginalGraphic");
+        if (!(storedGraphic instanceof Node) && menuButton.getGraphic() != null) {
+            menuButton.getProperties().put("commandBarOriginalGraphic", menuButton.getGraphic());
+            storedGraphic = menuButton.getGraphic();
+        }
+
+        Node leadingGraphic = buildStructuredCommandBarMenuIcon(menuButton,
+                storedGraphic instanceof Node storedNode ? cloneCommandBarMenuGraphic(storedNode) : null,
+                labelText);
+        Node content = buildStructuredCommandBarMenuContent(menuButton, leadingGraphic, labelText);
+        if (content != null) {
+            content.setMouseTransparent(true);
+            menuButton.setGraphic(content);
+        }
+        menuButton.setText("");
+        menuButton.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        menuButton.setGraphicTextGap(0.0);
+    }
+
+    private Node buildStructuredCommandBarMenuContent(javafx.scene.control.MenuButton menuButton, Node leadingGraphic, String labelText) {
+        HBox content = new HBox();
+        content.getStyleClass().add("command-bar-menu-content");
+        content.setAlignment(Pos.CENTER_LEFT);
+        content.setMouseTransparent(true);
+
+        StackPane iconSlot = new StackPane();
+        iconSlot.getStyleClass().add("command-bar-menu-icon-slot");
+        iconSlot.setMouseTransparent(true);
+        Node iconNode = buildStructuredCommandBarMenuIcon(menuButton, leadingGraphic, labelText);
+        if (iconNode != null) {
+            iconNode.setMouseTransparent(true);
+            iconSlot.getChildren().add(iconNode);
+        }
+
+        Label textLabel = new Label(labelText == null ? "" : labelText);
+        textLabel.getStyleClass().add("command-bar-menu-text");
+        textLabel.setMouseTransparent(true);
+
+        StackPane chevronSlot = new StackPane();
+        chevronSlot.getStyleClass().add("command-bar-menu-chevron-slot");
+        chevronSlot.setMouseTransparent(true);
+        chevronSlot.getChildren().add(buildStructuredCommandBarMenuChevron());
+
+        content.getChildren().addAll(iconSlot, textLabel, chevronSlot);
+        return content;
+    }
+
+    private Node buildStructuredCommandBarMenuChevron() {
+        javafx.scene.shape.SVGPath chevron = new javafx.scene.shape.SVGPath();
+        chevron.setContent("M 0 0 L 4 4 L 8 0");
+        chevron.getStyleClass().add("command-bar-menu-chevron-shape");
+        chevron.setMouseTransparent(true);
+        return chevron;
+    }
+
+    private Node buildStructuredCommandBarMenuIcon(javafx.scene.control.MenuButton menuButton, Node fallbackGraphic, String labelText) {
+        Node vectorIcon = buildStructuredCommandBarVectorIcon(menuButton);
+        if (vectorIcon != null) {
+            vectorIcon.setMouseTransparent(true);
+            return vectorIcon;
+        }
+        if (fallbackGraphic != null) {
+            fallbackGraphic.setMouseTransparent(true);
+            return fallbackGraphic;
+        }
+        String glyph = null;
+        if (labelText != null && !labelText.isBlank()) {
+            glyph = "";
+        }
+        if (glyph == null) {
+            return null;
+        }
+        Label icon = new Label(glyph);
+        icon.getStyleClass().addAll("fluent-icon", "command-bar-menu-leading-glyph");
+        icon.setMouseTransparent(true);
+        return icon;
+    }
+
+    private Node buildStructuredCommandBarVectorIcon(javafx.scene.control.MenuButton menuButton) {
+        if (menuButton == newMenuButton) {
+            return buildStructuredCommandBarNewVectorIcon();
+        }
+        if (menuButton == sortMenuButton) {
+            return buildStructuredCommandBarSortVectorIcon();
+        }
+        if (menuButton == viewMenuButton) {
+            return buildStructuredCommandBarViewVectorIcon();
+        }
+        return null;
+    }
+
+    private Node buildStructuredCommandBarNewVectorIcon() {
+        StackPane root = createStructuredCommandBarVectorIconRoot();
+        root.getChildren().addAll(
+                createStructuredCommandBarStrokePath("M 3 2 H 9.5 L 12.5 5 V 14 H 3 Z M 9.5 2 V 5 H 12.5"),
+                createStructuredCommandBarStrokePath("M 7.75 7 V 11"),
+                createStructuredCommandBarStrokePath("M 5.75 9 H 9.75")
+        );
+        return root;
+    }
+
+    private Node buildStructuredCommandBarSortVectorIcon() {
+        StackPane root = createStructuredCommandBarVectorIconRoot();
+        root.getChildren().addAll(
+                createStructuredCommandBarStrokePath("M 2.5 4 H 9.5"),
+                createStructuredCommandBarStrokePath("M 2.5 8 H 8"),
+                createStructuredCommandBarStrokePath("M 2.5 12 H 6.5"),
+                createStructuredCommandBarStrokePath("M 11.5 3.5 V 12"),
+                createStructuredCommandBarStrokePath("M 9.5 10 L 11.5 12 L 13.5 10")
+        );
+        return root;
+    }
+
+    private Node buildStructuredCommandBarViewVectorIcon() {
+        StackPane root = createStructuredCommandBarVectorIconRoot();
+        root.getChildren().addAll(
+                createStructuredCommandBarStrokePath("M 2.75 3 H 6.5 V 6.75 H 2.75 Z"),
+                createStructuredCommandBarStrokePath("M 8.5 3 H 12.25 V 6.75 H 8.5 Z"),
+                createStructuredCommandBarStrokePath("M 2.75 8.75 H 6.5 V 12.5 H 2.75 Z"),
+                createStructuredCommandBarStrokePath("M 8.5 8.75 H 12.25 V 12.5 H 8.5 Z")
+        );
+        return root;
+    }
+
+    private StackPane createStructuredCommandBarVectorIconRoot() {
+        StackPane root = new StackPane();
+        root.getStyleClass().add("command-bar-menu-vector-icon-root");
+        root.setTranslateY(0.25);
+        root.setMinSize(24, 24);
+        root.setPrefSize(24, 24);
+        root.setMaxSize(24, 24);
+        root.setMouseTransparent(true);
+        return root;
+    }
+
+    private javafx.scene.shape.SVGPath createStructuredCommandBarStrokePath(String content) {
+        javafx.scene.shape.SVGPath path = new javafx.scene.shape.SVGPath();
+        path.setContent(content);
+        path.getStyleClass().add("command-bar-menu-icon-stroke-shape");
+        path.setScaleX(1.46);
+        path.setScaleY(1.46);
+        path.setMouseTransparent(true);
+        return path;
+    }
+
+    private Node cloneCommandBarMenuGraphic(Node graphic) {
+        if (graphic == null) {
+            return null;
+        }
+        if (graphic instanceof Label labelGraphic) {
+            Label clone = new Label(labelGraphic.getText());
+            clone.getStyleClass().setAll(labelGraphic.getStyleClass());
+            clone.setStyle(labelGraphic.getStyle());
+            clone.setFont(labelGraphic.getFont());
+            clone.setTextFill(labelGraphic.getTextFill());
+            clone.setUnderline(labelGraphic.isUnderline());
+            clone.setWrapText(labelGraphic.isWrapText());
+            clone.setMinSize(labelGraphic.getMinWidth(), labelGraphic.getMinHeight());
+            clone.setPrefSize(labelGraphic.getPrefWidth(), labelGraphic.getPrefHeight());
+            clone.setMaxSize(labelGraphic.getMaxWidth(), labelGraphic.getMaxHeight());
+            clone.setMouseTransparent(true);
+            return clone;
+        }
+        if (graphic instanceof Labeled labeledGraphic) {
+            Label clone = new Label(labeledGraphic.getText());
+            clone.getStyleClass().setAll(labeledGraphic.getStyleClass());
+            clone.setStyle(labeledGraphic.getStyle());
+            clone.setContentDisplay(labeledGraphic.getContentDisplay());
+            clone.setGraphicTextGap(labeledGraphic.getGraphicTextGap());
+            clone.setMouseTransparent(true);
+            return clone;
+        }
+        return null;
     }
 
     private void syncCommandBarTooltip(javafx.scene.control.Labeled control) {
@@ -2410,6 +2648,7 @@ folderTree.setCellFactory(tv -> {
             iconScroll.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveIconViewportLayoutRefresh());
         }
         if (viewHost != null) {
+            ensureExplorerFileViewSelectionInteractionsInstalled();
             viewHost.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
             viewHost.heightProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
             viewHost.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveIconViewportLayoutRefresh());
@@ -2431,6 +2670,7 @@ folderTree.setCellFactory(tv -> {
         if (fileTable == null) {
             return;
         }
+        installResponsiveTableViewportBindings();
         fileTable.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
         fileTable.heightProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
         fileTable.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveTableViewportLayoutRefresh());
@@ -2459,6 +2699,14 @@ folderTree.setCellFactory(tv -> {
             contentSplitPane.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
             contentSplitPane.heightProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
             contentSplitPane.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveTableViewportLayoutRefresh());
+            contentSplitPane.getDividers().forEach(divider ->
+                    divider.positionProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh()));
+        }
+        if (mainSplitPane != null) {
+            mainSplitPane.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
+            mainSplitPane.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveTableViewportLayoutRefresh());
+            mainSplitPane.getDividers().forEach(divider ->
+                    divider.positionProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh()));
         }
         if (sidePane != null) {
             sidePane.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveTableViewportLayoutRefresh());
@@ -2472,6 +2720,24 @@ folderTree.setCellFactory(tv -> {
  * activateFromTableSelection.
  *
  */
+    private void installResponsiveTableViewportBindings() {
+        if (viewHost == null || fileTable == null) {
+            return;
+        }
+        if (detailsViewShell != null && !detailsViewShell.prefWidthProperty().isBound()) {
+            detailsViewShell.prefWidthProperty().bind(viewHost.widthProperty());
+        }
+        if (!fileTable.prefWidthProperty().isBound()) {
+            fileTable.prefWidthProperty().bind(viewHost.widthProperty());
+        }
+        if (detailsViewShell != null) {
+            detailsViewShell.setMinWidth(0.0);
+            detailsViewShell.setMaxWidth(Double.MAX_VALUE);
+        }
+        fileTable.setMinWidth(0.0);
+        fileTable.setMaxWidth(Double.MAX_VALUE);
+    }
+
     private void activateFromTableSelection() {
         LogSupport.enter(LOG, "activateFromTableSelection");
         if (fileTable == null) {
@@ -3209,7 +3475,12 @@ colType.setCellValueFactory(param -> {
         if (viewMode != ViewMode.DETAILS || fileTable == null) {
             return;
         }
-        Platform.runLater(this::syncVisibleDetailsHoverRows);
+        syncDetailsPresentationSelectedPathsFromTableSelection();
+        syncVisibleDetailsHoverRows();
+        Platform.runLater(() -> {
+            syncDetailsPresentationSelectedPathsFromTableSelection();
+            syncVisibleDetailsHoverRows();
+        });
     }
 
     private void setDetailsHoveredRow(TableRow<FileItem> row) {
@@ -3642,6 +3913,7 @@ colType.setCellValueFactory(param -> {
         row.pseudoClassStateChanged(PSEUDO_EXPLORER_HOVER, active);
         Object cachedStyle = row.getProperties().get(PROP_DETAILS_ROW_STYLE_CACHE);
         if (row.isEmpty() || row.getItem() == null || row.getIndex() < 0 || viewMode != ViewMode.DETAILS) {
+            row.pseudoClassStateChanged(PSEUDO_EXPLORER_SELECTED, false);
             if (!Objects.equals(cachedStyle, "")) {
                 row.setStyle("");
                 row.getProperties().put(PROP_DETAILS_ROW_STYLE_CACHE, "");
@@ -3649,7 +3921,9 @@ colType.setCellValueFactory(param -> {
             return;
         }
         boolean darkTheme = themeService != null && themeService.isDarkPreferred();
-        boolean selected = row.isSelected();
+        Path rowPath = row.getItem() != null ? row.getItem().path() : null;
+        boolean selected = row.isSelected() || (rowPath != null && detailsPresentationSelectedPaths.contains(rowPath));
+        row.pseudoClassStateChanged(PSEUDO_EXPLORER_SELECTED, selected);
         boolean focusedWindow = isWindowFocusedForDetailsPaint();
         String style = detailsRowStyleForState(row.getIndex(), darkTheme, focusedWindow, selected, active);
         if (!Objects.equals(cachedStyle, style)) {
@@ -7206,8 +7480,28 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             return;
         }
         configureIconFlowLayout(viewMode);
-        if (viewportWidth > 1.0 && iconFlow.getOrientation() == javafx.geometry.Orientation.HORIZONTAL) {
-            iconFlow.setPrefWrapLength(Math.max(1.0, viewportWidth));
+        double snappedWidth = viewportWidth > 1.0 ? Math.max(1.0, Math.floor(viewportWidth)) : 0.0;
+        if (snappedWidth > 1.0 && iconFlow.getOrientation() == javafx.geometry.Orientation.HORIZONTAL) {
+            iconFlow.setPrefWrapLength(snappedWidth);
+        }
+        applyResponsiveFlowIconViewportWidth(snappedWidth);
+    }
+
+    private void applyResponsiveFlowIconViewportWidth(double viewportWidth) {
+        if (iconFlow == null || !isIconMode(viewMode) || viewportWidth <= 1.0) {
+            return;
+        }
+        if (!iconFlow.prefWidthProperty().isBound()) {
+            iconFlow.setPrefWidth(viewportWidth);
+        }
+        iconFlow.setMinWidth(viewportWidth);
+        iconFlow.setMaxWidth(Double.MAX_VALUE);
+        iconFlow.requestLayout();
+        if (iconScroll != null) {
+            iconScroll.requestLayout();
+        }
+        if (viewHost != null) {
+            viewHost.requestLayout();
         }
     }
 
@@ -7227,19 +7521,31 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             return;
         }
         double viewportWidth = resolveResponsiveIconViewportWidth();
-        refreshIconFlowLayoutForCurrentView(viewportWidth);
+        double snappedWidth = viewportWidth > 1.0 ? Math.max(1.0, Math.floor(viewportWidth)) : viewportWidth;
+        refreshIconFlowLayoutForCurrentView(snappedWidth);
         if (!isUsingVirtualIconGridForCurrentView()) {
-            lastAppliedResponsiveIconViewportWidth = viewportWidth;
+            lastAppliedResponsiveIconViewportWidth = snappedWidth;
+            Platform.runLater(() -> {
+                if (!isIconMode(viewMode) || isUsingVirtualIconGridForCurrentView()) {
+                    return;
+                }
+                double refreshedWidth = resolveResponsiveIconViewportWidth();
+                double refreshedSnappedWidth = refreshedWidth > 1.0
+                        ? Math.max(1.0, Math.floor(refreshedWidth))
+                        : snappedWidth;
+                refreshIconFlowLayoutForCurrentView(refreshedSnappedWidth);
+                lastAppliedResponsiveIconViewportWidth = refreshedSnappedWidth;
+            });
             return;
         }
-        applyResponsiveVirtualIconViewMetrics(viewportWidth);
-        int itemsPerRow = computeItemsPerIconRow(viewportWidth);
+        applyResponsiveVirtualIconViewMetrics(snappedWidth);
+        int itemsPerRow = computeItemsPerIconRow(snappedWidth);
         if (itemsPerRow < 1) {
             itemsPerRow = 1;
         }
         Object current = virtualIconGridView == null ? null : virtualIconGridView.getProperties().get("iconGridItemsPerRow");
         int currentItemsPerRow = (current instanceof Number n) ? n.intValue() : -1;
-        lastAppliedResponsiveIconViewportWidth = viewportWidth;
+        lastAppliedResponsiveIconViewportWidth = snappedWidth;
         if (itemsPerRow != currentItemsPerRow) {
             rebuildVirtualIconGridPreservingAnchor();
         }
@@ -7291,6 +7597,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             applyResponsiveTableViewportWidth(refreshedSnappedWidth);
             fileTable.applyCss();
             fileTable.layout();
+            fileTable.refresh();
             syncDetailsVisibleColumnRoleClasses();
             if (viewHost != null) {
                 viewHost.requestLayout();
@@ -7314,13 +7621,17 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         double snappedWidth = Math.max(1.0, Math.floor(targetWidth));
         if (detailsViewShell != null) {
             detailsViewShell.setMinWidth(0.0);
-            detailsViewShell.setPrefWidth(snappedWidth);
+            if (!detailsViewShell.prefWidthProperty().isBound()) {
+                detailsViewShell.setPrefWidth(snappedWidth);
+            }
             detailsViewShell.setMaxWidth(Double.MAX_VALUE);
             StackPane.setAlignment(detailsViewShell, Pos.TOP_LEFT);
             detailsViewShell.requestLayout();
         }
         fileTable.setMinWidth(0.0);
-        fileTable.setPrefWidth(snappedWidth);
+        if (!fileTable.prefWidthProperty().isBound()) {
+            fileTable.setPrefWidth(snappedWidth);
+        }
         fileTable.setMaxWidth(Double.MAX_VALUE);
         fileTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         fileTable.requestLayout();
@@ -7332,13 +7643,13 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
 
     private double resolvePrimaryResponsiveTableViewportWidth() {
         return firstPositiveWidth(
+                contentSplitPane == null ? 0.0 : resolveResponsiveTableLeftSplitItemWidth(),
                 viewHost == null ? 0.0 : viewHost.getWidth(),
                 viewHost == null ? 0.0 : boundsWidth(viewHost.getLayoutBounds()),
                 detailsViewShell == null ? 0.0 : detailsViewShell.getWidth(),
                 detailsViewShell == null ? 0.0 : boundsWidth(detailsViewShell.getLayoutBounds()),
                 fileTable == null ? 0.0 : fileTable.getWidth(),
                 fileTable == null ? 0.0 : boundsWidth(fileTable.getLayoutBounds()),
-                contentSplitPane == null ? 0.0 : resolveResponsiveTableLeftSplitItemWidth(),
                 contentSplitPane == null ? 0.0 : contentSplitPane.getWidth(),
                 contentSplitPane == null ? 0.0 : boundsWidth(contentSplitPane.getLayoutBounds()));
     }
@@ -7960,6 +8271,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             private final FlowPane rowPane = new FlowPane();
             {
                 rowPane.setAlignment(Pos.TOP_LEFT);
+                rowPane.setPickOnBounds(false);
             }
             @Override
 /**
@@ -7972,6 +8284,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                 LogSupport.enter(LOG, "updateItem4");
                 super.updateItem(row, empty);
                 rowPane.getChildren().clear();
+                setPickOnBounds(false);
                 if (empty || row == null || row.isEmpty()) {
                     setGraphic(null);
                     return;
@@ -8006,6 +8319,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             protected void updateItem(Path item, boolean empty) {
                 LogSupport.enter(LOG, "updateItem5");
                 super.updateItem(item, empty);
+                setPickOnBounds(false);
                 if (empty || item == null) {
                     setGraphic(null);
                     return;
@@ -8050,6 +8364,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         host.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveIconViewportLayoutRefresh());
         host.getChildren().add(virtualIconGridView);
         host.getChildren().add(virtualIconListView);
+        bringIconMarqueeOverlayToFront();
     }
 /**
  * hideVirtualIconViews.
@@ -8288,31 +8603,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             markExplorerIconTileChild(textCol);
             installExplorerItemTooltip(row, () -> buildExplorerItemTooltipText(p));
             row.setOnMouseEntered(_ -> scheduleHoverPrefetch(p));
-            row.setOnMouseClicked(me -> {
-                lastIconActivatedPath = p;
-                fileTable.getSelectionModel().clearSelection();
-                int idx = indexOfTableItem(p);
-                if (idx >= 0) {
-                                    fileTable.getSelectionModel().select(idx);
-                    fileTable.scrollTo(idx);
-                    if (virtualIconGridView != null && virtualIconGridView.isVisible()) {
-                        virtualIconGridView.requestFocus();
-                    } else if (virtualIconListView != null && virtualIconListView.isVisible()) {
-                        virtualIconListView.requestFocus();
-                    } else if (virtualIconGridView != null && virtualIconGridView.isVisible()) {
-                        virtualIconGridView.requestFocus();
-                    } else if (virtualIconListView != null && virtualIconListView.isVisible()) {
-                        virtualIconListView.requestFocus();
-                    } else if (iconScroll != null && iconScroll.isVisible()) {
-                        iconScroll.requestFocus();
-                    } else {
-                        fileTable.requestFocus();
-                    }
-                }
-                if (me.getClickCount() == 2 && Files.isDirectory(p)) {
-                    navigateToFolder(p, true);
-                }
-            });
+            installExplorerIconTileSelectionHandlers(row, p);
             return row;
         }
         VBox tile = new VBox(iconGridTileSpacingForMode(viewMode));
@@ -8335,35 +8626,505 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         markExplorerIconTileChild(name);
         installExplorerItemTooltip(tile, () -> buildExplorerItemTooltipText(p));
         tile.setOnMouseEntered(_ -> scheduleHoverPrefetch(p));
-        tile.setOnMouseClicked(me -> {
-            lastIconActivatedPath = p;
-            fileTable.getSelectionModel().clearSelection();
-            int idx = indexOfTableItem(p);
-            if (idx >= 0) {
-                                fileTable.getSelectionModel().select(idx);
-                    fileTable.scrollTo(idx);
-                    if (virtualIconGridView != null && virtualIconGridView.isVisible()) {
-                        virtualIconGridView.requestFocus();
-                    } else if (virtualIconListView != null && virtualIconListView.isVisible()) {
-                        virtualIconListView.requestFocus();
-                    } else if (virtualIconGridView != null && virtualIconGridView.isVisible()) {
-                        virtualIconGridView.requestFocus();
-                    } else if (virtualIconListView != null && virtualIconListView.isVisible()) {
-                        virtualIconListView.requestFocus();
-                    } else if (iconScroll != null && iconScroll.isVisible()) {
-                        iconScroll.requestFocus();
-                    } else {
-                        fileTable.requestFocus();
-                    }
-            }
-            if (me.getClickCount() == 2) {
-                if (Files.isDirectory(p)) {
-                    navigateToFolder(p, true);
-                }
-            }
-        });
+        installExplorerIconTileSelectionHandlers(tile, p);
         return tile;
         }
+
+    private void installExplorerIconTileSelectionHandlers(Node tile, Path path) {
+        if (tile == null || path == null) {
+            return;
+        }
+        tile.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> {
+            if (event.getButton() != MouseButton.PRIMARY) {
+                return;
+            }
+            hideExplorerMetadataPopup();
+            requestActiveIconSurfaceFocus();
+            handleExplorerIconTilePrimaryPress(path, event);
+            event.consume();
+        });
+        tile.addEventFilter(MouseEvent.MOUSE_RELEASED, event -> {
+            if (event.getButton() == MouseButton.PRIMARY) {
+                event.consume();
+            }
+        });
+        tile.addEventFilter(MouseEvent.MOUSE_CLICKED, event -> {
+            if (event.getButton() != MouseButton.PRIMARY) {
+                return;
+            }
+            lastIconActivatedPath = path;
+            if (event.getClickCount() == 2 && Files.isDirectory(path)) {
+                navigateToFolder(path, true);
+            }
+            event.consume();
+        });
+    }
+
+    private void handleExplorerIconTilePrimaryPress(Path path, MouseEvent event) {
+        if (path == null || fileTable == null || fileTable.getSelectionModel() == null) {
+            return;
+        }
+        lastIconActivatedPath = path;
+        if (event.isShiftDown()) {
+            selectExplorerIconRange(path, event.isShortcutDown());
+            return;
+        }
+        if (event.isShortcutDown()) {
+            toggleExplorerIconSelection(path);
+            return;
+        }
+        selectOnlyExplorerIconPath(path);
+    }
+
+    private void selectOnlyExplorerIconPath(Path path) {
+        int idx = indexOfTableItem(path);
+        if (idx < 0 || fileTable == null || fileTable.getSelectionModel() == null) {
+            return;
+        }
+        fileTable.getSelectionModel().clearAndSelect(idx);
+        if (fileTable.getFocusModel() != null) {
+            fileTable.getFocusModel().focus(idx);
+        }
+        iconSelectionAnchorPath = path;
+    }
+
+    private void toggleExplorerIconSelection(Path path) {
+        int idx = indexOfTableItem(path);
+        if (idx < 0 || fileTable == null || fileTable.getSelectionModel() == null) {
+            return;
+        }
+        if (fileTable.getSelectionModel().isSelected(idx)) {
+            fileTable.getSelectionModel().clearSelection(idx);
+        } else {
+            fileTable.getSelectionModel().select(idx);
+        }
+        if (fileTable.getFocusModel() != null) {
+            fileTable.getFocusModel().focus(idx);
+        }
+        iconSelectionAnchorPath = path;
+    }
+
+    private void selectExplorerIconRange(Path targetPath, boolean additive) {
+        if (targetPath == null || fileTable == null || fileTable.getItems() == null || fileTable.getSelectionModel() == null) {
+            return;
+        }
+        int targetIndex = indexOfTableItem(targetPath);
+        if (targetIndex < 0) {
+            return;
+        }
+        Path anchorPath = iconSelectionAnchorPath != null ? iconSelectionAnchorPath : getFocusedOrSelectedPath();
+        int anchorIndex = indexOfTableItem(anchorPath);
+        if (anchorIndex < 0) {
+            selectOnlyExplorerIconPath(targetPath);
+            return;
+        }
+        java.util.LinkedHashSet<Path> paths = additive
+                ? new java.util.LinkedHashSet<>(getSelectedItems())
+                : new java.util.LinkedHashSet<>();
+        int start = Math.min(anchorIndex, targetIndex);
+        int end = Math.max(anchorIndex, targetIndex);
+        for (int i = start; i <= end; i++) {
+            FileItem item = fileTable.getItems().get(i);
+            if (item != null && item.path() != null) {
+                paths.add(item.path());
+            }
+        }
+        applyExplorerPathSelection(paths, targetPath);
+    }
+
+    private void requestActiveIconSurfaceFocus() {
+        if (virtualIconGridView != null && virtualIconGridView.isVisible()) {
+            virtualIconGridView.requestFocus();
+            return;
+        }
+        if (virtualIconListView != null && virtualIconListView.isVisible()) {
+            virtualIconListView.requestFocus();
+            return;
+        }
+        if (iconFlow != null && iconFlow.isVisible()) {
+            iconFlow.requestFocus();
+            return;
+        }
+        if (iconScroll != null && iconScroll.isVisible()) {
+            iconScroll.requestFocus();
+            return;
+        }
+        if (viewHost != null) {
+            viewHost.requestFocus();
+        }
+    }
+
+    private void applyExplorerPathSelection(java.util.Collection<Path> paths, Path focusPath) {
+        if (fileTable == null || fileTable.getItems() == null || fileTable.getSelectionModel() == null) {
+            return;
+        }
+        java.util.LinkedHashSet<Path> orderedPaths = new java.util.LinkedHashSet<>();
+        if (paths != null) {
+            for (Path path : paths) {
+                if (path != null) {
+                    orderedPaths.add(path);
+                }
+            }
+        }
+        java.util.ArrayList<Integer> selectedIndices = new java.util.ArrayList<>();
+        int focusIndex = -1;
+        for (int i = 0; i < fileTable.getItems().size(); i++) {
+            FileItem item = fileTable.getItems().get(i);
+            if (item == null || item.path() == null) {
+                continue;
+            }
+            if (orderedPaths.contains(item.path())) {
+                selectedIndices.add(i);
+                if (focusIndex < 0 || java.util.Objects.equals(item.path(), focusPath)) {
+                    focusIndex = i;
+                }
+            }
+        }
+        fileTable.getSelectionModel().clearSelection();
+        if (!selectedIndices.isEmpty()) {
+            int firstIndex = selectedIndices.get(0);
+            int[] rest = new int[Math.max(0, selectedIndices.size() - 1)];
+            for (int i = 1; i < selectedIndices.size(); i++) {
+                rest[i - 1] = selectedIndices.get(i);
+            }
+            fileTable.getSelectionModel().selectIndices(firstIndex, rest);
+        }
+        if (fileTable.getFocusModel() != null) {
+            fileTable.getFocusModel().focus(focusIndex);
+        }
+        if (focusPath != null && orderedPaths.contains(focusPath)) {
+            iconSelectionAnchorPath = focusPath;
+        }
+        if (viewMode == ViewMode.DETAILS) {
+            replaceDetailsPresentationSelectedPaths(orderedPaths);
+            fileTable.refresh();
+            syncVisibleDetailsHoverRows();
+            Platform.runLater(() -> {
+                syncDetailsPresentationSelectedPathsFromTableSelection();
+                syncVisibleDetailsHoverRows();
+                fileTable.refresh();
+            });
+        }
+    }
+
+    private void syncDetailsPresentationSelectedPathsFromTableSelection() {
+        if (fileTable == null || fileTable.getSelectionModel() == null) {
+            replaceDetailsPresentationSelectedPaths(java.util.Collections.emptySet());
+            return;
+        }
+        java.util.LinkedHashSet<Path> selectedPaths = new java.util.LinkedHashSet<>();
+        for (FileItem item : fileTable.getSelectionModel().getSelectedItems()) {
+            if (item != null && item.path() != null) {
+                selectedPaths.add(item.path());
+            }
+        }
+        replaceDetailsPresentationSelectedPaths(selectedPaths);
+    }
+
+    private void replaceDetailsPresentationSelectedPaths(java.util.Collection<Path> selectedPaths) {
+        detailsPresentationSelectedPaths.clear();
+        if (selectedPaths != null) {
+            for (Path path : selectedPaths) {
+                if (path != null) {
+                    detailsPresentationSelectedPaths.add(path);
+                }
+            }
+        }
+    }
+
+    private void ensureExplorerFileViewSelectionInteractionsInstalled() {
+        if (iconMarqueeInteractionInstalled || viewHost == null) {
+            return;
+        }
+        iconMarqueeInteractionInstalled = true;
+        if (iconMarqueeSelectionRect == null) {
+            iconMarqueeSelectionRect = new Rectangle();
+            iconMarqueeSelectionRect.setManaged(false);
+            iconMarqueeSelectionRect.setMouseTransparent(true);
+            iconMarqueeSelectionRect.setVisible(false);
+            iconMarqueeSelectionRect.setStroke(Color.rgb(200, 225, 255, 0.92));
+            iconMarqueeSelectionRect.setStrokeWidth(1.0);
+            iconMarqueeSelectionRect.setFill(Color.rgb(98, 163, 241, 0.22));
+        }
+        if (!viewHost.getChildren().contains(iconMarqueeSelectionRect)) {
+            viewHost.getChildren().add(iconMarqueeSelectionRect);
+        }
+        bringIconMarqueeOverlayToFront();
+        viewHost.addEventFilter(MouseEvent.MOUSE_PRESSED, this::handleExplorerFileViewMousePressed);
+        viewHost.addEventFilter(MouseEvent.MOUSE_DRAGGED, this::handleExplorerFileViewMouseDragged);
+        viewHost.addEventFilter(MouseEvent.MOUSE_RELEASED, this::handleExplorerFileViewMouseReleased);
+    }
+
+    private void bringIconMarqueeOverlayToFront() {
+        if (iconMarqueeSelectionRect != null) {
+            iconMarqueeSelectionRect.toFront();
+        }
+    }
+
+    private void handleExplorerFileViewMousePressed(MouseEvent event) {
+        if (event == null || event.getButton() != MouseButton.PRIMARY || !isSelectionMarqueeMode(viewMode)) {
+            return;
+        }
+        Node target = resolveEventTargetNode(event);
+        if (viewMode == ViewMode.DETAILS) {
+            if (!isNodeWithinDetailsSelectionSurface(target) || findAncestorTableRow(target) != null) {
+                return;
+            }
+        } else {
+            if (!isNodeWithinActiveIconSurface(target) || findExplorerIconTilePath(target) != null) {
+                return;
+            }
+        }
+        iconMarqueePressArmed = true;
+        iconMarqueeDragStarted = false;
+        marqueeSelectionMode = viewMode;
+        iconMarqueeAdditive = event.isShortcutDown();
+        iconMarqueePressSceneX = event.getSceneX();
+        iconMarqueePressSceneY = event.getSceneY();
+        iconMarqueeBaseSelection.clear();
+        if (iconMarqueeAdditive) {
+            iconMarqueeBaseSelection.addAll(getSelectedItems());
+        }
+        hideExplorerMetadataPopup();
+        if (marqueeSelectionMode == ViewMode.DETAILS) {
+            requestActiveDetailsSurfaceFocus();
+        } else {
+            requestActiveIconSurfaceFocus();
+        }
+        event.consume();
+    }
+
+    private void handleExplorerFileViewMouseDragged(MouseEvent event) {
+        if (!iconMarqueePressArmed || event == null || !isSelectionMarqueeMode(marqueeSelectionMode)) {
+            return;
+        }
+        double dx = event.getSceneX() - iconMarqueePressSceneX;
+        double dy = event.getSceneY() - iconMarqueePressSceneY;
+        if (!iconMarqueeDragStarted && Math.hypot(dx, dy) < 4.0) {
+            event.consume();
+            return;
+        }
+        if (!iconMarqueeDragStarted) {
+            iconMarqueeDragStarted = true;
+            bringIconMarqueeOverlayToFront();
+        }
+        updateExplorerFileViewMarquee(event.getSceneX(), event.getSceneY());
+        event.consume();
+    }
+
+    private void handleExplorerFileViewMouseReleased(MouseEvent event) {
+        if (!iconMarqueePressArmed || event == null) {
+            return;
+        }
+        if (!iconMarqueeDragStarted && !iconMarqueeAdditive) {
+            if (fileTable != null && fileTable.getSelectionModel() != null) {
+                fileTable.getSelectionModel().clearSelection();
+            }
+            if (fileTable != null && fileTable.getFocusModel() != null) {
+                fileTable.getFocusModel().focus(-1);
+            }
+            iconSelectionAnchorPath = null;
+        }
+        resetExplorerFileViewMarquee();
+        event.consume();
+    }
+
+    private void updateExplorerFileViewMarquee(double sceneX, double sceneY) {
+        if (viewHost == null || iconMarqueeSelectionRect == null || !isSelectionMarqueeMode(marqueeSelectionMode)) {
+            return;
+        }
+        Point2D start = viewHost.sceneToLocal(iconMarqueePressSceneX, iconMarqueePressSceneY);
+        Point2D current = viewHost.sceneToLocal(sceneX, sceneY);
+        double x = Math.min(start.getX(), current.getX());
+        double y = Math.min(start.getY(), current.getY());
+        double w = Math.abs(current.getX() - start.getX());
+        double h = Math.abs(current.getY() - start.getY());
+        iconMarqueeSelectionRect.setX(x);
+        iconMarqueeSelectionRect.setY(y);
+        iconMarqueeSelectionRect.setWidth(w);
+        iconMarqueeSelectionRect.setHeight(h);
+        iconMarqueeSelectionRect.setVisible(true);
+
+        double minSceneX = Math.min(iconMarqueePressSceneX, sceneX);
+        double minSceneY = Math.min(iconMarqueePressSceneY, sceneY);
+        double maxSceneX = Math.max(iconMarqueePressSceneX, sceneX);
+        double maxSceneY = Math.max(iconMarqueePressSceneY, sceneY);
+
+        java.util.LinkedHashSet<Path> selectedPaths = iconMarqueeAdditive
+                ? new java.util.LinkedHashSet<>(iconMarqueeBaseSelection)
+                : new java.util.LinkedHashSet<>();
+        Path focusPath = null;
+        if (marqueeSelectionMode == ViewMode.DETAILS) {
+            for (TableRow<FileItem> row : collectVisibleDetailsRows()) {
+                FileItem item = row.getItem();
+                Path path = item != null ? item.path() : null;
+                if (path == null) {
+                    continue;
+                }
+                Bounds bounds = row.localToScene(row.getBoundsInLocal());
+                if (bounds == null) {
+                    continue;
+                }
+                if (sceneBoundsIntersect(bounds, minSceneX, minSceneY, maxSceneX, maxSceneY)) {
+                    selectedPaths.add(path);
+                    focusPath = path;
+                }
+            }
+        } else {
+            for (Node tile : collectVisibleExplorerIconTiles()) {
+                Path path = pathForExplorerIconTile(tile);
+                if (path == null) {
+                    continue;
+                }
+                Bounds bounds = tile.localToScene(tile.getBoundsInLocal());
+                if (bounds == null) {
+                    continue;
+                }
+                if (sceneBoundsIntersect(bounds, minSceneX, minSceneY, maxSceneX, maxSceneY)) {
+                    selectedPaths.add(path);
+                    focusPath = path;
+                }
+            }
+        }
+        applyExplorerPathSelection(selectedPaths, focusPath);
+    }
+
+    private void resetExplorerFileViewMarquee() {
+        iconMarqueePressArmed = false;
+        iconMarqueeDragStarted = false;
+        iconMarqueeAdditive = false;
+        marqueeSelectionMode = null;
+        iconMarqueePressSceneX = Double.NaN;
+        iconMarqueePressSceneY = Double.NaN;
+        iconMarqueeBaseSelection.clear();
+        if (iconMarqueeSelectionRect != null) {
+            iconMarqueeSelectionRect.setVisible(false);
+            iconMarqueeSelectionRect.setX(0.0);
+            iconMarqueeSelectionRect.setY(0.0);
+            iconMarqueeSelectionRect.setWidth(0.0);
+            iconMarqueeSelectionRect.setHeight(0.0);
+        }
+    }
+
+    private boolean isSelectionMarqueeMode(ViewMode mode) {
+        return mode == ViewMode.DETAILS || isIconMode(mode);
+    }
+
+    private void requestActiveDetailsSurfaceFocus() {
+        if (fileTable != null) {
+            fileTable.requestFocus();
+            return;
+        }
+        if (detailsViewShell != null) {
+            detailsViewShell.requestFocus();
+            return;
+        }
+        if (viewHost != null) {
+            viewHost.requestFocus();
+        }
+    }
+
+    private boolean isNodeWithinDetailsSelectionSurface(Node node) {
+        if (node == null || viewMode != ViewMode.DETAILS) {
+            return false;
+        }
+        for (Node current = node; current != null; current = current.getParent()) {
+            if (current == fileTable || current == detailsViewShell || current == viewHost) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private java.util.List<TableRow<FileItem>> collectVisibleDetailsRows() {
+        java.util.ArrayList<TableRow<FileItem>> rows = new java.util.ArrayList<>();
+        if (fileTable == null || !fileTable.isVisible()) {
+            return rows;
+        }
+        for (Node node : fileTable.lookupAll(".table-row-cell")) {
+            if (node instanceof TableRow<?> rawRow && rawRow.getTableView() == fileTable && !rawRow.isEmpty() && rawRow.getItem() != null) {
+                @SuppressWarnings("unchecked")
+                TableRow<FileItem> row = (TableRow<FileItem>) rawRow;
+                rows.add(row);
+            }
+        }
+        rows.sort(java.util.Comparator.comparingInt(TableRow::getIndex));
+        return rows;
+    }
+
+    private java.util.List<Node> collectVisibleExplorerIconTiles() {
+        java.util.ArrayList<Node> out = new java.util.ArrayList<>();
+        collectVisibleExplorerIconTiles(iconFlow, out);
+        collectVisibleExplorerIconTiles(virtualIconGridView, out);
+        collectVisibleExplorerIconTiles(virtualIconListView, out);
+        return out;
+    }
+
+    private void collectVisibleExplorerIconTiles(Node node, java.util.List<Node> out) {
+        if (node == null || !node.isVisible()) {
+            return;
+        }
+        if (pathForExplorerIconTile(node) != null) {
+            out.add(node);
+            return;
+        }
+        if (node instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                collectVisibleExplorerIconTiles(child, out);
+            }
+        }
+    }
+
+    private boolean sceneBoundsIntersect(Bounds bounds, double minSceneX, double minSceneY, double maxSceneX, double maxSceneY) {
+        return bounds.getMaxX() >= minSceneX
+                && bounds.getMinX() <= maxSceneX
+                && bounds.getMaxY() >= minSceneY
+                && bounds.getMinY() <= maxSceneY;
+    }
+
+    private Path pathForExplorerIconTile(Node node) {
+        if (node == null) {
+            return null;
+        }
+        Object taggedPath = node.getProperties().get(EXPLORER_ICON_TILE_PATH_KEY);
+        return taggedPath instanceof Path path ? path : null;
+    }
+
+    private Path findExplorerIconTilePath(Node node) {
+        for (Node current = node; current != null; current = current.getParent()) {
+            Path path = pathForExplorerIconTile(current);
+            if (path != null) {
+                return path;
+            }
+        }
+        return null;
+    }
+
+    private Node resolveEventTargetNode(MouseEvent event) {
+        if (event == null) {
+            return null;
+        }
+        if (event.getPickResult() != null && event.getPickResult().getIntersectedNode() != null) {
+            return event.getPickResult().getIntersectedNode();
+        }
+        Object target = event.getTarget();
+        return target instanceof Node node ? node : null;
+    }
+
+    private boolean isNodeWithinActiveIconSurface(Node node) {
+        if (node == null || !isIconMode(viewMode)) {
+            return false;
+        }
+        for (Node current = node; current != null; current = current.getParent()) {
+            if (current == fileTable || current == detailsViewShell) {
+                return false;
+            }
+            if (current == iconFlow || current == iconScroll || current == virtualIconGridView || current == virtualIconListView || current == viewHost) {
+                return true;
+            }
+        }
+        return false;
+    }
 /**
  * buildIconNode.
  *
@@ -8493,6 +9254,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
     private void configureTabsAndHome() {
         applyExplorerTabChrome(homeTabButton, null);
         applyExplorerTabChrome(currentTabButton, currentDirectory);
+        applyCloseTabButtonChrome(closeTabButton);
         applyExplorerTabChrome(newTabButton, null);
         refreshHomeSurface();
         updateTabStrip();
@@ -8504,23 +9266,155 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             return;
         }
         button.setTranslateY(3.0);
-        button.setContentDisplay(ContentDisplay.LEFT);
-        button.setGraphicTextGap(6.0);
         if (button == newTabButton) {
+            button.setContentDisplay(ContentDisplay.LEFT);
+            button.setGraphicTextGap(0.0);
             button.setGraphic(null);
             return;
         }
+        String labelText = button.getText();
+        Object storedLabel = button.getProperties().get("explorerTabLabelText");
+        if ((labelText == null || labelText.isBlank()) && storedLabel instanceof String stored && !stored.isBlank()) {
+            labelText = stored;
+        }
+        if (labelText == null) {
+            labelText = "";
+        }
+        labelText = labelText.trim();
+        if (!labelText.isBlank()) {
+            button.getProperties().put("explorerTabLabelText", labelText);
+            button.setAccessibleText(labelText);
+        }
+        button.setText("");
+        button.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        button.setGraphicTextGap(0.0);
+
         boolean dark = themeService != null && themeService.isDarkPreferred();
         Image iconImage = iconPath != null
                 ? IconLoader.loadForPath(iconPath, dark, 16)
                 : IconLoader.load(IconLoader.IconType.FOLDER, dark, 16);
-        ImageView graphic = new ImageView(iconImage);
-        graphic.setFitWidth(16.0);
-        graphic.setFitHeight(16.0);
-        graphic.setPreserveRatio(true);
-        graphic.setSmooth(true);
-        graphic.setMouseTransparent(true);
-        button.setGraphic(graphic);
+        ImageView iconView = new ImageView(iconImage);
+        iconView.setFitWidth(16.0);
+        iconView.setFitHeight(16.0);
+        iconView.setPreserveRatio(true);
+        iconView.setSmooth(true);
+        iconView.setMouseTransparent(true);
+
+        Label textLabel = new Label(labelText);
+        textLabel.getStyleClass().add("explorer-tab-text");
+        textLabel.setTextOverrun(OverrunStyle.ELLIPSIS);
+        textLabel.setMouseTransparent(true);
+        textLabel.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(textLabel, Priority.ALWAYS);
+
+        HBox content = new HBox(iconView, textLabel);
+        if (button == homeTabButton || button == currentTabButton) {
+            content.getChildren().add(createInlineTabCloseSlot(button));
+        }
+        content.getStyleClass().add("explorer-tab-content");
+        content.setAlignment(Pos.CENTER_LEFT);
+        content.setFillHeight(true);
+        content.setMouseTransparent(false);
+
+        button.setGraphic(content);
+    }
+
+    private Node createInlineTabCloseSlot(Button ownerButton) {
+        StackPane closeSlot = new StackPane();
+        closeSlot.getStyleClass().add("explorer-tab-close-slot");
+        closeSlot.setAlignment(Pos.CENTER);
+        closeSlot.setPickOnBounds(true);
+        closeSlot.setCursor(Cursor.HAND);
+        closeSlot.setFocusTraversable(false);
+
+        Label closeGlyph = new Label("×");
+        closeGlyph.getStyleClass().add("explorer-tab-inline-close-glyph");
+        closeGlyph.setMouseTransparent(true);
+        closeSlot.getChildren().add(closeGlyph);
+
+        closeSlot.addEventFilter(MouseEvent.MOUSE_PRESSED, evt -> evt.consume());
+        closeSlot.addEventFilter(MouseEvent.MOUSE_RELEASED, MouseEvent::consume);
+        closeSlot.addEventFilter(MouseEvent.MOUSE_CLICKED, evt -> {
+            if (evt.getButton() == MouseButton.PRIMARY) {
+                closeExplorerTab(ownerButton);
+            }
+            evt.consume();
+        });
+        return closeSlot;
+    }
+
+    private void applyCloseTabButtonChrome(Button button) {
+        if (button == null) {
+            return;
+        }
+        button.setTranslateY(3.0);
+        button.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        button.setGraphicTextGap(0.0);
+        Label closeGlyph = new Label("×");
+        closeGlyph.getStyleClass().add("explorer-strip-close-glyph");
+        closeGlyph.setMouseTransparent(true);
+        button.setText("");
+        button.setGraphic(closeGlyph);
+        button.setAccessibleText("Close current tab");
+    }
+
+    private void closeActiveExplorerTab() {
+        if (!homeActive && currentTabVisible) {
+            closeExplorerTab(currentTabButton);
+            return;
+        }
+        if (homeTabVisible) {
+            closeExplorerTab(homeTabButton);
+            return;
+        }
+        if (currentTabVisible) {
+            closeExplorerTab(currentTabButton);
+        }
+    }
+
+    @FXML
+    private void onCloseCurrentTabButton() {
+        closeActiveExplorerTab();
+    }
+
+    private void closeExplorerTab(Button button) {
+        if (button == null) {
+            return;
+        }
+        if (button == homeTabButton) {
+            if (homeActive && currentDirectory == null && !currentTabVisible) {
+                homeTabVisible = true;
+                updateTabStrip();
+                return;
+            }
+            homeTabVisible = false;
+            if (homeActive) {
+                if (currentDirectory != null) {
+                    hideHomePage();
+                    return;
+                }
+                homeTabVisible = true;
+            }
+        } else if (button == currentTabButton) {
+            currentTabVisible = false;
+            if (!homeActive) {
+                showHomePage();
+                return;
+            }
+        }
+        ensureAtLeastOneExplorerTabVisible();
+        updateTabStrip();
+    }
+
+    private void ensureAtLeastOneExplorerTabVisible() {
+        if (homeTabVisible || currentTabVisible) {
+            return;
+        }
+        if (currentDirectory != null) {
+            currentTabVisible = true;
+        } else {
+            homeTabVisible = true;
+        }
     }
 
     @FXML
@@ -8540,6 +9434,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
 
     private void showHomePage() {
         homeActive = true;
+        homeTabVisible = true;
         if (searchField != null) {
             searchField.clear();
         }
@@ -8547,10 +9442,12 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         applyHomeModeVisibility();
         updateWindowTitle(null);
         updateTopChromeState();
+        updateTabStrip();
         setStatus("Home");
     }
 
     private void hideHomePage() {
+        currentTabVisible = true;
         if (!homeActive) {
             updateTabStrip();
             return;
@@ -8559,6 +9456,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         applyHomeModeVisibility();
         updateWindowTitle(currentDirectory);
         updateTopChromeState();
+        updateTabStrip();
         if (currentDirectory != null && statusLabel != null && fileMetadataService != null) {
             statusLabel.setText(fileMetadataService.displayPathForStatus(currentDirectory));
         }
@@ -8587,21 +9485,40 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
     }
 
     private void updateTabStrip() {
+        ensureAtLeastOneExplorerTabVisible();
         if (homeTabButton != null) {
-            setStyleClass(homeTabButton, "selected-tab", homeActive);
-            applyExplorerTabChrome(homeTabButton, null);
-            homeTabButton.setTooltip(new javafx.scene.control.Tooltip("Open Home"));
+            homeTabButton.setVisible(homeTabVisible);
+            homeTabButton.setManaged(homeTabVisible);
+            setStyleClass(homeTabButton, "selected-tab", homeActive && homeTabVisible);
+            if (homeTabVisible) {
+                applyExplorerTabChrome(homeTabButton, null);
+                homeTabButton.setTooltip(new javafx.scene.control.Tooltip("Open Home"));
+            }
         }
         if (currentTabButton != null) {
-            setStyleClass(currentTabButton, "selected-tab", !homeActive);
+            currentTabButton.setVisible(currentTabVisible);
+            currentTabButton.setManaged(currentTabVisible);
+            setStyleClass(currentTabButton, "selected-tab", !homeActive && currentTabVisible);
             currentTabButton.setText(directoryDisplayName(currentDirectory));
             currentTabButton.setDisable(currentDirectory == null);
-            applyExplorerTabChrome(currentTabButton, currentDirectory);
-            currentTabButton.setTooltip(new javafx.scene.control.Tooltip(currentDirectory == null ? "Current folder" : currentDirectory.toString()));
+            if (currentTabVisible) {
+                applyExplorerTabChrome(currentTabButton, currentDirectory);
+                currentTabButton.setTooltip(new javafx.scene.control.Tooltip(currentDirectory == null ? "Current folder" : currentDirectory.toString()));
+            }
+        }
+        if (closeTabButton != null) {
+            applyCloseTabButtonChrome(closeTabButton);
+            closeTabButton.setVisible(false);
+            closeTabButton.setManaged(false);
+            closeTabButton.setDisable(true);
+            closeTabButton.setTooltip(new javafx.scene.control.Tooltip("Close current tab"));
         }
         if (newTabButton != null) {
             applyExplorerTabChrome(newTabButton, null);
             newTabButton.setTooltip(new javafx.scene.control.Tooltip("Open current folder in a new window"));
+        }
+        if (tabStrip != null) {
+            tabStrip.requestLayout();
         }
     }
 

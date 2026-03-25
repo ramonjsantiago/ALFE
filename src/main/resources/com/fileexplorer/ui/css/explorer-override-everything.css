@@ -66,6 +66,71 @@
 .explorer-tab-button {
     -fx-background-color: #202020;
     -fx-border-color: #3A3A3A;
+    -fx-content-display: graphic-only;
+    -fx-graphic-text-gap: 0;
+}
+
+.explorer-tab-content {
+    -fx-alignment: center-left;
+    -fx-spacing: 6px;
+}
+
+.explorer-tab-text {
+    -fx-padding: 0;
+}
+
+.explorer-tab-close-slot {
+    -fx-alignment: center;
+    -fx-min-width: 16px;
+    -fx-pref-width: 16px;
+    -fx-max-width: 16px;
+    -fx-min-height: 16px;
+    -fx-pref-height: 16px;
+    -fx-max-height: 16px;
+    -fx-background-radius: 8px;
+    -fx-padding: 0;
+}
+
+.theme-dark .explorer-tab-button .explorer-tab-text,
+.theme-dark .explorer-tab-button .explorer-tab-inline-close-glyph,
+.theme-dark .explorer-tab-button .explorer-tab-close-glyph {
+    -fx-text-fill: #E0DFDF;
+    -fx-fill: #E0DFDF;
+}
+
+.theme-light .explorer-tab-button .explorer-tab-text,
+.theme-light .explorer-tab-button .explorer-tab-inline-close-glyph,
+.theme-light .explorer-tab-button .explorer-tab-close-glyph {
+    -fx-text-fill: #1F1F1F;
+    -fx-fill: #1F1F1F;
+}
+
+.explorer-tab-inline-close-glyph {
+    -fx-font-size: 12px;
+    -fx-font-weight: 700;
+    -fx-opacity: 0.92;
+}
+
+.explorer-tab-close-glyph {
+    -fx-font-family: "Segoe Fluent Icons";
+    -fx-font-size: 10px;
+    -fx-opacity: 0.92;
+}
+
+.theme-dark .explorer-tab-button:hover .explorer-tab-close-slot {
+    -fx-background-color: rgba(255, 255, 255, 0.09);
+}
+
+.theme-dark .explorer-tab-button.selected-tab .explorer-tab-close-slot {
+    -fx-background-color: rgba(255, 255, 255, 0.04);
+}
+
+.theme-light .explorer-tab-button:hover .explorer-tab-close-slot {
+    -fx-background-color: rgba(0, 0, 0, 0.08);
+}
+
+.theme-light .explorer-tab-button.selected-tab .explorer-tab-close-slot {
+    -fx-background-color: rgba(0, 0, 0, 0.04);
 }
 
 .explorer-tab-button:hover {
@@ -165,4 +230,467 @@
 .explorer-home-tab .image-view,
 .explorer-current-tab .image-view {
     -fx-opacity: 1.0;
+}
+
+/* HOTFIX103 / Phase 4P.9J — Restore Sort/View icon+text toolbar entries */
+.command-bar > .menu-button.command-bar-icon-text {
+    -fx-min-width: USE_COMPUTED_SIZE;
+    -fx-pref-width: USE_COMPUTED_SIZE;
+    -fx-max-width: USE_COMPUTED_SIZE;
+    -fx-padding: 0 10 0 10;
+    -fx-content-display: left;
+    -fx-graphic-text-gap: 6px;
+    -fx-alignment: center-left;
+}
+
+
+
+/* HOTFIX104 / Phase 4P.9K — Restore New icon+text and chevrons */
+.command-bar > .menu-button.command-bar-icon-text > .arrow-button {
+    -fx-padding: 0 8 0 4;
+}
+
+.command-bar > .menu-button.command-bar-icon-text > .arrow-button > .arrow {
+    -fx-background-color: #E0DFDF;
+    -fx-background-insets: 0;
+    -fx-padding: 3px 4px 0 4px;
+    -fx-shape: "M 0 0 L 4 4 L 8 0 L 6.7 0 L 4 2.55 L 1.3 0 Z";
+    -fx-scale-shape: false;
+}
+
+.command-bar > .menu-button.command-bar-native-menu-button {
+    -fx-min-width: USE_COMPUTED_SIZE;
+    -fx-pref-width: USE_COMPUTED_SIZE;
+    -fx-max-width: USE_COMPUTED_SIZE;
+    -fx-padding: 0 10 0 8;
+    -fx-content-display: left;
+    -fx-graphic-text-gap: 6px;
+    -fx-alignment: center-left;
+}
+
+.command-bar > .menu-button.command-bar-native-menu-button > .label {
+    -fx-padding: 0;
+}
+
+.command-bar > .menu-button.command-bar-native-menu-button > .arrow-button {
+    -fx-padding: 0 6 0 5;
+}
+
+.command-bar > .menu-button.command-bar-native-menu-button > .arrow-button > .arrow {
+    -fx-background-color: #E0DFDF;
+    -fx-background-insets: 0;
+    -fx-padding: 3px 4px 0 4px;
+    -fx-shape: "M 0 0 L 4 4 L 8 0 L 6.7 0 L 4 2.55 L 1.3 0 Z";
+    -fx-scale-shape: false;
+}
+
+.command-bar > .menu-button.command-primary-button.command-bar-icon-text {
+    -fx-font-weight: 400;
+}
+
+/* HOTFIX105 / Phase 4P.9L — Top nav icon 48px center spacing */
+.explorer-address-row .explorer-nav-cluster,
+.breadcrumb-row .address-nav-group {
+    -fx-spacing: 8;
+}
+
+.explorer-address-row .explorer-nav-cluster > .button,
+.breadcrumb-row .address-nav-group > .button {
+    -fx-min-width: 40px;
+    -fx-pref-width: 40px;
+    -fx-max-width: 40px;
+    -fx-min-height: 36px;
+    -fx-pref-height: 36px;
+    -fx-max-height: 36px;
+    -fx-padding: 0;
+    -fx-content-display: graphic-only;
+    -fx-graphic-text-gap: 0;
+    -fx-alignment: center;
+}
+
+
+/* HOTFIX106 / Phase 4P.9M — Top Chrome and Command Bar Metrics Parity */
+.window-top-stack.explorer-top-work-area {
+    -fx-padding: 6 0 4 0;
+    -fx-spacing: 0;
+}
+
+.theme-dark .explorer-tabstrip {
+    -fx-background-color: #202020;
+    -fx-border-color: transparent transparent #2A2A2A transparent;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 0 8 0 8;
+}
+
+.theme-dark .top-chrome-surface.explorer-top-bands,
+.theme-dark .top-chrome-surface.explorer-top-bands .breadcrumb-row,
+.theme-dark .top-chrome-surface.explorer-top-bands .command-bar {
+    -fx-background-color: #2C2C2C;
+}
+
+.theme-dark .top-chrome-surface.explorer-top-bands {
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
+    -fx-border-color: #2A2A2A;
+    -fx-border-width: 0 0 1 0;
+}
+
+.theme-dark .explorer-address-row {
+    -fx-padding: 6 8 4 8;
+}
+
+.explorer-address-row .explorer-nav-cluster,
+.breadcrumb-row .address-nav-group {
+    -fx-spacing: 8;
+    -fx-padding: 0 10 0 0;
+    -fx-alignment: center-left;
+}
+
+.explorer-address-row .explorer-nav-cluster > .button,
+.breadcrumb-row .address-nav-group > .button {
+    -fx-min-width: 40px;
+    -fx-pref-width: 40px;
+    -fx-max-width: 40px;
+    -fx-min-height: 36px;
+    -fx-pref-height: 36px;
+    -fx-max-height: 36px;
+    -fx-padding: 0;
+    -fx-content-display: graphic-only;
+    -fx-graphic-text-gap: 0;
+    -fx-alignment: center;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.theme-dark .explorer-address-row .explorer-nav-cluster > .button:hover,
+.theme-dark .breadcrumb-row .address-nav-group > .button:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.060);
+}
+
+.theme-dark .explorer-address-row .explorer-nav-cluster > .button:armed,
+.theme-dark .explorer-address-row .explorer-nav-cluster > .button:pressed,
+.theme-dark .breadcrumb-row .address-nav-group > .button:armed,
+.theme-dark .breadcrumb-row .address-nav-group > .button:pressed {
+    -fx-background-color: rgba(255, 255, 255, 0.100);
+}
+
+.theme-dark .explorer-address-row .explorer-nav-cluster > .button:disabled,
+.theme-dark .breadcrumb-row .address-nav-group > .button:disabled {
+    -fx-opacity: 1.0;
+}
+
+.theme-dark .explorer-address-row .explorer-nav-cluster > .button > .fluent-icon,
+.theme-dark .breadcrumb-row .address-nav-group > .button > .fluent-icon {
+    -fx-font-size: 15px;
+    -fx-fill: #F1F1F1;
+    -fx-text-fill: #F1F1F1;
+}
+
+.theme-dark .explorer-address-row .explorer-nav-cluster > .button:disabled > .fluent-icon,
+.theme-dark .breadcrumb-row .address-nav-group > .button:disabled > .fluent-icon {
+    -fx-fill: #737373;
+    -fx-text-fill: #737373;
+}
+
+.theme-dark .explorer-address-shell,
+.theme-dark .explorer-search-shell {
+    -fx-background-color: #202020;
+    -fx-background-radius: 8;
+    -fx-border-color: #343434;
+    -fx-border-radius: 8;
+}
+
+.theme-dark .explorer-search-field {
+    -fx-background-color: transparent;
+    -fx-text-fill: #E7E7E7;
+    -fx-prompt-text-fill: #9A9A9A;
+}
+
+.theme-dark .command-bar {
+    -fx-padding: 0 8 6 8;
+    -fx-spacing: 2;
+}
+
+.theme-dark .command-bar > .button,
+.theme-dark .command-bar > .toggle-button,
+.theme-dark .command-bar > .menu-button {
+    -fx-min-height: 32px;
+    -fx-pref-height: 32px;
+    -fx-max-height: 32px;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 0 8 0 8;
+    -fx-graphic-text-gap: 6px;
+}
+
+.theme-dark .command-bar > .button:hover,
+.theme-dark .command-bar > .toggle-button:hover,
+.theme-dark .command-bar > .menu-button:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.055);
+}
+
+.theme-dark .command-bar > .button:armed,
+.theme-dark .command-bar > .toggle-button:armed,
+.theme-dark .command-bar > .toggle-button:selected,
+.theme-dark .command-bar > .menu-button:armed,
+.theme-dark .command-bar > .menu-button:showing {
+    -fx-background-color: rgba(255, 255, 255, 0.095);
+}
+
+.command-bar > .button.icon-only,
+.command-bar > .toggle-button.icon-only,
+.command-bar > .menu-button.icon-only {
+    -fx-min-width: 32px;
+    -fx-pref-width: 32px;
+    -fx-max-width: 32px;
+    -fx-min-height: 32px;
+    -fx-pref-height: 32px;
+    -fx-max-height: 32px;
+    -fx-padding: 0;
+    -fx-content-display: graphic-only;
+    -fx-graphic-text-gap: 0;
+    -fx-alignment: center;
+}
+
+.command-bar > .menu-button.command-bar-icon-text {
+    -fx-min-width: USE_COMPUTED_SIZE;
+    -fx-pref-width: USE_COMPUTED_SIZE;
+    -fx-max-width: USE_COMPUTED_SIZE;
+    -fx-padding: 0 10 0 8;
+    -fx-content-display: left;
+    -fx-graphic-text-gap: 6px;
+    -fx-alignment: center-left;
+}
+
+.command-bar > .menu-button.command-bar-icon-text > .label {
+    -fx-padding: 0;
+}
+
+.command-bar > .menu-button.command-bar-icon-text > .arrow-button {
+    -fx-padding: 0 6 0 5;
+}
+
+.command-bar > .menu-button.command-bar-icon-text > .arrow-button > .arrow {
+    -fx-background-color: #E0DFDF;
+    -fx-background-insets: 0;
+    -fx-padding: 3px 4px 0 4px;
+    -fx-shape: "M 0 0 L 4 4 L 8 0 L 6.7 0 L 4 2.55 L 1.3 0 Z";
+    -fx-scale-shape: false;
+}
+
+.command-bar > .menu-button.command-bar-native-menu-button {
+    -fx-min-width: USE_COMPUTED_SIZE;
+    -fx-pref-width: USE_COMPUTED_SIZE;
+    -fx-max-width: USE_COMPUTED_SIZE;
+    -fx-padding: 0 10 0 8;
+    -fx-content-display: left;
+    -fx-graphic-text-gap: 6px;
+    -fx-alignment: center-left;
+}
+
+.command-bar > .menu-button.command-bar-native-menu-button > .label {
+    -fx-padding: 0;
+}
+
+.command-bar > .menu-button.command-bar-native-menu-button > .arrow-button {
+    -fx-padding: 0 6 0 5;
+}
+
+.command-bar > .menu-button.command-bar-native-menu-button > .arrow-button > .arrow {
+    -fx-background-color: #E0DFDF;
+    -fx-background-insets: 0;
+    -fx-padding: 3px 4px 0 4px;
+    -fx-shape: "M 0 0 L 4 4 L 8 0 L 6.7 0 L 4 2.55 L 1.3 0 Z";
+    -fx-scale-shape: false;
+}
+
+.theme-dark .command-bar .fluent-icon,
+.theme-dark .command-bar .mdl2-icon {
+    -fx-font-size: 15px;
+    -fx-fill: #E0DFDF;
+    -fx-text-fill: #E0DFDF;
+}
+
+.command-bar .separator {
+    -fx-padding: 0 6 0 6;
+}
+
+.command-bar .separator:vertical .line,
+.secondary-toolbar .separator:vertical .line {
+    -fx-background-color: #272727;
+    -fx-border-color: #272727;
+}
+
+
+/* HOTFIX116 / Phase 4P.9V — Command Bar Icon Lane and Baseline Parity */
+.command-bar > .menu-button.command-bar-structured-menu-button {
+    -fx-min-width: USE_COMPUTED_SIZE;
+    -fx-pref-width: USE_COMPUTED_SIZE;
+    -fx-max-width: USE_COMPUTED_SIZE;
+    -fx-min-height: 32px;
+    -fx-pref-height: 32px;
+    -fx-max-height: 32px;
+    -fx-padding: 0 12 0 9;
+    -fx-content-display: graphic-only;
+    -fx-graphic-text-gap: 0;
+    -fx-alignment: center-left;
+}
+
+.command-bar > .menu-button.command-bar-structured-menu-button > .arrow-button {
+    -fx-padding: 0;
+    -fx-min-width: 0;
+    -fx-pref-width: 0;
+    -fx-max-width: 0;
+    -fx-opacity: 0;
+}
+
+.command-bar > .menu-button.command-bar-structured-menu-button > .arrow-button > .arrow {
+    -fx-padding: 0;
+    -fx-background-color: transparent;
+}
+
+.command-bar > .menu-button.command-bar-structured-menu-button > .label {
+    -fx-padding: 0;
+}
+
+.command-bar-menu-content {
+    -fx-alignment: center-left;
+    -fx-min-height: 32px;
+    -fx-pref-height: 32px;
+    -fx-spacing: 1px;
+}
+
+.command-bar-menu-icon-slot {
+    -fx-alignment: center;
+    -fx-min-width: 28px;
+    -fx-pref-width: 28px;
+    -fx-max-width: 28px;
+    -fx-min-height: 32px;
+    -fx-pref-height: 32px;
+    -fx-max-height: 32px;
+    -fx-padding: 0 9 0 0;
+}
+
+.command-bar .command-bar-menu-leading-glyph {
+    -fx-font-family: "Segoe Fluent Icons";
+    -fx-font-size: 19px;
+    -fx-opacity: 1.0;
+}
+
+.command-bar-menu-vector-icon-root {
+    -fx-alignment: center;
+    -fx-min-width: 24px;
+    -fx-pref-width: 24px;
+    -fx-max-width: 24px;
+    -fx-min-height: 24px;
+    -fx-pref-height: 24px;
+    -fx-max-height: 24px;
+}
+
+.command-bar-menu-icon-stroke-shape {
+    -fx-fill: transparent;
+    -fx-stroke: #E0DFDF;
+    -fx-stroke-width: 1.65;
+    -fx-stroke-line-cap: round;
+    -fx-stroke-line-join: round;
+}
+
+.theme-light .command-bar-menu-icon-stroke-shape {
+    -fx-stroke: #1F1F1F;
+}
+
+.command-bar-menu-text {
+    -fx-padding: 0 1 0 0;
+}
+
+.command-bar-menu-chevron-slot {
+    -fx-alignment: center;
+    -fx-min-width: 14px;
+    -fx-pref-width: 14px;
+    -fx-max-width: 14px;
+    -fx-min-height: 32px;
+    -fx-pref-height: 32px;
+    -fx-max-height: 32px;
+    -fx-padding: 0 0 0 5;
+}
+
+.command-bar-menu-chevron-shape {
+    -fx-fill: transparent;
+    -fx-stroke: #E0DFDF;
+    -fx-stroke-width: 1.35;
+    -fx-stroke-line-cap: round;
+    -fx-stroke-line-join: round;
+}
+
+.theme-light .command-bar-menu-chevron-shape {
+    -fx-stroke: #1F1F1F;
+}
+
+
+/* HOTFIX111 / Phase 4P.9Q — Inline tab close slot and plus-after-last-tab parity */
+.explorer-tab-button .explorer-tab-text {
+    -fx-padding: 0;
+}
+
+.explorer-tab-button .explorer-tab-content {
+    -fx-spacing: 6px;
+}
+
+.explorer-tab-button .explorer-tab-close-slot {
+    -fx-cursor: hand;
+}
+
+.explorer-tab-close-button,
+.explorer-new-tab-button {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-border-insets: 0;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
+}
+
+.explorer-tab-close-button {
+    -fx-min-width: 28px;
+    -fx-pref-width: 28px;
+    -fx-max-width: 28px;
+    -fx-min-height: 32px;
+    -fx-pref-height: 32px;
+    -fx-max-height: 32px;
+    -fx-padding: 0;
+    -fx-alignment: center;
+    -fx-content-display: graphic-only;
+}
+
+.explorer-new-tab-button {
+    -fx-min-width: 28px;
+    -fx-pref-width: 28px;
+    -fx-max-width: 28px;
+    -fx-min-height: 32px;
+    -fx-pref-height: 32px;
+    -fx-max-height: 32px;
+    -fx-padding: 0;
+    -fx-alignment: center;
+}
+
+.theme-dark .explorer-tab-close-button:hover,
+.theme-dark .explorer-new-tab-button:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.06);
+    -fx-border-color: transparent;
+}
+
+.theme-light .explorer-tab-close-button:hover,
+.theme-light .explorer-new-tab-button:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.06);
+    -fx-border-color: transparent;
+}
+
+.explorer-strip-close-glyph {
+    -fx-font-size: 13px;
+    -fx-font-weight: 700;
 }

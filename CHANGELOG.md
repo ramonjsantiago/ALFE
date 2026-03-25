@@ -1,3 +1,37 @@
+## HOTFIX118 / Phase 4P.9X — Marquee and Ctrl Selection Parity
+
+- added Explorer-style icon-view selection handling so Extra large, Large, Medium, Small, List, Tiles, and Content views support single-select, Ctrl-click toggle select, and Shift-range extension through the shared file selection model
+- added a view-host marquee selection overlay that hit-tests visible icon tiles during click-drag selection and applies the live result back to the file selection state
+- stopped virtual icon-grid row selection leakage by consuming tile mouse events at the icon level and disabling whole-row pick bounds for the virtual grid/list cells
+
+## HOTFIX117 / Phase 4P.9W — Icon View Live Reflow on Resize
+
+- pushed the live visible icon viewport width directly into the FlowPane icon host instead of only updating wrap length
+- added a follow-up responsive pass for non-virtual icon views so SplitPane / ScrollPane layout settles before the final icon-flow width is applied
+- preserved the existing virtual icon-grid row regrouping behavior for larger folders while making small FlowPane-based icon folders reflow more reliably during grow/shrink cycles
+
+## HOTFIX112 / Phase 4P.9R — Structured Command Bar Chevron Render Finalization
+- converted New, Sort, and View into structured graphic-only MenuButtons so the visible layout is explicitly icon + label + down chevron
+- replaced chevron visibility dependence on the native MenuButton arrow lane with a dedicated SVG chevron slot inside the command-bar content tree
+- preserved the existing flyout behavior and full-button hit target while restoring the missing down chevrons
+
+## HOTFIX108 / Phase 4P.9N — Toolbar Menu Chevron Slot and Baseline Alignment Parity
+- reworked the command-bar New, Sort, and View MenuButtons into a fixed structure of icon + label + dedicated trailing chevron slot
+- moved the visible chevron ownership into the button content instead of relying on the skin arrow-button lane
+- collapsed the default MenuButton arrow-button width for those structured controls so the chevron stays aligned and visible
+- preserved the existing flyout hierarchy, full-button hit target, and command-bar hover/pressed states
+
+## HOTFIX107 / Phase 4P.9N — Toolbar Flyout Chevron Visibility Fix
+- fixed the missing down chevrons on the toolbar New, Sort, and View MenuButtons
+- replaced the open chevron shapes with closed painted chevron paths so the glyph renders reliably in JavaFX
+- preserved the existing command-bar metrics and flyout hierarchy from HOTFIX106
+
+
+## HOTFIX105 / Phase 4P.9L — Top Nav Icon 48px Center Spacing
+- adjusted the top navigation toolbar icon rhythm to 48px center-to-center using a 40px button well with 8px inter-button spacing
+- kept the existing Back, Forward, Up, and Refresh toolbar behavior, icons, and tooltips intact while retuning only the spacing metrics
+- applied the spacing override in the late Explorer override stylesheet so the change stays low-risk and easy to tune further
+
 
 ## HOTFIX102 / Phase 4P.9I — Tab Folder Icons and Vertical Offset
 - Added folder icons to the left of the Home and Current folder tab text.
@@ -284,3 +318,59 @@
 - corrected tooltip contrast so icon-only toolbar button tooltips are readable again
 - aligned tooltip background/border colors with the dark palette
 - kept HOTFIX99 toolbar icon-only layout unchanged
+
+## HOTFIX103 / Phase 4P.9J — Restore Sort/View Toolbar Icon+Text
+- Restored the toolbar **Sort** and **View** entries to render as **icon + name** instead of icon-only controls.
+- Preserved the existing Sort and View flyout/dropdown menu hierarchies and actions.
+- Added a labeled-command-bar style so Sort and View keep normal button sizing and left-aligned icon/text spacing while the other leading toolbar commands remain icon-only.
+
+## HOTFIX104 / Phase 4P.9K — Toolbar New / Sort / View Icon+Text Chevron Restore
+- Restored **New** on the toolbar from icon-only to **icon + text**.
+- Kept the existing **New**, **Sort**, and **View** flyout menu hierarchies unchanged.
+- Tuned the toolbar flyout arrow treatment so **New**, **Sort**, and **View** use a smaller right-side chevron.
+
+
+## HOTFIX106 / Phase 4P.9M — Top Chrome and Command Bar Metrics Parity
+- Tightened the top chrome so the tab strip, address row, and command bar read as a quieter Windows-style surface stack.
+- Retuned the top navigation button wells to use flatter hover/pressed states, calmer disabled contrast, and more Windows-like glyph sizing.
+- Refined command-bar metrics for icon-only actions and the New / Sort / View flyouts, including subtler open-state wells and tighter label-to-chevron spacing.
+
+HOTFIX110 / Phase 4P.9P — Toolbar Native Menu Restore and Tab Strip Close/Plus Parity
+- src/main/java/com/fileexplorer/controller/MainController.java
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- src/main/resources/com/fileexplorer/ui/css/explorer-override-everything.css
+- src/main/resources/com/fileexplorer/ui/css/home-tabs-parity.css
+- PHASE4P_9P_TOOLBAR_NATIVE_MENU_RESTORE_AND_TAB_STRIP_CLOSE_PLUS_PARITY_NOTES.txt
+
+
+## HOTFIX111 / Phase 4P.9Q — Inline Tab Close and Plus-After-Last-Tab Parity
+- Moved the visible tab close affordance into each tab so the X now sits immediately after the tab label.
+- Reordered the tab strip so the + button renders directly after the last visible tab instead of being separated by the flexible spacer.
+- Left the old strip-level close button hidden and unmanaged as a fallback path while the inline tab close slot handles user interaction.
+
+
+## HOTFIX113 / Phase 4P.9S — Command Bar Vector Icon Restore
+- Replaced the New / Sort / View toolbar glyph dependency with dedicated vector icons so those controls no longer fall back to ellipsis.
+- Kept the HOTFIX112 structured command-bar layout intact: icon + label + dedicated trailing chevron slot.
+- Added theme-aware vector stroke styling so the restored icons remain legible in dark and light modes.
+
+## HOTFIX114 / Phase 4P.9T — Command Bar Icon Size Parity
+- Increased the visible size of the structured vector icons used by **New**, **Sort**, and **View**.
+- Widened the command-bar icon lane slightly so the larger icons remain centered and do not crowd the label.
+- Increased vector stroke weight modestly for better toolbar icon legibility.
+
+## HOTFIX115 / Phase 4P.9U — Command Bar Icon Size More Parity
+- Increased the visible size of the structured vector icons used by **New**, **Sort**, and **View** again for stronger command-bar parity.
+- Expanded the icon slot further so the larger icons remain centered without colliding with the labels.
+- Slightly increased vector stroke weight and fallback glyph size so the icons read more clearly at normal desktop scale.
+
+## HOTFIX119 / Phase 4P.9Y — Details View Marquee Selection Parity
+- Added click-and-drag marquee selection to the **Details** view when dragging from blank file-view space.
+- Marquee hit-testing now selects every intersected visible details row both logically and visually instead of leaving the UI looking single-selected.
+- Preserved additive **Ctrl-drag** marquee behavior while explicitly focusing the details table so active selection paint stays stable during the drag.
+
+
+## HOTFIX120 / Phase 4P.9Z — Details Marquee Multi-Select Visual and Logical Fix
+- Switched details marquee selection application to an atomic multi-index selection path so every intersected row is selected in one pass.
+- Added a dedicated details-row `explorer-selected` presentation state so marquee-selected rows paint correctly even while the virtualized table is mid-drag.
+- Forced immediate and deferred details selection presentation refreshes after marquee updates to keep logical and visual multi-selection in sync.
