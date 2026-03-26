@@ -1,3 +1,9 @@
+## HOTFIX130 / Phase 4P.9AJ — Icon View Marquee Gesture Ownership, Release Collapse Suppression, and Stable Multi-Select Commit
+
+- stopped icon-view marquee live preview from mutating the shared TableView selection model on every drag pulse; icon marquee now previews through dedicated presentation state and commits the multi-select only once on mouse release
+- added marquee gesture ownership guards so trailing icon click/clicked handlers cannot reclaim the gesture and collapse the committed marquee result back to a single lead item
+- suppressed hover-class churn while marquee ownership is active so drag-selection paint remains stable instead of flickering as the pointer crosses tiles
+
 ## HOTFIX118 / Phase 4P.9X — Marquee and Ctrl Selection Parity
 
 - added Explorer-style icon-view selection handling so Extra large, Large, Medium, Small, List, Tiles, and Content views support single-select, Ctrl-click toggle select, and Shift-range extension through the shared file selection model
@@ -374,3 +380,30 @@ HOTFIX110 / Phase 4P.9P — Toolbar Native Menu Restore and Tab Strip Close/Plus
 - Switched details marquee selection application to an atomic multi-index selection path so every intersected row is selected in one pass.
 - Added a dedicated details-row `explorer-selected` presentation state so marquee-selected rows paint correctly even while the virtualized table is mid-drag.
 - Forced immediate and deferred details selection presentation refreshes after marquee updates to keep logical and visual multi-selection in sync.
+
+## HOTFIX121 / Phase 4P.9AA — Details View Marquee Drag Activation Fix
+- Allowed marquee selection in **Details** view to arm from existing rows as well as blank viewport space, so the drag can begin even when the folder fills the table.
+- Excluded the details header, show/hide columns button, and scrollbars from marquee arming so header interactions still behave normally.
+- Preserved normal single-click row behavior when no drag occurs, while switching to marquee selection as soon as the drag threshold is crossed.
+
+## HOTFIX122 / Phase 4P.9AB — Details Marquee Release Selection Commit Fix
+- Captured the active Details-view marquee hit set during drag and committed it again after JavaFX mouse-release processing.
+- Prevented the final native row-selection pass from collapsing a completed marquee selection back to a single row.
+- Kept visual and logical multi-selection aligned after release, including additive Ctrl-drag marquee selection.
+
+## HOTFIX128 / Phase 4P.9AH — Icon View Marquee Hit-Set Commit and Tile Selection Rebind Finalization
+- Added a persistent icon selection presentation set so marquee-selected icon tiles repaint from committed selection state instead of only transient drag state.
+- Reapplied icon marquee selection after mouse release and forced immediate plus deferred icon-tile refresh passes to stabilize post-release paint.
+- Initialized rebuilt and recycled icon tiles from the committed selection predicate so virtualization and relayout do not drop marquee-selected visuals.
+
+## HOTFIX129 / Phase 4P.9AI — Icon View Marquee Final Commit, Invalidation, and Selection Model Unification
+- Recomputed the icon marquee hit set on mouse release so the committed selection matches the final drag rectangle instead of an earlier drag sample.
+- Wrapped icon-selection model updates in a presentation transaction so transient clear-and-reselect passes do not erase committed icon-tile paint.
+- Refreshed icon-tile selected and hover visuals with explicit state invalidation after release to keep marquee-selected tiles painted when the pointer moves away.
+
+
+
+## HOTFIX131 / Phase 4P.9AK — Icon View Marquee Click-Through Suppression and Virtual Cell Input Isolation
+- Added a view-host `MOUSE_CLICKED` suppression path for marquee-owned icon gestures so the post-release click sequence cannot collapse a committed multi-selection to the last icon.
+- Held icon marquee click suppression across additional UI pulses so release/click cleanup from JavaFX skins cannot immediately override the marquee commit.
+- Installed virtual icon cell mouse-event suppression and live marquee selection delta filtering to reduce drag flicker and block ListView cell input from reasserting single-item selection during marquee completion.

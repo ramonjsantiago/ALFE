@@ -395,11 +395,19 @@ private volatile long hugeFolderScannedTotal = 0L;
     private boolean iconMarqueePressArmed = false;
     private boolean iconMarqueeDragStarted = false;
     private boolean iconMarqueeAdditive = false;
+    private boolean iconMarqueePressOnExistingItem = false;
+    private boolean iconMarqueeGestureOwnsSelection = false;
+    private boolean suppressExplorerIconClickSelection = false;
+    private int suppressExplorerIconClickSelectionPulsesRemaining = 0;
     private double iconMarqueePressSceneX = Double.NaN;
     private double iconMarqueePressSceneY = Double.NaN;
     private final java.util.LinkedHashSet<Path> iconMarqueeBaseSelection = new java.util.LinkedHashSet<>();
+    private final java.util.LinkedHashSet<Path> pendingExplorerMarqueeSelectionPaths = new java.util.LinkedHashSet<>();
+    private Path pendingExplorerMarqueeFocusPath = null;
     private ViewMode marqueeSelectionMode = null;
     private final java.util.LinkedHashSet<Path> detailsPresentationSelectedPaths = new java.util.LinkedHashSet<>();
+    private final java.util.LinkedHashSet<Path> iconPresentationSelectedPaths = new java.util.LinkedHashSet<>();
+    private int explorerSelectionPresentationTransactionDepth = 0;
     private boolean virtualIconViewsInstalled;
     private boolean iconScrollPagingInstalled;
     private long iconBuildGeneration;
@@ -2998,6 +3006,9 @@ colType.setCellValueFactory(param -> {
             Path p = newSel != null ? newSel.path() : null;
             updateSelectionDetails(p);
             updateSelectionCommandState();
+            if (!isExplorerSelectionPresentationTransactionActive()) {
+                syncIconPresentationSelectedPathsFromTableSelection();
+            }
             refreshVisibleIconTileSelectionState();
             refreshVisibleDetailsSelectionPresentation();
             refreshExplorerMetadataPopupForSelection(newSel);
@@ -3011,6 +3022,9 @@ colType.setCellValueFactory(param -> {
             }
         });
         fileTable.getSelectionModel().getSelectedItems().addListener((ListChangeListener<FileItem>) change -> {
+            if (!isExplorerSelectionPresentationTransactionActive()) {
+                syncIconPresentationSelectedPathsFromTableSelection();
+            }
             refreshVisibleIconTileSelectionState();
             refreshVisibleDetailsSelectionPresentation();
         });
@@ -4101,17 +4115,17 @@ colType.setCellValueFactory(param -> {
             tile.getProperties().put(EXPLORER_ICON_TILE_PATH_KEY, path);
         }
         installStableExplorerIconTileHover(tile);
-        if (styleClasses == null) {
-            return;
-        }
-        for (String styleClass : styleClasses) {
-            if (styleClass == null || styleClass.isBlank()) {
-                continue;
+        if (styleClasses != null) {
+            for (String styleClass : styleClasses) {
+                if (styleClass == null || styleClass.isBlank()) {
+                    continue;
+                }
+                if (!tile.getStyleClass().contains(styleClass)) {
+                    tile.getStyleClass().add(styleClass);
+                }
             }
-            if (!tile.getStyleClass().contains(styleClass)) {
-                tile.getStyleClass().add(styleClass);
-            }
         }
+        syncExplorerIconTileSelectedState(tile, path != null && isPathCurrentlySelected(path));
     }
 
     private void installStableExplorerIconTileHover(Node tile) {
@@ -4123,8 +4137,35 @@ colType.setCellValueFactory(param -> {
             return;
         }
         tile.getProperties().put(EXPLORER_ICON_TILE_HOVER_HANDLER_KEY, Boolean.TRUE);
-        tile.addEventHandler(MouseEvent.MOUSE_ENTERED, e -> setStyleClass(tile, "explorer-hover", true));
-        tile.addEventHandler(MouseEvent.MOUSE_EXITED, e -> setStyleClass(tile, "explorer-hover", false));
+        tile.addEventHandler(MouseEvent.MOUSE_ENTERED, e -> syncExplorerIconTileHoverState(tile, true));
+        tile.addEventHandler(MouseEvent.MOUSE_EXITED, e -> syncExplorerIconTileHoverState(tile, false));
+    }
+
+    private void syncExplorerIconTileHoverState(Node tile, boolean active) {
+        if (tile == null) {
+            return;
+        }
+        if (iconMarqueeGestureOwnsSelection) {
+            active = false;
+        }
+        setStyleClass(tile, "explorer-hover", active);
+        tile.pseudoClassStateChanged(PSEUDO_EXPLORER_HOVER, active);
+        tile.applyCss();
+        if (tile instanceof Parent parent) {
+            parent.requestLayout();
+        }
+    }
+
+    private void syncExplorerIconTileSelectedState(Node tile, boolean selected) {
+        if (tile == null) {
+            return;
+        }
+        setStyleClass(tile, "explorer-selected", selected);
+        tile.pseudoClassStateChanged(PSEUDO_EXPLORER_SELECTED, selected);
+        tile.applyCss();
+        if (tile instanceof Parent parent) {
+            parent.requestLayout();
+        }
     }
 
     private void markExplorerIconTileChild(Node node) {
@@ -4140,7 +4181,16 @@ colType.setCellValueFactory(param -> {
     }
 
     private boolean isPathCurrentlySelected(Path path) {
-        if (path == null || fileTable == null) {
+        if (path == null) {
+            return false;
+        }
+        if (isIconMode(viewMode) && iconPresentationSelectedPaths.contains(path)) {
+            return true;
+        }
+        if (viewMode == ViewMode.DETAILS && detailsPresentationSelectedPaths.contains(path)) {
+            return true;
+        }
+        if (fileTable == null || fileTable.getSelectionModel() == null) {
             return false;
         }
         ObservableList<FileItem> selectedItems = fileTable.getSelectionModel().getSelectedItems();
@@ -4177,7 +4227,7 @@ colType.setCellValueFactory(param -> {
         }
         Object taggedPath = node.getProperties().get(EXPLORER_ICON_TILE_PATH_KEY);
         if (taggedPath instanceof Path path) {
-            setStyleClass(node, "explorer-selected", isPathCurrentlySelected(path));
+            syncExplorerIconTileSelectedState(node, isPathCurrentlySelected(path));
         }
         if (node instanceof Parent parent) {
             for (Node child : parent.getChildrenUnmodifiable()) {
@@ -8272,6 +8322,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             {
                 rowPane.setAlignment(Pos.TOP_LEFT);
                 rowPane.setPickOnBounds(false);
+                installExplorerVirtualCellGestureSuppression(this);
             }
             @Override
 /**
@@ -8309,6 +8360,9 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         virtualIconListView.setMaxWidth(Double.MAX_VALUE);
         virtualIconListView.setMaxHeight(Double.MAX_VALUE);
         virtualIconListView.setCellFactory(_ -> new ListCell<>() {
+            {
+                installExplorerVirtualCellGestureSuppression(this);
+            }
             @Override
 /**
  * updateItem.
@@ -8370,6 +8424,27 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
  * hideVirtualIconViews.
  *
  */
+    private void installExplorerVirtualCellGestureSuppression(ListCell<?> cell) {
+        if (cell == null) {
+            return;
+        }
+        cell.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> {
+            if (event.getButton() == MouseButton.PRIMARY && (shouldSuppressExplorerIconPrimaryGestureHandling() || iconMarqueePressArmed || iconMarqueeDragStarted)) {
+                event.consume();
+            }
+        });
+        cell.addEventFilter(MouseEvent.MOUSE_RELEASED, event -> {
+            if (event.getButton() == MouseButton.PRIMARY && (shouldSuppressExplorerIconPrimaryGestureHandling() || iconMarqueePressArmed || iconMarqueeDragStarted)) {
+                event.consume();
+            }
+        });
+        cell.addEventFilter(MouseEvent.MOUSE_CLICKED, event -> {
+            if (event.getButton() == MouseButton.PRIMARY && (shouldSuppressExplorerIconPrimaryGestureHandling() || iconMarqueePressArmed || iconMarqueeDragStarted)) {
+                event.consume();
+            }
+        });
+    }
+
     private void hideVirtualIconViews() {
         LogSupport.enter(LOG, "hideVirtualIconViews");
         if (virtualIconGridView != null) {
@@ -8640,6 +8715,10 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             }
             hideExplorerMetadataPopup();
             requestActiveIconSurfaceFocus();
+            if (shouldSuppressExplorerIconPrimaryGestureHandling()) {
+                event.consume();
+                return;
+            }
             handleExplorerIconTilePrimaryPress(path, event);
             event.consume();
         });
@@ -8652,12 +8731,42 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             if (event.getButton() != MouseButton.PRIMARY) {
                 return;
             }
+            if (shouldSuppressExplorerIconPrimaryGestureHandling()) {
+                event.consume();
+                return;
+            }
             lastIconActivatedPath = path;
             if (event.getClickCount() == 2 && Files.isDirectory(path)) {
                 navigateToFolder(path, true);
             }
             event.consume();
         });
+    }
+
+    private boolean shouldSuppressExplorerIconPrimaryGestureHandling() {
+        return iconMarqueeGestureOwnsSelection || suppressExplorerIconClickSelection;
+    }
+
+    private void beginExplorerIconMarqueeGestureOwnership() {
+        iconMarqueeGestureOwnsSelection = true;
+        suppressExplorerIconClickSelection = true;
+    }
+
+    private void releaseExplorerIconMarqueeGestureOwnershipSoon() {
+        suppressExplorerIconClickSelectionPulsesRemaining = Math.max(suppressExplorerIconClickSelectionPulsesRemaining, 2);
+        Platform.runLater(this::advanceExplorerIconGestureSuppressionRelease);
+    }
+
+    private void advanceExplorerIconGestureSuppressionRelease() {
+        if (suppressExplorerIconClickSelectionPulsesRemaining > 0) {
+            suppressExplorerIconClickSelectionPulsesRemaining--;
+            if (suppressExplorerIconClickSelectionPulsesRemaining > 0) {
+                Platform.runLater(this::advanceExplorerIconGestureSuppressionRelease);
+                return;
+            }
+        }
+        iconMarqueeGestureOwnsSelection = false;
+        suppressExplorerIconClickSelection = false;
     }
 
     private void handleExplorerIconTilePrimaryPress(Path path, MouseEvent event) {
@@ -8780,17 +8889,29 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                 }
             }
         }
-        fileTable.getSelectionModel().clearSelection();
-        if (!selectedIndices.isEmpty()) {
-            int firstIndex = selectedIndices.get(0);
-            int[] rest = new int[Math.max(0, selectedIndices.size() - 1)];
-            for (int i = 1; i < selectedIndices.size(); i++) {
-                rest[i - 1] = selectedIndices.get(i);
-            }
-            fileTable.getSelectionModel().selectIndices(firstIndex, rest);
+        boolean iconSelectionApply = isIconMode(viewMode);
+        if (iconSelectionApply) {
+            replaceIconPresentationSelectedPaths(orderedPaths);
+            refreshVisibleIconTileSelectionState();
+            beginExplorerSelectionPresentationTransaction();
         }
-        if (fileTable.getFocusModel() != null) {
-            fileTable.getFocusModel().focus(focusIndex);
+        try {
+            fileTable.getSelectionModel().clearSelection();
+            if (!selectedIndices.isEmpty()) {
+                int firstIndex = selectedIndices.get(0);
+                int[] rest = new int[Math.max(0, selectedIndices.size() - 1)];
+                for (int i = 1; i < selectedIndices.size(); i++) {
+                    rest[i - 1] = selectedIndices.get(i);
+                }
+                fileTable.getSelectionModel().selectIndices(firstIndex, rest);
+            }
+            if (fileTable.getFocusModel() != null) {
+                fileTable.getFocusModel().focus(focusIndex);
+            }
+        } finally {
+            if (iconSelectionApply) {
+                endExplorerSelectionPresentationTransaction();
+            }
         }
         if (focusPath != null && orderedPaths.contains(focusPath)) {
             iconSelectionAnchorPath = focusPath;
@@ -8804,7 +8925,33 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                 syncVisibleDetailsHoverRows();
                 fileTable.refresh();
             });
+        } else if (isIconMode(viewMode)) {
+            replaceIconPresentationSelectedPaths(orderedPaths);
+            refreshVisibleIconTileSelectionState();
+            Platform.runLater(() -> {
+                syncIconPresentationSelectedPathsFromTableSelection();
+                refreshVisibleIconTileSelectionState();
+                Platform.runLater(() -> {
+                    syncIconPresentationSelectedPathsFromTableSelection();
+                    refreshVisibleIconTileSelectionState();
+                });
+            });
         }
+    }
+
+
+    private void beginExplorerSelectionPresentationTransaction() {
+        explorerSelectionPresentationTransactionDepth++;
+    }
+
+    private void endExplorerSelectionPresentationTransaction() {
+        if (explorerSelectionPresentationTransactionDepth > 0) {
+            explorerSelectionPresentationTransactionDepth--;
+        }
+    }
+
+    private boolean isExplorerSelectionPresentationTransactionActive() {
+        return explorerSelectionPresentationTransactionDepth > 0;
     }
 
     private void syncDetailsPresentationSelectedPathsFromTableSelection() {
@@ -8832,6 +8979,44 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         }
     }
 
+    private void syncIconPresentationSelectedPathsFromTableSelection() {
+        if (fileTable == null || fileTable.getSelectionModel() == null) {
+            replaceIconPresentationSelectedPaths(java.util.Collections.emptySet());
+            return;
+        }
+        java.util.LinkedHashSet<Path> selectedPaths = new java.util.LinkedHashSet<>();
+        for (FileItem item : fileTable.getSelectionModel().getSelectedItems()) {
+            if (item != null && item.path() != null) {
+                selectedPaths.add(item.path());
+            }
+        }
+        replaceIconPresentationSelectedPaths(selectedPaths);
+    }
+
+    private void replaceIconPresentationSelectedPaths(java.util.Collection<Path> selectedPaths) {
+        iconPresentationSelectedPaths.clear();
+        if (selectedPaths != null) {
+            for (Path path : selectedPaths) {
+                if (path != null) {
+                    iconPresentationSelectedPaths.add(path);
+                }
+            }
+        }
+    }
+
+    private void refreshVisibleIconSelectionPresentation() {
+        syncIconPresentationSelectedPathsFromTableSelection();
+        refreshVisibleIconTileSelectionState();
+        Platform.runLater(() -> {
+            syncIconPresentationSelectedPathsFromTableSelection();
+            refreshVisibleIconTileSelectionState();
+            Platform.runLater(() -> {
+                syncIconPresentationSelectedPathsFromTableSelection();
+                refreshVisibleIconTileSelectionState();
+            });
+        });
+    }
+
     private void ensureExplorerFileViewSelectionInteractionsInstalled() {
         if (iconMarqueeInteractionInstalled || viewHost == null) {
             return;
@@ -8853,6 +9038,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         viewHost.addEventFilter(MouseEvent.MOUSE_PRESSED, this::handleExplorerFileViewMousePressed);
         viewHost.addEventFilter(MouseEvent.MOUSE_DRAGGED, this::handleExplorerFileViewMouseDragged);
         viewHost.addEventFilter(MouseEvent.MOUSE_RELEASED, this::handleExplorerFileViewMouseReleased);
+        viewHost.addEventFilter(MouseEvent.MOUSE_CLICKED, this::handleExplorerFileViewMouseClicked);
     }
 
     private void bringIconMarqueeOverlayToFront() {
@@ -8866,22 +9052,31 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             return;
         }
         Node target = resolveEventTargetNode(event);
+        boolean pressOnExistingItem = false;
         if (viewMode == ViewMode.DETAILS) {
-            if (!isNodeWithinDetailsSelectionSurface(target) || findAncestorTableRow(target) != null) {
+            if (!isNodeWithinDetailsSelectionSurface(target) || isDetailsMarqueeExcludedTarget(target)) {
                 return;
             }
+            TableRow<?> targetRow = findAncestorTableRow(target);
+            pressOnExistingItem = targetRow != null && !targetRow.isEmpty();
         } else {
-            if (!isNodeWithinActiveIconSurface(target) || findExplorerIconTilePath(target) != null) {
+            if (!isNodeWithinActiveIconSurface(target)) {
                 return;
             }
+            pressOnExistingItem = findExplorerIconTilePath(target) != null;
         }
         iconMarqueePressArmed = true;
         iconMarqueeDragStarted = false;
+        iconMarqueePressOnExistingItem = pressOnExistingItem;
+        iconMarqueeGestureOwnsSelection = false;
+        suppressExplorerIconClickSelection = false;
         marqueeSelectionMode = viewMode;
         iconMarqueeAdditive = event.isShortcutDown();
         iconMarqueePressSceneX = event.getSceneX();
         iconMarqueePressSceneY = event.getSceneY();
         iconMarqueeBaseSelection.clear();
+        pendingExplorerMarqueeSelectionPaths.clear();
+        pendingExplorerMarqueeFocusPath = null;
         if (iconMarqueeAdditive) {
             iconMarqueeBaseSelection.addAll(getSelectedItems());
         }
@@ -8891,7 +9086,9 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         } else {
             requestActiveIconSurfaceFocus();
         }
-        event.consume();
+        if (!pressOnExistingItem) {
+            event.consume();
+        }
     }
 
     private void handleExplorerFileViewMouseDragged(MouseEvent event) {
@@ -8901,12 +9098,22 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         double dx = event.getSceneX() - iconMarqueePressSceneX;
         double dy = event.getSceneY() - iconMarqueePressSceneY;
         if (!iconMarqueeDragStarted && Math.hypot(dx, dy) < 4.0) {
-            event.consume();
+            if (!iconMarqueePressOnExistingItem) {
+                event.consume();
+            }
             return;
         }
         if (!iconMarqueeDragStarted) {
             iconMarqueeDragStarted = true;
+            if (isIconMode(marqueeSelectionMode)) {
+                beginExplorerIconMarqueeGestureOwnership();
+            }
             bringIconMarqueeOverlayToFront();
+            if (marqueeSelectionMode == ViewMode.DETAILS) {
+                requestActiveDetailsSurfaceFocus();
+            } else {
+                requestActiveIconSurfaceFocus();
+            }
         }
         updateExplorerFileViewMarquee(event.getSceneX(), event.getSceneY());
         event.consume();
@@ -8916,17 +9123,68 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (!iconMarqueePressArmed || event == null) {
             return;
         }
-        if (!iconMarqueeDragStarted && !iconMarqueeAdditive) {
+        boolean committedMarqueeDragStarted = iconMarqueeDragStarted;
+        boolean shouldConsume = committedMarqueeDragStarted || !iconMarqueePressOnExistingItem;
+        if (committedMarqueeDragStarted) {
+            updatePendingExplorerMarqueeSelection(event.getSceneX(), event.getSceneY(), false);
+        }
+        java.util.LinkedHashSet<Path> committedMarqueeSelection = new java.util.LinkedHashSet<>(pendingExplorerMarqueeSelectionPaths);
+        Path committedMarqueeFocusPath = pendingExplorerMarqueeFocusPath;
+        ViewMode committedMarqueeMode = marqueeSelectionMode;
+        if (!committedMarqueeDragStarted && !iconMarqueeAdditive && !iconMarqueePressOnExistingItem) {
             if (fileTable != null && fileTable.getSelectionModel() != null) {
                 fileTable.getSelectionModel().clearSelection();
             }
             if (fileTable != null && fileTable.getFocusModel() != null) {
                 fileTable.getFocusModel().focus(-1);
             }
+            replaceIconPresentationSelectedPaths(java.util.Collections.emptySet());
+            refreshVisibleIconTileSelectionState();
             iconSelectionAnchorPath = null;
+            resetExplorerFileViewMarquee();
+            releaseExplorerIconMarqueeGestureOwnershipSoon();
+        } else if (committedMarqueeDragStarted && committedMarqueeMode == ViewMode.DETAILS) {
+            applyExplorerPathSelection(committedMarqueeSelection, committedMarqueeFocusPath);
+            resetExplorerFileViewMarquee();
+            Platform.runLater(() -> {
+                applyExplorerPathSelection(committedMarqueeSelection, committedMarqueeFocusPath);
+                Platform.runLater(() -> applyExplorerPathSelection(committedMarqueeSelection, committedMarqueeFocusPath));
+            });
+            releaseExplorerIconMarqueeGestureOwnershipSoon();
+        } else if (committedMarqueeDragStarted && isIconMode(committedMarqueeMode)) {
+            beginExplorerIconMarqueeGestureOwnership();
+            replaceIconPresentationSelectedPaths(committedMarqueeSelection);
+            refreshVisibleIconTileSelectionState();
+            requestActiveIconSurfaceFocus();
+            applyExplorerPathSelection(committedMarqueeSelection, committedMarqueeFocusPath);
+            resetExplorerFileViewMarquee();
+            Platform.runLater(() -> {
+                requestActiveIconSurfaceFocus();
+                replaceIconPresentationSelectedPaths(committedMarqueeSelection);
+                refreshVisibleIconSelectionPresentation();
+                Platform.runLater(() -> {
+                    requestActiveIconSurfaceFocus();
+                    replaceIconPresentationSelectedPaths(committedMarqueeSelection);
+                    refreshVisibleIconSelectionPresentation();
+                    releaseExplorerIconMarqueeGestureOwnershipSoon();
+                });
+            });
+        } else {
+            resetExplorerFileViewMarquee();
+            releaseExplorerIconMarqueeGestureOwnershipSoon();
         }
-        resetExplorerFileViewMarquee();
-        event.consume();
+        if (shouldConsume) {
+            event.consume();
+        }
+    }
+
+    private void handleExplorerFileViewMouseClicked(MouseEvent event) {
+        if (event == null || event.getButton() != MouseButton.PRIMARY) {
+            return;
+        }
+        if (shouldSuppressExplorerIconPrimaryGestureHandling() || iconMarqueePressArmed || iconMarqueeDragStarted) {
+            event.consume();
+        }
     }
 
     private void updateExplorerFileViewMarquee(double sceneX, double sceneY) {
@@ -8944,7 +9202,10 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         iconMarqueeSelectionRect.setWidth(w);
         iconMarqueeSelectionRect.setHeight(h);
         iconMarqueeSelectionRect.setVisible(true);
+        updatePendingExplorerMarqueeSelection(sceneX, sceneY, true);
+    }
 
+    private void updatePendingExplorerMarqueeSelection(double sceneX, double sceneY, boolean applyLiveSelection) {
         double minSceneX = Math.min(iconMarqueePressSceneX, sceneX);
         double minSceneY = Math.min(iconMarqueePressSceneY, sceneY);
         double maxSceneX = Math.max(iconMarqueePressSceneX, sceneX);
@@ -8986,17 +9247,32 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                 }
             }
         }
-        applyExplorerPathSelection(selectedPaths, focusPath);
+        boolean selectionChanged = !pendingExplorerMarqueeSelectionPaths.equals(selectedPaths)
+                || !java.util.Objects.equals(pendingExplorerMarqueeFocusPath, focusPath);
+        pendingExplorerMarqueeSelectionPaths.clear();
+        pendingExplorerMarqueeSelectionPaths.addAll(selectedPaths);
+        pendingExplorerMarqueeFocusPath = focusPath;
+        if (applyLiveSelection && selectionChanged) {
+            if (isIconMode(marqueeSelectionMode)) {
+                replaceIconPresentationSelectedPaths(selectedPaths);
+                refreshVisibleIconTileSelectionState();
+            } else {
+                applyExplorerPathSelection(selectedPaths, focusPath);
+            }
+        }
     }
 
     private void resetExplorerFileViewMarquee() {
         iconMarqueePressArmed = false;
         iconMarqueeDragStarted = false;
         iconMarqueeAdditive = false;
+        iconMarqueePressOnExistingItem = false;
         marqueeSelectionMode = null;
         iconMarqueePressSceneX = Double.NaN;
         iconMarqueePressSceneY = Double.NaN;
         iconMarqueeBaseSelection.clear();
+        pendingExplorerMarqueeSelectionPaths.clear();
+        pendingExplorerMarqueeFocusPath = null;
         if (iconMarqueeSelectionRect != null) {
             iconMarqueeSelectionRect.setVisible(false);
             iconMarqueeSelectionRect.setX(0.0);
@@ -9031,6 +9307,29 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         for (Node current = node; current != null; current = current.getParent()) {
             if (current == fileTable || current == detailsViewShell || current == viewHost) {
                 return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isDetailsMarqueeExcludedTarget(Node node) {
+        for (Node current = node; current != null; current = current.getParent()) {
+            if (current instanceof ScrollBar) {
+                return true;
+            }
+            String className = current.getClass().getName();
+            if (className.contains("TableColumnHeader") || className.contains("TableHeaderRow")) {
+                return true;
+            }
+            ObservableList<String> styleClasses = current.getStyleClass();
+            if (styleClasses.contains("column-header")
+                    || styleClasses.contains("nested-column-header")
+                    || styleClasses.contains("filler")
+                    || styleClasses.contains("show-hide-columns-button")) {
+                return true;
+            }
+            if (current == fileTable || current == detailsViewShell || current == viewHost) {
+                break;
             }
         }
         return false;
