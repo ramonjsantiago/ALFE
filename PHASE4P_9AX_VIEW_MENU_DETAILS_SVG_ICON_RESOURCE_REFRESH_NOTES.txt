@@ -1,0 +1,19 @@
+HOTFIX144 / Phase 4P.9AX — View Menu Details SVG Icon Resource Refresh
+
+Summary
+- Replaced the View menu Details icon source asset with the newly supplied SVG.
+- Re-rendered the packaged PNG resource used by JavaFX image loading.
+- Synced the compiled-resource copies under target/classes.
+
+Files updated
+- src/main/resources/icons/view.details.svg
+- src/main/resources/icons/view.details.png
+- target/classes/icons/view.details.svg
+- target/classes/icons/view.details.png
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt
+
+Notes
+- MainLayout.fxml already referenced /icons/view.details.png, so no FXML path change was required for this refresh.
+- The resource name was kept stable to preserve the existing menu layout and image slot sizing.

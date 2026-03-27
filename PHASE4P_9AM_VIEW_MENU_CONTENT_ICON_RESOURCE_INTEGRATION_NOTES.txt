@@ -1,0 +1,5 @@
+HOTFIX133 / Phase 4P.9AM — View Menu Content Icon Resource Integration
+
+- Added the supplied content-view icon asset to src/main/resources/icons/view.content.png.
+- Replaced the View > Content menu item glyph in MainLayout.fxml with an ImageView bound to the packaged resource.
+- Kept the existing row spacing and icon slot metrics aligned with the already-integrated View > List resource icon path.

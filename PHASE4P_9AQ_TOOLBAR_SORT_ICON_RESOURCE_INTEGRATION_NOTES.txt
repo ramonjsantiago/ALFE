@@ -1,0 +1,17 @@
+HOTFIX137 / Phase 4P.9AQ — Toolbar Sort Icon Resource Integration
+
+Summary
+- Added the user-supplied Sort toolbar icon asset under src/main/resources/icons and synced the packaged copy under target/classes/icons.
+- Generated a toolbar.sort.png raster resource for JavaFX Image loading while preserving the original ContextMenu.Sort.svg source asset.
+- Updated MainLayout.fxml so the toolbar Sort command now uses the packaged image resource instead of the previous Segoe Fluent glyph.
+
+Files Changed
+- src/main/resources/icons/ContextMenu.Sort.svg
+- src/main/resources/icons/toolbar.sort.png
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- target/classes/icons/ContextMenu.Sort.svg
+- target/classes/icons/toolbar.sort.png
+- target/classes/com/fileexplorer/ui/layout/MainLayout.fxml
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt

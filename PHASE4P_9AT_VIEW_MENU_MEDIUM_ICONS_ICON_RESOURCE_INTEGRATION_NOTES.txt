@@ -1,0 +1,18 @@
+HOTFIX140 / Phase 4P.9AT — View Menu Medium Icons Icon Resource Integration
+
+Summary
+- Added the supplied View > Medium icons asset under the packaged resources.
+- Replaced the View menu Medium icons glyph slot in MainLayout.fxml with the packaged image resource.
+- Synced the delivered target/classes resource snapshot so the full-project package stays internally consistent.
+
+Files changed
+- src/main/resources/icons/view.medium.svg
+- src/main/resources/icons/view.medium.png
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- target/classes/icons/view.medium.svg
+- target/classes/icons/view.medium.png
+- target/classes/com/fileexplorer/ui/layout/MainLayout.fxml
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE4P_9AT_VIEW_MENU_MEDIUM_ICONS_ICON_RESOURCE_INTEGRATION_NOTES.txt
