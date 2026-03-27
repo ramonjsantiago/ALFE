@@ -1,5 +1,21 @@
-src/main/java/com/fileexplorer/controller/MainController.java
+Updated for HOTFIX151 / Phase 4P.9BE
+src/main/resources/icons/see.more.undo.png
+src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+target/classes/icons/see.more.undo.png
+target/classes/com/fileexplorer/ui/layout/MainLayout.fxml
 PHASE_LABEL.txt
 CHANGELOG.md
 CHANGED_FILES.txt
-PHASE4P_9AK_ICON_VIEW_MARQUEE_CLICK_THROUGH_SUPPRESSION_AND_VIRTUAL_CELL_INPUT_ISOLATION_NOTES.txt
+PHASE4P_9BE_SEE_MORE_UNDO_MENU_ICON_RESOURCE_INTEGRATION_NOTES.txt
+
+HOTFIX152 / Phase 4P.9BF — See More Undo Icon Resource Visibility Fix
+- src/main/resources/icons/see_more_undo.png
+- src/main/resources/icons/see.more.undo.png
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- target/classes/icons/see_more_undo.png
+- target/classes/icons/see.more.undo.png
+- target/classes/com/fileexplorer/ui/layout/MainLayout.fxml
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE4P_9BF_SEE_MORE_UNDO_ICON_RESOURCE_VISIBILITY_FIX_NOTES.txt

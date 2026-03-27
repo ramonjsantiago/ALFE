@@ -26,6 +26,7 @@
 <?import javafx.scene.control.ToolBar?>
 <?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.control.TreeView?>
+<?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.FlowPane?>
@@ -187,11 +188,23 @@
 
                                 <Button fx:id="cutButton" text="Cut" focusTraversable="false">
                                     <tooltip><Tooltip text="Cut"/></tooltip>
-                                    <graphic><Label text="&#xE8C6;" styleClass="fluent-icon"/></graphic>
+                                    <graphic>
+                                        <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true">
+                                            <image>
+                                                <Image url="@/icons/toolbar.cut.png"/>
+                                            </image>
+                                        </ImageView>
+                                    </graphic>
                                 </Button>
                                 <Button fx:id="copyButton" text="Copy" focusTraversable="false">
                                     <tooltip><Tooltip text="Copy"/></tooltip>
-                                    <graphic><Label text="&#xE8C8;" styleClass="fluent-icon"/></graphic>
+                                    <graphic>
+                                        <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true">
+                                            <image>
+                                                <Image url="@/icons/toolbar.copy.png"/>
+                                            </image>
+                                        </ImageView>
+                                    </graphic>
                                 </Button>
                                 <Button fx:id="pasteButton" text="Paste" focusTraversable="false">
                                     <tooltip><Tooltip text="Paste"/></tooltip>
@@ -199,7 +212,13 @@
                                 </Button>
                                 <Button fx:id="renameButton" text="Rename" focusTraversable="false">
                                     <tooltip><Tooltip text="Rename"/></tooltip>
-                                    <graphic><Label text="&#xE8AC;" styleClass="fluent-icon"/></graphic>
+                                    <graphic>
+                                        <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true">
+                                            <image>
+                                                <Image url="@/icons/toolbar.rename.png"/>
+                                            </image>
+                                        </ImageView>
+                                    </graphic>
                                 </Button>
                                 <Button fx:id="shareButton" text="Share" focusTraversable="false">
                                     <tooltip><Tooltip text="Share"/></tooltip>
@@ -214,7 +233,13 @@
 <!-- Sort menu -->
                         <MenuButton fx:id="sortMenuButton" text="Sort" focusTraversable="false">
                             <tooltip><Tooltip text="Sort"/></tooltip>
-                            <graphic><Label text="&#xE8CB;" styleClass="fluent-icon"/></graphic>
+                            <graphic>
+    <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true">
+        <image>
+            <Image url="@/icons/toolbar.sort.png"/>
+        </image>
+    </ImageView>
+</graphic>
                             <items>
                                 <MenuItem text="Name" userData="NAME" onAction="#onSortMenuItem"/>
                                 <MenuItem text="Date modified" userData="MODIFIED" onAction="#onSortMenuItem"/>
@@ -237,8 +262,11 @@
                                             <RadioButton fx:id="viewExtraLargeIcons" toggleGroup="$viewModeToggleGroup"
                                                          userData="EXTRA_LARGE_ICONS" onAction="#onViewModeRadio"
                                                          focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <Label text="&#xE8A9;" styleClass="mdl2-icon view-menu-icon"/>
-                                            
+                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
+                                                <image>
+                                                    <Image url="@/icons/view.extra.large.png"/>
+                                                </image>
+                                            </ImageView>
                                             <Label text="Extra large icons" styleClass="view-menu-text"/>
                                         </HBox>
                                     </content>
@@ -250,7 +278,11 @@
                                             <RadioButton fx:id="viewLargeIcons" toggleGroup="$viewModeToggleGroup"
                                                          userData="LARGE_ICONS" onAction="#onViewModeRadio"
                                                          focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <Label text="&#xE8A7;" styleClass="mdl2-icon view-menu-icon"/>
+                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
+                                                <image>
+                                                    <Image url="@/icons/view.large.png"/>
+                                                </image>
+                                            </ImageView>
                                             
                                             <Label text="Large icons" styleClass="view-menu-text"/>
                                         </HBox>
@@ -263,7 +295,11 @@
                                             <RadioButton fx:id="viewMediumIcons" toggleGroup="$viewModeToggleGroup"
                                                          userData="MEDIUM_ICONS" onAction="#onViewModeRadio"
                                                          focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <Label text="&#xE80A;" styleClass="mdl2-icon view-menu-icon"/>
+                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
+                                                <image>
+                                                    <Image url="@/icons/view.medium.png"/>
+                                                </image>
+                                            </ImageView>
                                             
                                             <Label text="Medium icons" styleClass="view-menu-text"/>
                                         </HBox>
@@ -276,8 +312,11 @@
                                             <RadioButton fx:id="viewSmallIcons" toggleGroup="$viewModeToggleGroup"
                                                          userData="SMALL_ICONS" onAction="#onViewModeRadio"
                                                          focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <Label text="&#xE8A8;" styleClass="mdl2-icon view-menu-icon"/>
-                                            
+                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
+                                                <image>
+                                                    <Image url="@/icons/view.small.png"/>
+                                                </image>
+                                            </ImageView>
                                             <Label text="Small icons" styleClass="view-menu-text"/>
                                         </HBox>
                                     </content>
@@ -289,8 +328,11 @@
                                             <RadioButton fx:id="viewList" toggleGroup="$viewModeToggleGroup"
                                                          userData="LIST" onAction="#onViewModeRadio"
                                                          focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <Label text="&#xE8FD;" styleClass="mdl2-icon view-menu-icon"/>
-                                            
+                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
+                                                <image>
+                                                    <Image url="@/icons/view.list.png"/>
+                                                </image>
+                                            </ImageView>
                                             <Label text="List" styleClass="view-menu-text"/>
                                         </HBox>
                                     </content>
@@ -302,8 +344,11 @@
                                             <RadioButton fx:id="viewDetails" toggleGroup="$viewModeToggleGroup" selected="true"
                                                          userData="DETAILS" onAction="#onViewModeRadio"
                                                          focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <Label text="&#xE9D5;" styleClass="mdl2-icon view-menu-icon"/>
-                                            
+                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
+                                                <image>
+                                                    <Image url="@/icons/view.details.png"/>
+                                                </image>
+                                            </ImageView>
                                             <Label text="Details" styleClass="view-menu-text"/>
                                         </HBox>
                                     </content>
@@ -315,8 +360,11 @@
                                             <RadioButton fx:id="viewTiles" toggleGroup="$viewModeToggleGroup"
                                                          userData="TILES" onAction="#onViewModeRadio"
                                                          focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <Label text="&#xECA5;" styleClass="mdl2-icon view-menu-icon"/>
-                                            
+                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
+                                                <image>
+                                                    <Image url="@/icons/view.tiles.png"/>
+                                                </image>
+                                            </ImageView>
                                             <Label text="Tiles" styleClass="view-menu-text"/>
                                         </HBox>
                                     </content>
@@ -328,8 +376,11 @@
                                             <RadioButton fx:id="viewContent" toggleGroup="$viewModeToggleGroup"
                                                          userData="CONTENT" onAction="#onViewModeRadio"
                                                          focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <Label text="&#xE8A5;" styleClass="mdl2-icon view-menu-icon"/>
-                                            
+                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
+                                                <image>
+                                                    <Image url="@/icons/view.content.png"/>
+                                                </image>
+                                            </ImageView>
                                             <Label text="Content" styleClass="view-menu-text"/>
                                         </HBox>
                                     </content>
@@ -345,7 +396,11 @@
                                             <RadioButton fx:id="detailsPaneMenuItem"
                                                          onAction="#onDetailsPaneRadioToggle"
                                                          focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <Label text="&#xE946;" styleClass="mdl2-icon view-menu-icon"/>
+                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
+                                                <image>
+                                                    <Image url="@/icons/view.details.pane.png"/>
+                                                </image>
+                                            </ImageView>
                                             <Label text="Details pane" styleClass="view-menu-text"/>
                                         </HBox>
                                     </content>
@@ -357,7 +412,11 @@
                                             <RadioButton fx:id="previewPaneMenuItem"
                                                          onAction="#onPreviewPaneRadioToggle"
                                                          focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <Label text="&#xE8A1;" styleClass="mdl2-icon view-menu-icon"/>
+                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
+                                                <image>
+                                                    <Image url="@/icons/view.preview.pane.png"/>
+                                                </image>
+                                            </ImageView>
                                             <Label text="Preview pane" styleClass="view-menu-text"/>
                                         </HBox>
                                     </content>
@@ -379,7 +438,11 @@
                                                     <CheckBox fx:id="showNavigationPaneMenuItem" selected="true"
                                                               onAction="#onShowNavigationPaneToggle"
                                                               focusTraversable="false" styleClass="view-menu-checkbox"/>
-                                                    <Label text="&#xE700;" styleClass="mdl2-icon view-menu-icon"/>
+                                                    <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
+                                                        <image>
+                                                            <Image url="@/icons/view.navigation.pane.png"/>
+                                                        </image>
+                                                    </ImageView>
                                                     <Label text="Navigation pane" styleClass="view-menu-text"/>
                                                 </HBox>
                                             </content>
@@ -467,7 +530,13 @@
                             <graphic><Label text="&#xE712;" styleClass="fluent-icon"/></graphic>
                             <items>
                                 <MenuItem text="Undo" styleClass="see-more-menuitem">
-                                    <graphic><Label text="&#xE7A7;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
+                                    <graphic>
+                                        <ImageView fitWidth="16.0" fitHeight="16.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
+                                            <image>
+                                                <Image url="@/icons/see_more_undo.png"/>
+                                            </image>
+                                        </ImageView>
+                                    </graphic>
                                 </MenuItem>
 
                                 <SeparatorMenuItem/>

@@ -1,3 +1,54 @@
+## HOTFIX152 / Phase 4P.9BF — See More Undo Icon Resource Visibility Fix
+- Corrected the See more > Undo icon resource path to use a simple classpath-safe filename.
+- Re-rendered the Undo icon into a tightly trimmed 18x18 transparent PNG for reliable menu display.
+- Reduced the Undo menu ImageView fit size to 16x16 to avoid clipping and square placeholder rendering in the overflow menu.
+- Synced the same changes into target/classes.
+
+## HOTFIX151 / Phase 4P.9BE — See More Undo Menu Icon Resource Integration
+- Added the supplied **See more > Undo** icon asset under `src/main/resources/icons/see.more.undo.png` and synced the packaged copy under `target/classes/icons`.
+- Updated `MainLayout.fxml` so the See more menu **Undo** row now uses the packaged image resource instead of the previous Segoe Fluent glyph label.
+- Preserved the existing menu icon slot sizing and alignment by binding the new resource through an `ImageView` with the same 18px menu icon metrics used elsewhere in the shell UI.
+
+## HOTFIX145 / Phase 4P.9AY — View Menu Details Pane Icon Resource Integration
+- Added the supplied **View > Details pane** asset under `src/main/resources/icons` as both the original SVG and a JavaFX-friendly PNG.
+- Updated `MainLayout.fxml` so the View menu **Details pane** row now uses the packaged image resource instead of the previous font glyph label.
+- Synced the packaged `target/classes` icon resources and FXML snapshot so the full-project archive carries the new Details pane menu icon consistently.
+
+## HOTFIX144 / Phase 4P.9AX — View Menu Details SVG Icon Resource Refresh
+- Replaced the packaged **View > Details** vector asset with the newly supplied SVG under `src/main/resources/icons/view.details.svg`.
+- Re-rendered `view.details.png` from the supplied SVG so the existing JavaFX menu image binding now shows the new Details icon without changing the FXML resource path.
+- Synced the packaged `target/classes` resource copies so the full-project archive carries the refreshed View menu Details icon consistently.
+
+## HOTFIX139 / Phase 4P.9AS — View Menu Content SVG Icon Resource Refresh
+- Added the supplied **View > Content** SVG asset under `src/main/resources/icons/view.content.svg`.
+- Re-rendered the JavaFX-friendly `view.content.png` resource from the supplied SVG so the existing menu item now uses the new attached icon.
+- Synced the packaged `target/classes` icon resources and FXML snapshot so the full-project archive carries the refreshed View menu Content icon consistently.
+
+## HOTFIX138 / Phase 4P.9AR — View Menu Extra Large Icons Icon Resource Integration
+- added the user-supplied View > Extra large icons asset under `src/main/resources/icons` and synced the packaged copies under `target/classes/icons`
+- generated `view.extra.large.png` for JavaFX image loading while preserving the supplied vector asset as `view.extra.large.svg`
+- updated `MainLayout.fxml` so the View menu `Extra large icons` row now uses the packaged image resource instead of the previous font glyph
+
+## HOTFIX137 / Phase 4P.9AQ — Toolbar Sort Icon Resource Integration
+- added the user-supplied Sort toolbar icon under `src/main/resources/icons` and synced the packaged copy under `target/classes/icons`
+- generated `toolbar.sort.png` for JavaFX image loading while preserving the original `ContextMenu.Sort.svg` source asset
+- updated `MainLayout.fxml` so the toolbar Sort command now uses the packaged image resource instead of the previous Segoe Fluent glyph
+
+## HOTFIX134 / Phase 4P.9AN — Toolbar Cut Icon Resource Integration
+- Added the supplied Toolbar `Cut` icon asset under `src/main/resources/icons/ContextMenu.Cut.svg` and generated a packaged raster resource at `src/main/resources/icons/toolbar.cut.png` for JavaFX toolbar rendering.
+- Replaced the toolbar `Cut` button glyph in `MainLayout.fxml` with an `ImageView` that loads the packaged `/icons/toolbar.cut.png` resource.
+- Synced the packaged resource copies under `target/classes` so the full-project archive carries the updated toolbar icon assets and FXML together.
+
+## HOTFIX133 / Phase 4P.9AM — View Menu Content Icon Resource Integration
+- Added the supplied `view.content.png` asset under `src/main/resources/icons` so the menu icon is packaged with the application resources.
+- Replaced the View > Content menu-row glyph in `MainLayout.fxml` with an `ImageView` that loads the packaged `/icons/view.content.png` resource.
+- Preserved the same icon-slot sizing and layout metrics used by the View > List resource-backed icon so both menu rows align consistently.
+
+## HOTFIX132 / Phase 4P.9AL — View Menu List Icon Resource Integration
+- Added the supplied View > List icon asset to `src/main/resources/icons/view.list.png`.
+- Updated `MainLayout.fxml` so the View menu `List` row uses the supplied image resource instead of the previous font glyph.
+- Kept the asset on the application resource classpath so the icon is packaged with the rest of the UI resources.
+
 ## HOTFIX130 / Phase 4P.9AJ — Icon View Marquee Gesture Ownership, Release Collapse Suppression, and Stable Multi-Select Commit
 
 - stopped icon-view marquee live preview from mutating the shared TableView selection model on every drag pulse; icon marquee now previews through dedicated presentation state and commits the multi-select only once on mouse release
@@ -407,3 +458,62 @@ HOTFIX110 / Phase 4P.9P — Toolbar Native Menu Restore and Tab Strip Close/Plus
 - Added a view-host `MOUSE_CLICKED` suppression path for marquee-owned icon gestures so the post-release click sequence cannot collapse a committed multi-selection to the last icon.
 - Held icon marquee click suppression across additional UI pulses so release/click cleanup from JavaFX skins cannot immediately override the marquee commit.
 - Installed virtual icon cell mouse-event suppression and live marquee selection delta filtering to reduce drag flicker and block ListView cell input from reasserting single-item selection during marquee completion.
+
+## HOTFIX135 / Phase 4P.9AO — Toolbar Rename Icon Resource Integration
+- Added the attached **Rename** toolbar icon to the packaged resources as both the original SVG asset and a JavaFX-friendly PNG.
+- Updated `MainLayout.fxml` so the toolbar **Rename** command uses the packaged image resource instead of the prior glyph label.
+- Synced the delivered packaged-resource copies under `target/classes` to keep the shipped project snapshot consistent.
+
+
+
+## HOTFIX136 / Phase 4P.9AP — Toolbar Copy Icon Resource Integration
+- Added the attached **Copy** toolbar icon to the packaged resources as both the original SVG asset and a JavaFX-friendly PNG.
+- Updated `MainLayout.fxml` so the toolbar **Copy** command uses the packaged image resource instead of the prior glyph label.
+- Synced the delivered packaged-resource copies under `target/classes` to keep the shipped project snapshot consistent.
+
+
+## HOTFIX140 / Phase 4P.9AT — View Menu Medium Icons Icon Resource Integration
+- Added the attached **Medium icons** View-menu asset to the packaged resources as both the original SVG and a JavaFX-friendly PNG.
+- Updated `MainLayout.fxml` so the View menu **Medium icons** row uses the packaged image resource instead of the prior glyph label.
+- Synced the delivered packaged-resource copies under `target/classes` to keep the shipped project snapshot consistent.
+
+## HOTFIX141 / Phase 4P.9AU — View Menu Small Icons Icon Resource Integration
+- Added the attached **Small icons** View-menu asset to the packaged resources as both the original SVG and a JavaFX-friendly PNG.
+- Updated `MainLayout.fxml` so the View menu **Small icons** row uses the packaged image resource instead of the prior glyph label.
+- Synced the delivered packaged-resource copies under `target/classes` to keep the shipped project snapshot consistent.
+
+## HOTFIX142 / Phase 4P.9AV — View Menu Details Icon Resource Integration
+- Added the attached **Details** View-menu asset to the packaged resources as both the original SVG and a JavaFX-friendly PNG.
+- Updated `MainLayout.fxml` so the View menu **Details** row uses the packaged image resource instead of the prior glyph label.
+- Synced the delivered packaged-resource copies under `target/classes` to keep the shipped project snapshot consistent.
+
+
+## HOTFIX143 / Phase 4P.9AW — View Menu Tiles Icon Resource Integration
+- Added the attached **Tiles** View-menu asset to the packaged resources as both the original SVG and a JavaFX-friendly PNG.
+- Updated `MainLayout.fxml` so the View menu **Tiles** row uses the packaged image resource instead of the prior glyph label.
+- Synced the delivered packaged-resource copies under `target/classes` to keep the shipped project snapshot consistent.
+
+## HOTFIX146 / Phase 4P.9AZ — View Menu Details Icon SVG Resource Refresh
+- Replaced the attached **Details** View-menu source asset with the newly supplied SVG under the existing packaged resource path.
+- Re-rendered the JavaFX-friendly `view.details.png` used by `MainLayout.fxml`, so the View menu **Details** row now reflects the refreshed icon without changing the FXML path.
+- Synced the delivered packaged-resource copies under `target/classes` to keep the shipped project snapshot consistent.
+
+## HOTFIX147 / Phase 4P.9BA — View Menu Preview Pane Icon Resource Integration
+- Added the attached **Preview pane** View-menu asset to the packaged resources as both the original SVG and a JavaFX-friendly PNG.
+- Updated `MainLayout.fxml` so the View menu **Preview pane** row uses the packaged image resource instead of the prior glyph label.
+- Synced the delivered packaged-resource copies under `target/classes` to keep the shipped project snapshot consistent.
+
+## HOTFIX148 / Phase 4P.9BB — View Menu Large Icons Icon Resource Integration
+- Added the attached **Large icons** View-menu asset to the packaged resources as both the original SVG and a JavaFX-friendly PNG.
+- Updated `MainLayout.fxml` so the View menu **Large icons** row uses the packaged image resource instead of the prior glyph label.
+- Synced the delivered packaged-resource copies under `target/classes` to keep the shipped project snapshot consistent.
+
+## HOTFIX149 / Phase 4P.9BC — View Menu Navigation Pane Icon Resource Integration
+- Added the attached **Navigation pane** View-menu asset to the packaged resources as both the original SVG and a JavaFX-friendly PNG.
+- Updated `MainLayout.fxml` so the View menu **Navigation pane** row uses the packaged image resource instead of the prior glyph label.
+- Synced the delivered packaged-resource copies under `target/classes` to keep the shipped project snapshot consistent.
+
+## HOTFIX150 / Phase 4P.9BD — Folder Icon Resource Integration
+- Replaced the generic folder icon with the attached packaged asset across the `IconLoader` resource set so folder visuals now resolve from the new image instead of the previous placeholder-style resources.
+- Generated standard light/dark folder PNG resources for all clamped icon sizes used by the application (`16, 24, 32, 48, 64, 96, 128, 256`) under `src/main/resources/com/fileexplorer/ui/icons`.
+- Refreshed the legacy packaged folder `.ico` resources and synced the same assets under `target/classes` to keep the delivered project snapshot consistent.
