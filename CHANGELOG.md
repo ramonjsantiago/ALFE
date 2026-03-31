@@ -1,3 +1,9 @@
+
+## HOTFIX155 / Phase 4P.9BI — See More Select None Menu Icon Resource Integration
+- Added the supplied **See more > Select none** SVG asset under `src/main/resources/icons/see_more_select_none.svg` and rendered a JavaFX-friendly PNG at `src/main/resources/icons/see_more_select_none.png`.
+- Updated `MainLayout.fxml` so the See more menu **Select none** row now uses the packaged image resource instead of the previous Segoe Fluent glyph label.
+- Synced the packaged `target/classes` icon resources and FXML snapshot so the full-project archive carries the new Select none menu icon consistently.
+
 ## HOTFIX152 / Phase 4P.9BF — See More Undo Icon Resource Visibility Fix
 - Corrected the See more > Undo icon resource path to use a simple classpath-safe filename.
 - Re-rendered the Undo icon into a tightly trimmed 18x18 transparent PNG for reliable menu display.
@@ -517,3 +523,30 @@ HOTFIX110 / Phase 4P.9P — Toolbar Native Menu Restore and Tab Strip Close/Plus
 - Replaced the generic folder icon with the attached packaged asset across the `IconLoader` resource set so folder visuals now resolve from the new image instead of the previous placeholder-style resources.
 - Generated standard light/dark folder PNG resources for all clamped icon sizes used by the application (`16, 24, 32, 48, 64, 96, 128, 256`) under `src/main/resources/com/fileexplorer/ui/icons`.
 - Refreshed the legacy packaged folder `.ico` resources and synced the same assets under `target/classes` to keep the delivered project snapshot consistent.
+
+## HOTFIX153 / Phase 4P.9BG — See More Pin to Quick Access Menu Icon Resource Integration
+- Added the attached **Pin to Quick access** asset to the packaged resources as both the original SVG and a JavaFX-friendly PNG.
+- Updated `MainLayout.fxml` so the **See more** menu row now reads **Pin to Quick access** and uses the packaged image resource instead of the previous placeholder favorites glyph.
+- Synced the delivered packaged-resource copies under `target/classes` to keep the shipped project snapshot consistent.
+
+## HOTFIX154 / Phase 4P.9BH — See More Select All Menu Icon Resource Integration
+- Added the attached **Select all** asset to the packaged resources as both the original SVG and a JavaFX-friendly PNG.
+- Updated `MainLayout.fxml` so the **See more > Select all** row uses the packaged image resource instead of the previous glyph label.
+- Synced the delivered packaged-resource copies under `target/classes` to keep the shipped project snapshot consistent.
+
+## HOTFIX156 / Phase 4P.9BJ — See More Invert Selection Menu Icon Resource Integration
+- Added the attached **Invert selection** asset to the packaged resources as both the original SVG and a JavaFX-friendly PNG.
+- Updated `MainLayout.fxml` so the **See more > Invert selection** row uses the packaged image resource instead of the previous glyph label.
+- Synced the delivered packaged-resource copies under `target/classes` to keep the shipped project snapshot consistent.
+
+## HOTFIX158 / Phase 4P.9BL — File View Item Context Menu Restoration
+- Restored right-click item context-menu invocation across the non-Details file views by wiring the shared file-operations context menu onto icon/list/tile/content item surfaces.
+- Added Windows-style right-click selection preparation for icon-based items so an unselected item becomes the active single selection before the menu opens, while preserving an existing multi-selection when the clicked item is already selected.
+- Updated file-operations menu anchoring so the shared context menu attaches to the currently visible file-view surface instead of assuming the Details table is the active owner.
+
+
+## HOTFIX159 / Phase 4P.9BM — File View Context Menu Command Routing and Multi-Selection Parity
+- Expanded the shared file-item context menu so file views now expose `Open`, `Open in new tab`, and `Pin to Quick access` with Windows-style enablement based on the current target selection.
+- Routed item-menu commands against the active selection set across Details, icon, list, tiles, and content views; right-clicking an already selected item preserves multi-selection while commands resolve against the full selected set.
+- Added a distinct file-view background context menu for empty-space right-clicks so empty surfaces no longer reuse the item menu, and ensured the background and item menus mutually dismiss each other.
+- Wired `Pin to Quick access` into the current session quick-access row and bound the See more command to pin the active folder location.

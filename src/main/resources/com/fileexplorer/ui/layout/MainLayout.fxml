@@ -544,8 +544,14 @@
                                 <MenuItem text="Compress to ZIP file" styleClass="see-more-menuitem">
                                     <graphic><Label text="&#xF012;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
                                 </MenuItem>
-                                <MenuItem text="Add to Favorites" styleClass="see-more-menuitem">
-                                    <graphic><Label text="&#xE734;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
+                                <MenuItem text="Pin to Quick access" styleClass="see-more-menuitem">
+                                    <graphic>
+                                        <ImageView fitWidth="16.0" fitHeight="16.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
+                                            <image>
+                                                <Image url="@/icons/see_more_pin_to_quick_access.png"/>
+                                            </image>
+                                        </ImageView>
+                                    </graphic>
                                 </MenuItem>
                                 <MenuItem text="Copy path" styleClass="see-more-menuitem">
                                     <graphic><Label text="&#xE8C8;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
@@ -554,13 +560,31 @@
                                 <SeparatorMenuItem/>
 
                                 <MenuItem text="Select all" styleClass="see-more-menuitem">
-                                    <graphic><Label text="&#xE8B3;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
+                                    <graphic>
+                                        <ImageView fitWidth="16.0" fitHeight="16.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
+                                            <image>
+                                                <Image url="@/icons/see_more_select_all.png"/>
+                                            </image>
+                                        </ImageView>
+                                    </graphic>
                                 </MenuItem>
                                 <MenuItem text="Select none" styleClass="see-more-menuitem">
-                                    <graphic><Label text="&#xE8C5;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
+                                    <graphic>
+                                        <ImageView fitWidth="16.0" fitHeight="16.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
+                                            <image>
+                                                <Image url="@/icons/see_more_select_none.png"/>
+                                            </image>
+                                        </ImageView>
+                                    </graphic>
                                 </MenuItem>
                                 <MenuItem text="Invert selection" styleClass="see-more-menuitem">
-                                    <graphic><Label text="&#xE8D4;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
+                                    <graphic>
+                                        <ImageView fitWidth="16.0" fitHeight="16.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
+                                            <image>
+                                                <Image url="@/icons/see_more_invert_selection.png"/>
+                                            </image>
+                                        </ImageView>
+                                    </graphic>
                                 </MenuItem>
 
                                 <SeparatorMenuItem/>

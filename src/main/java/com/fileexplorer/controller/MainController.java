@@ -305,10 +305,12 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     private Path pendingInlineRenameSelectionPath;
     private int pendingInlineRenameSelectionIndex = -1;
     private final java.util.List<Path> recentHomeLocations = new java.util.ArrayList<>();
+    private final java.util.List<Path> userPinnedHomeLocations = new java.util.ArrayList<>();
     private boolean homeActive = false;
     private boolean homeTabVisible = true;
     private boolean currentTabVisible = true;
     private static final int HOME_RECENT_MAX = 8;
+    private static final int HOME_PINNED_MAX = 8;
     @FXML private TextArea previewText;
     @FXML private javafx.scene.image.ImageView previewImage;
     @FXML private TextArea detailsText;
@@ -1104,6 +1106,7 @@ public void attach(ExplorerContext context) {
             switch (label) {
                 case "Undo" -> item.setOnAction(e -> setStatus("Undo: not implemented yet."));
                 case "Copy path" -> item.setOnAction(e -> copyPrimaryPathToClipboard());
+                case "Pin to Quick access" -> item.setOnAction(e -> pinCurrentLocationToQuickAccess());
                 case "Select all" -> item.setOnAction(e -> selectAll());
                 case "Select none" -> item.setOnAction(e -> clearSelection());
                 case "Invert selection" -> item.setOnAction(e -> invertSelection());
@@ -2763,6 +2766,64 @@ folderTree.setCellFactory(tv -> {
         Path selected = getPrimarySelection();
         if (selected != null) {
             openPath(selected);
+        }
+    }
+
+    private void openSelection() {
+        java.util.List<Path> selectedPaths = new java.util.ArrayList<>(getSelectedItems());
+        if (selectedPaths.isEmpty()) {
+            Path primarySelection = getPrimarySelection();
+            if (primarySelection != null) {
+                selectedPaths.add(primarySelection);
+            }
+        }
+        if (selectedPaths.isEmpty()) {
+            return;
+        }
+        hideExplorerTransientUi();
+        if (selectedPaths.size() == 1) {
+            openPath(selectedPaths.get(0));
+            return;
+        }
+        int openedCount = 0;
+        for (Path path : selectedPaths) {
+            if (path == null) {
+                continue;
+            }
+            try {
+                if (isDirectoryPath(path)) {
+                    openNewWindow(path);
+                } else if (Desktop.isDesktopSupported()) {
+                    Desktop.getDesktop().open(path.toFile());
+                }
+                openedCount++;
+            } catch (Exception ex) {
+                LOG.log(Level.FINE, "Open selection path failed", ex);
+            }
+        }
+        if (openedCount > 0) {
+            setStatus("Opened " + openedCount + " item(s).");
+        }
+    }
+
+    private void openSelectionInNewTab() {
+        Path primarySelection = getPrimarySelection();
+        if (!isDirectoryPath(primarySelection)) {
+            return;
+        }
+        hideExplorerTransientUi();
+        openNewWindow(primarySelection);
+        setStatus("Opened in new window (tab fallback): " + directoryDisplayName(primarySelection));
+    }
+
+    private boolean isDirectoryPath(Path path) {
+        if (path == null) {
+            return false;
+        }
+        try {
+            return Files.isDirectory(path);
+        } catch (Exception ex) {
+            return false;
         }
     }
 
@@ -5014,12 +5075,20 @@ colType.setCellValueFactory(param -> {
     // Reused context menu instance for file operations (prevents multiple menus stacking).
     private transient javafx.scene.control.ContextMenu fileOpsMenu;
     private transient javafx.scene.control.MenuItem fileOpsOpenItem;
+    private transient javafx.scene.control.MenuItem fileOpsOpenInNewTabItem;
+    private transient javafx.scene.control.MenuItem fileOpsPinToQuickAccessItem;
     private transient javafx.scene.control.MenuItem fileOpsCopyItem;
     private transient javafx.scene.control.MenuItem fileOpsCutItem;
     private transient javafx.scene.control.MenuItem fileOpsPasteItem;
     private transient javafx.scene.control.MenuItem fileOpsRenameItem;
     private transient javafx.scene.control.MenuItem fileOpsDeleteItem;
     private transient javafx.scene.control.MenuItem fileOpsPropertiesItem;
+    private transient javafx.scene.control.ContextMenu fileViewBackgroundMenu;
+    private transient javafx.scene.control.MenuItem fileViewBackgroundPasteItem;
+    private transient javafx.scene.control.MenuItem fileViewBackgroundNewFolderItem;
+    private transient javafx.scene.control.MenuItem fileViewBackgroundSelectAllItem;
+    private transient javafx.scene.control.MenuItem fileViewBackgroundRefreshItem;
+    private transient javafx.scene.control.MenuItem fileViewBackgroundPropertiesItem;
     private FileItem getFocusedOrSelectedFileItem() {
         if (fileTable == null || fileTable.getItems() == null) {
             return null;
@@ -5084,6 +5153,9 @@ colType.setCellValueFactory(param -> {
         if (fileOpsMenu != null) {
             fileOpsMenu.hide();
         }
+        if (fileViewBackgroundMenu != null) {
+            fileViewBackgroundMenu.hide();
+        }
         if (fileTable != null) {
             Object header = fileTable.getProperties().get(com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.PROP_HEADER_MENU);
             if (header instanceof javafx.scene.control.ContextMenu cm) {
@@ -5134,7 +5206,9 @@ colType.setCellValueFactory(param -> {
         if (fileTable == null) return;
         if (fileOpsMenu == null) {
             fileOpsMenu = createExplorerContextMenu();
-            fileOpsOpenItem = createExplorerMenuItem("Open", "", this::openPrimarySelection);
+            fileOpsOpenItem = createExplorerMenuItem("Open", "", this::openSelection);
+            fileOpsOpenInNewTabItem = createExplorerMenuItem("Open in new tab", "", this::openSelectionInNewTab);
+            fileOpsPinToQuickAccessItem = createExplorerMenuItem("Pin to Quick access", "", this::pinSelectionToQuickAccess);
             fileOpsCopyItem = createExplorerMenuItem("Copy", "", () -> copySelection(false));
             fileOpsCutItem = createExplorerMenuItem("Cut", "", () -> copySelection(true));
             fileOpsPasteItem = createExplorerMenuItem("Paste", "", this::pasteIntoCurrentDirectory);
@@ -5143,6 +5217,9 @@ colType.setCellValueFactory(param -> {
             fileOpsPropertiesItem = createExplorerMenuItem("Properties", "", this::openPropertiesForSelection);
             fileOpsMenu.getItems().addAll(
                     fileOpsOpenItem,
+                    fileOpsOpenInNewTabItem,
+                    createExplorerSeparator(),
+                    fileOpsPinToQuickAccessItem,
                     createExplorerSeparator(),
                     fileOpsCopyItem,
                     fileOpsCutItem,
@@ -5158,7 +5235,11 @@ colType.setCellValueFactory(param -> {
                         : 0;
                 boolean hasSelection = selectionCount > 0;
                 boolean singleSelection = selectionCount == 1;
-                fileOpsOpenItem.setDisable(!singleSelection);
+                Path primarySelection = getPrimarySelection();
+                boolean singleDirectorySelection = singleSelection && isDirectoryPath(primarySelection);
+                fileOpsOpenItem.setDisable(!hasSelection);
+                fileOpsOpenInNewTabItem.setDisable(!singleDirectorySelection);
+                fileOpsPinToQuickAccessItem.setDisable(!singleDirectorySelection);
                 fileOpsCopyItem.setDisable(!hasSelection);
                 fileOpsCutItem.setDisable(!hasSelection);
                 fileOpsPasteItem.setDisable(currentDirectory == null || clipboardPaths.isEmpty());
@@ -5170,8 +5251,87 @@ colType.setCellValueFactory(param -> {
         }
         Object header = fileTable.getProperties().get(com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.PROP_HEADER_MENU);
         if (header instanceof javafx.scene.control.ContextMenu cm) cm.hide();
+        if (fileViewBackgroundMenu != null) {
+            fileViewBackgroundMenu.hide();
+        }
         fileOpsMenu.hide();
-        fileOpsMenu.show(fileTable, screenX, screenY);
+        Node anchor = getActiveFileOpsMenuAnchor();
+        if (anchor == null) {
+            return;
+        }
+        fileOpsMenu.show(anchor, screenX, screenY);
+    }
+
+    private Node getActiveFileOpsMenuAnchor() {
+        if (viewMode == ViewMode.DETAILS) {
+            if (fileTable != null && fileTable.getScene() != null) {
+                return fileTable;
+            }
+            if (detailsViewShell != null && detailsViewShell.getScene() != null) {
+                return detailsViewShell;
+            }
+        }
+        if (virtualIconGridView != null && virtualIconGridView.isVisible() && virtualIconGridView.getScene() != null) {
+            return virtualIconGridView;
+        }
+        if (virtualIconListView != null && virtualIconListView.isVisible() && virtualIconListView.getScene() != null) {
+            return virtualIconListView;
+        }
+        if (iconFlow != null && iconFlow.isVisible() && iconFlow.getScene() != null) {
+            return iconFlow;
+        }
+        if (iconScroll != null && iconScroll.isVisible() && iconScroll.getScene() != null) {
+            return iconScroll;
+        }
+        if (viewHost != null && viewHost.getScene() != null) {
+            return viewHost;
+        }
+        return fileTable != null && fileTable.getScene() != null ? fileTable : null;
+    }
+
+
+    private void showFileViewBackgroundContextMenu(double screenX, double screenY) {
+        Node anchor = getActiveFileOpsMenuAnchor();
+        if (anchor == null) {
+            return;
+        }
+        if (fileViewBackgroundMenu == null) {
+            fileViewBackgroundMenu = createExplorerContextMenu();
+            fileViewBackgroundPasteItem = createExplorerMenuItem("Paste", "", this::pasteIntoCurrentDirectory);
+            fileViewBackgroundNewFolderItem = createExplorerMenuItem("New folder", "", this::createNewFolder);
+            fileViewBackgroundSelectAllItem = createExplorerMenuItem("Select all", "", this::selectAll);
+            fileViewBackgroundRefreshItem = createExplorerMenuItem("Refresh", "", this::refresh);
+            fileViewBackgroundPropertiesItem = createExplorerMenuItem("Properties", "", () -> openPropertiesForPath(currentDirectory));
+            fileViewBackgroundMenu.getItems().addAll(
+                    fileViewBackgroundPasteItem,
+                    createExplorerSeparator(),
+                    fileViewBackgroundNewFolderItem,
+                    fileViewBackgroundSelectAllItem,
+                    createExplorerSeparator(),
+                    fileViewBackgroundRefreshItem,
+                    createExplorerSeparator(),
+                    fileViewBackgroundPropertiesItem);
+            fileViewBackgroundMenu.setOnShowing(e -> {
+                boolean hasDirectory = currentDirectory != null;
+                boolean hasVisibleItems = fileTable != null && fileTable.getItems() != null && !fileTable.getItems().isEmpty();
+                fileViewBackgroundPasteItem.setDisable(!hasDirectory || clipboardPaths.isEmpty());
+                fileViewBackgroundNewFolderItem.setDisable(!hasDirectory);
+                fileViewBackgroundSelectAllItem.setDisable(!hasVisibleItems);
+                fileViewBackgroundRefreshItem.setDisable(!hasDirectory);
+                fileViewBackgroundPropertiesItem.setDisable(!hasDirectory);
+            });
+        }
+        if (fileOpsMenu != null) {
+            fileOpsMenu.hide();
+        }
+        if (fileTable != null) {
+            Object header = fileTable.getProperties().get(com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.PROP_HEADER_MENU);
+            if (header instanceof javafx.scene.control.ContextMenu cm) {
+                cm.hide();
+            }
+        }
+        fileViewBackgroundMenu.hide();
+        fileViewBackgroundMenu.show(anchor, screenX, screenY);
     }
     /**
      * Phase 3.6.0: Table context menu + keyboard shortcuts for file operations.
@@ -5185,7 +5345,7 @@ colType.setCellValueFactory(param -> {
                     // Header menu and row-specific context menu handlers manage these cases.
                     return;
                 }
-                showFileOpsContextMenu(ev.getScreenX(), ev.getScreenY());
+                showFileViewBackgroundContextMenu(ev.getScreenX(), ev.getScreenY());
                 ev.consume();
             } catch (Throwable ignored) {
                 // keep context menu best-effort
@@ -5203,7 +5363,14 @@ colType.setCellValueFactory(param -> {
                 return;
             }
             if (e.getCode() == javafx.scene.input.KeyCode.CONTEXT_MENU || (e.getCode() == javafx.scene.input.KeyCode.F10 && e.isShiftDown())) {
-                showFileOpsContextMenuForFocusedRow();
+                if (getFocusedOrSelectedIndex() >= 0) {
+                    showFileOpsContextMenuForFocusedRow();
+                } else {
+                    Bounds tableBounds = fileTable.localToScreen(fileTable.getBoundsInLocal());
+                    if (tableBounds != null) {
+                        showFileViewBackgroundContextMenu(tableBounds.getMinX() + 48.0, tableBounds.getMinY() + 48.0);
+                    }
+                }
                 e.consume();
                 return;
             }
@@ -8710,6 +8877,12 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             return;
         }
         tile.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> {
+            if (event.getButton() == MouseButton.SECONDARY) {
+                prepareSelectionForContextMenuPath(path);
+                hideExplorerMetadataPopup();
+                requestActiveIconSurfaceFocus();
+                return;
+            }
             if (event.getButton() != MouseButton.PRIMARY) {
                 return;
             }
@@ -8741,10 +8914,34 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             }
             event.consume();
         });
+        tile.setOnContextMenuRequested(event -> {
+            prepareSelectionForContextMenuPath(path);
+            hideExplorerMetadataPopup();
+            showFileOpsContextMenu(event.getScreenX(), event.getScreenY());
+            event.consume();
+        });
     }
 
     private boolean shouldSuppressExplorerIconPrimaryGestureHandling() {
         return iconMarqueeGestureOwnsSelection || suppressExplorerIconClickSelection;
+    }
+
+    private void prepareSelectionForContextMenuPath(Path path) {
+        if (path == null || fileTable == null || fileTable.getSelectionModel() == null) {
+            return;
+        }
+        if (!isPathCurrentlySelected(path)) {
+            applyExplorerPathSelection(java.util.Set.of(path), path);
+        } else {
+            int index = findTableIndexForPath(path);
+            if (index >= 0) {
+                if (fileTable.getFocusModel() != null) {
+                    fileTable.getFocusModel().focus(index);
+                }
+                iconSelectionAnchorPath = path;
+                lastIconActivatedPath = path;
+            }
+        }
     }
 
     private void beginExplorerIconMarqueeGestureOwnership() {
@@ -9039,6 +9236,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         viewHost.addEventFilter(MouseEvent.MOUSE_DRAGGED, this::handleExplorerFileViewMouseDragged);
         viewHost.addEventFilter(MouseEvent.MOUSE_RELEASED, this::handleExplorerFileViewMouseReleased);
         viewHost.addEventFilter(MouseEvent.MOUSE_CLICKED, this::handleExplorerFileViewMouseClicked);
+        viewHost.addEventFilter(javafx.scene.input.ContextMenuEvent.CONTEXT_MENU_REQUESTED, this::handleExplorerFileViewContextMenuRequested);
     }
 
     private void bringIconMarqueeOverlayToFront() {
@@ -9185,6 +9383,26 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (shouldSuppressExplorerIconPrimaryGestureHandling() || iconMarqueePressArmed || iconMarqueeDragStarted) {
             event.consume();
         }
+    }
+
+
+    private void handleExplorerFileViewContextMenuRequested(javafx.scene.input.ContextMenuEvent event) {
+        if (event == null || !isIconMode(viewMode)) {
+            return;
+        }
+        Node target = event.getPickResult() != null && event.getPickResult().getIntersectedNode() != null
+                ? event.getPickResult().getIntersectedNode()
+                : (event.getTarget() instanceof Node node ? node : null);
+        if (findExplorerIconTilePath(target) != null) {
+            return;
+        }
+        if (target != null && !isNodeWithinActiveIconSurface(target) && target != viewHost) {
+            return;
+        }
+        hideExplorerMetadataPopup();
+        requestActiveIconSurfaceFocus();
+        showFileViewBackgroundContextMenu(event.getScreenX(), event.getScreenY());
+        event.consume();
     }
 
     private void updateExplorerFileViewMarquee(double sceneX, double sceneY) {
@@ -9848,18 +10066,66 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         }
     }
 
+    private void pinCurrentLocationToQuickAccess() {
+        pinPathToQuickAccess(currentDirectory);
+    }
+
+    private void pinSelectionToQuickAccess() {
+        Path primarySelection = getPrimarySelection();
+        if (!isDirectoryPath(primarySelection)) {
+            return;
+        }
+        pinPathToQuickAccess(primarySelection);
+    }
+
+    private void pinPathToQuickAccess(Path path) {
+        if (!isDirectoryPath(path)) {
+            setStatus("Only folders can be pinned to Quick access.");
+            return;
+        }
+        Path normalized = path.normalize();
+        userPinnedHomeLocations.removeIf(existing -> Objects.equals(existing, normalized));
+        userPinnedHomeLocations.add(0, normalized);
+        while (userPinnedHomeLocations.size() > HOME_PINNED_MAX) {
+            userPinnedHomeLocations.remove(userPinnedHomeLocations.size() - 1);
+        }
+        refreshHomeSurface();
+        setStatus("Pinned to Quick access: " + directoryDisplayName(normalized));
+    }
+
     private void rebuildHomePinnedRow() {
         if (homePinnedRow == null) {
             return;
         }
         homePinnedRow.getChildren().clear();
         Path home = Paths.get(System.getProperty("user.home"));
+        java.util.LinkedHashSet<Path> renderedPaths = new java.util.LinkedHashSet<>();
         addHomePinnedButton("Home", home);
-        addHomePinnedButton("Desktop", home.resolve("Desktop"));
-        addHomePinnedButton("Downloads", home.resolve("Downloads"));
-        addHomePinnedButton("Documents", home.resolve("Documents"));
-        addHomePinnedButton("Pictures", home.resolve("Pictures"));
-        addHomePinnedButton("OneDrive", home.resolve("OneDrive"));
+        renderedPaths.add(home.normalize());
+        Path desktop = home.resolve("Desktop");
+        addHomePinnedButton("Desktop", desktop);
+        renderedPaths.add(desktop.normalize());
+        Path downloads = home.resolve("Downloads");
+        addHomePinnedButton("Downloads", downloads);
+        renderedPaths.add(downloads.normalize());
+        Path documents = home.resolve("Documents");
+        addHomePinnedButton("Documents", documents);
+        renderedPaths.add(documents.normalize());
+        Path pictures = home.resolve("Pictures");
+        addHomePinnedButton("Pictures", pictures);
+        renderedPaths.add(pictures.normalize());
+        Path oneDrive = home.resolve("OneDrive");
+        addHomePinnedButton("OneDrive", oneDrive);
+        renderedPaths.add(oneDrive.normalize());
+        for (Path pinned : userPinnedHomeLocations) {
+            if (pinned == null) {
+                continue;
+            }
+            Path normalizedPinned = pinned.normalize();
+            if (renderedPaths.add(normalizedPinned)) {
+                addHomePinnedButton(directoryDisplayName(normalizedPinned), normalizedPinned);
+            }
+        }
     }
 
     private void addHomePinnedButton(String label, Path path) {
@@ -10047,7 +10313,15 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
  */
     private void selectAll() {
         LogSupport.enter(LOG, "selectAll");
+        if (fileTable == null || fileTable.getSelectionModel() == null) {
+            return;
+        }
         fileTable.getSelectionModel().selectAll();
+        if (viewMode != ViewMode.DETAILS) {
+            syncIconPresentationSelectedPathsFromTableSelection();
+            refreshVisibleIconTileSelectionState();
+        }
+        updateSelectionCommandState();
         setStatus("Selected all.");
     }
 
