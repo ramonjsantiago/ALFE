@@ -19,3 +19,67 @@ HOTFIX152 / Phase 4P.9BF — See More Undo Icon Resource Visibility Fix
 - CHANGELOG.md
 - CHANGED_FILES.txt
 - PHASE4P_9BF_SEE_MORE_UNDO_ICON_RESOURCE_VISIBILITY_FIX_NOTES.txt
+
+HOTFIX153 / Phase 4P.9BG — See More Pin to Quick Access Menu Icon Resource Integration
+- src/main/resources/icons/see_more_pin_to_quick_access.svg
+- src/main/resources/icons/see_more_pin_to_quick_access.png
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- target/classes/icons/see_more_pin_to_quick_access.svg
+- target/classes/icons/see_more_pin_to_quick_access.png
+- target/classes/com/fileexplorer/ui/layout/MainLayout.fxml
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE4P_9BG_SEE_MORE_PIN_TO_QUICK_ACCESS_MENU_ICON_RESOURCE_INTEGRATION_NOTES.txt
+
+HOTFIX154 / Phase 4P.9BH — See More Select All Menu Icon Resource Integration
+- src/main/resources/icons/see_more_select_all.svg
+- src/main/resources/icons/see_more_select_all.png
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- target/classes/icons/see_more_select_all.svg
+- target/classes/icons/see_more_select_all.png
+- target/classes/com/fileexplorer/ui/layout/MainLayout.fxml
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE4P_9BH_SEE_MORE_SELECT_ALL_MENU_ICON_RESOURCE_INTEGRATION_NOTES.txt
+
+
+HOTFIX155 / Phase 4P.9BI — See More Select None Menu Icon Resource Integration
+- src/main/resources/icons/see_more_select_none.svg
+- src/main/resources/icons/see_more_select_none.png
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- target/classes/icons/see_more_select_none.svg
+- target/classes/icons/see_more_select_none.png
+- target/classes/com/fileexplorer/ui/layout/MainLayout.fxml
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE4P_9BI_SEE_MORE_SELECT_NONE_MENU_ICON_RESOURCE_INTEGRATION_NOTES.txt
+
+
+HOTFIX156 / Phase 4P.9BJ — See More Invert Selection Menu Icon Resource Integration
+- src/main/resources/icons/see_more_invert_selection.svg
+- src/main/resources/icons/see_more_invert_selection.png
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- target/classes/icons/see_more_invert_selection.svg
+- target/classes/icons/see_more_invert_selection.png
+- target/classes/com/fileexplorer/ui/layout/MainLayout.fxml
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE4P_9BJ_SEE_MORE_INVERT_SELECTION_MENU_ICON_RESOURCE_INTEGRATION_NOTES.txt
+
+HOTFIX158 / Phase 4P.9BL — File View Item Context Menu Restoration
+- src/main/java/com/fileexplorer/controller/MainController.java
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE4P_9BL_FILE_VIEW_ITEM_CONTEXT_MENU_RESTORATION_NOTES.txt
+
+HOTFIX159 / Phase 4P.9BM — File View Context Menu Command Routing and Multi-Selection Parity
+- src/main/java/com/fileexplorer/controller/MainController.java
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE4P_9BM_FILE_VIEW_CONTEXT_MENU_COMMAND_ROUTING_AND_MULTI_SELECTION_PARITY_NOTES.txt
