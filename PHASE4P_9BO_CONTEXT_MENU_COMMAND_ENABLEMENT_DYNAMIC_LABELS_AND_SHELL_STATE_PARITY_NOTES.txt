@@ -1,0 +1,21 @@
+HOTFIX161 / Phase 4P.9BO — Context Menu Command Enablement, Dynamic Labels, and Shell-State Parity
+
+Summary
+- Added a shared shell-state synchronization pass for the file-item context menu and the file-view background context menu.
+- The item-menu Quick access command is now dynamic: a pinned single-folder selection shows Unpin from Quick access and routes through the same toggle path.
+- The background Undo command now reflects the top undo-stack label when available.
+- Paste enablement now uses a stricter shell-state gate so cut items from the current folder do not advertise a no-op paste back into the same folder.
+- Toolbar Paste now uses the same paste gate as the context menus.
+
+Implementation notes
+- MainController now centralizes item-menu state refresh in syncFileOpsMenuState().
+- MainController now centralizes cross-menu refresh in syncExplorerContextMenuShellState().
+- Quick access pin state is derived from the normalized userPinnedHomeLocations collection.
+- Unpin support was added through unpinPathFromQuickAccess(Path).
+- Directory listing application now refreshes menu shell state after navigation results are applied.
+- Table selection changes now trigger immediate context-menu shell-state refresh.
+
+Known limits
+- Properties remains single-selection only in this phase.
+- Paste shortcut remains a placeholder and stays disabled in this phase.
+- Undo label text is compacted for long operation labels to keep menu width stable.

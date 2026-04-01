@@ -550,3 +550,22 @@ HOTFIX110 / Phase 4P.9P — Toolbar Native Menu Restore and Tab Strip Close/Plus
 - Routed item-menu commands against the active selection set across Details, icon, list, tiles, and content views; right-clicking an already selected item preserves multi-selection while commands resolve against the full selected set.
 - Added a distinct file-view background context menu for empty-space right-clicks so empty surfaces no longer reuse the item menu, and ensured the background and item menus mutually dismiss each other.
 - Wired `Pin to Quick access` into the current session quick-access row and bound the See more command to pin the active folder location.
+
+
+## HOTFIX160 / Phase 4P.9BN — Background Context Menu and Empty-Space Selection Parity
+- Expanded the file-view background context menu into a distinct empty-surface menu with Explorer-style `View`, `Sort by`, `Group by`, `Undo`, `Paste`, `New`, `Select all`, `Refresh`, and `Properties` command routing.
+- Anchored empty-space context menus to the actual active file-view surface in both Details and icon-based views, while continuing to prevent stacking with item menus and header menus.
+- Synced selection-paint refresh for `Select all`, `Select none`, and `Invert selection`, and now dismiss transient Explorer menus on view switches and folder navigation so background menus do not linger across surface changes.
+
+## HOTFIX161 / Phase 4P.9BO — Context Menu Command Enablement, Dynamic Labels, and Shell-State Parity
+- Added live shell-state synchronization for file-item and background context menus so enablement refreshes immediately after selection changes, clipboard changes, navigation refreshes, paste completion, and Quick access pin updates.
+- Made `Pin to Quick access` dynamic for single-folder item selections by switching the label to `Unpin from Quick access` when the selected folder is already pinned, and routed that same command path through a true toggle handler.
+- Improved background-menu shell parity by deriving the `Undo` label from the current command stack and by disabling `Paste` when a cut clipboard payload would paste back into the same source folder without changing location.
+- Updated toolbar paste-state handling to use the same shell-state gate as the context menus so command surfaces stay aligned.
+
+## HOTFIX162 / Phase 4P.9BP — Background Surface Refresh, Clipboard Action Routing, and New-Menu Real Command Wiring
+- Routed the background-surface `Refresh`, `Paste`, and `Properties` actions through explicit folder-surface helpers so the menu now dismisses cleanly and resolves its target from the active folder surface instead of relying on a stale item path.
+- Expanded the background `New` submenu with real `Folder` and `Text Document` creation commands, both using collision-safe Explorer-style default naming and queueing the newly created path for immediate inline rename after the refreshed listing is applied.
+- Added disabled placeholder coverage for unsupported `New` entries so unfinished template rows remain visibly disabled instead of appearing half-wired.
+- Aligned paste-state gating with the active folder-surface resolver so toolbar and background paste enablement both reflect the same target directory logic.
+

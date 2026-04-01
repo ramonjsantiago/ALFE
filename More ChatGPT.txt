@@ -1,0 +1,1036 @@
+
+
+
+Let's continue with the next phase
+
+
+Thought for 1m 11s
+The next clean phase is:
+
+HOTFIX128 / Phase 4P.9AJ — Selection Command Execution and Menu-State Parity
+
+Goal
+Finish the command-surface work so the Explorer menus do not just look right, but behave like Windows Explorer across all active views.
+
+Scope
+
+Wire these commands end-to-end:
+
+Pin to Quick access
+
+Select all
+
+Select none
+
+Invert selection
+
+Make command behavior consistent in:
+
+Details
+
+List
+
+Tiles
+
+Small / Medium / Large / Extra Large icon views
+
+Ensure menu item enable/disable state updates correctly from the current selection model.
+
+Keep menu icon placement and indentation parity intact.
+
+Add keyboard parity where appropriate:
+
+Ctrl+A → Select all
+
+Esc or equivalent clear path → Select none
+
+Make invert-selection operate only on the current visible item domain, not on hidden/non-rendered artifacts.
+
+Sync selection paint immediately after command execution so there is no stale highlight state.
+
+Acceptance criteria
+
+Select all visibly selects every selectable item in the active view.
+
+Select none clears both logical and painted selection.
+
+Invert selection flips the selection set correctly and repaints immediately.
+
+Pin to Quick access is at least functionally stubbed to the correct action path and updates UI state cleanly.
+
+No regressions to marquee persistence, Ctrl-click, or hover/selection paint.
+
+Recommended output name
+FileExplorer_PHASE4P_9AJ_SELECTION_COMMAND_EXECUTION_AND_MENU_STATE_PARITY_HOTFIX128_FULL_PROJECT.zip
+
+Use your latest post-4P.9AI working baseline for this phase, not HOTFIX122.
+
+
+
+bd089b00-8ff3-4fe5-b739-4336af883980.zip
+Zip Archive
+The attached zip contains the latest baseline, let's start building off of that.
+
+
+Thought for 12m 22s
+Built off your attached baseline and packaged a fully populated project zip here:
+
+
+Included in this phase:
+
+See more > Pin to Quick access now pins a folder into the Home quick-access row for the current session
+
+Select all, Select none, and Invert selection now run through the shared selection pipeline so Details and icon views stay in sync
+
+menu enable/disable state now updates for those See more commands
+
+keyboard handling added for Ctrl+A and Esc without stealing those keys from text inputs
+
+I also updated:
+
+PHASE_LABEL.txt
+
+CHANGELOG.md
+
+CHANGED_FILES.txt
+
+PHASE4P_9BK_SELECTION_COMMAND_EXECUTION_AND_MENU_STATE_PARITY_NOTES.txt
+
+I was able to update and package the full source tree, but I did not rebuild compiled Java bytecode in this container.
+
+
+In the File view's the right click on item menu is missing
+
+
+Thought for 8m 6s
+Fixed as the next corrective phase and packaged the full project here:
+
+
+This pass restores the file-item right-click menu in the non-Details file views:
+
+Extra large icons
+
+Large icons
+
+Medium icons
+
+Small icons
+
+List
+
+Tiles
+
+Content
+
+What changed:
+
+right-click on an unselected item now selects that item before opening the menu
+
+right-click on an already selected item preserves the current multi-selection
+
+the shared file-operations context menu now anchors to the currently visible file-view surface instead of assuming Details view is active
+
+Updated in the zip:
+
+src/main/java/com/fileexplorer/controller/MainController.java
+
+PHASE_LABEL.txt
+
+CHANGELOG.md
+
+CHANGED_FILES.txt
+
+PHASE4P_9BL_FILE_VIEW_ITEM_CONTEXT_MENU_RESTORATION_NOTES.txt
+
+I was able to patch and package the full source tree here, but I could not run a full Maven compile in this container because Maven is not installed.
+
+
+Works, what's the next phase?
+
+The next clean phase is:
+
+HOTFIX159 / Phase 4P.9BM — File View Context Menu Command Routing and Multi-Selection Parity
+
+Goal
+Now that the right-click menu is back in file views, the next step is to make every command launched from that menu behave exactly against the correct target set.
+
+Scope
+
+Make file-view item context menu commands route against the proper selection set in:
+
+Extra large icons
+
+Large icons
+
+Medium icons
+
+Small icons
+
+List
+
+Tiles
+
+Content
+
+Enforce Windows-style target rules:
+
+right-click on an unselected item → select only that item, then run command against it
+
+right-click on one of several selected items → preserve multi-selection and run against the whole selection
+
+right-click empty space → open background menu, not item menu
+
+Verify command parity for common actions:
+
+Open
+
+Open in new tab
+
+Cut / Copy / Paste
+
+Rename
+
+Delete
+
+Properties
+
+Pin to Quick access where applicable
+
+Ensure only one context surface is open at a time:
+
+no simultaneous item menu, background menu, header menu, or file-ops flyout
+
+Restore clean dismissal behavior:
+
+outside click
+
+Escape
+
+view switch
+
+selection model refresh
+
+Acceptance criteria
+
+Item menu appears only on item right-click.
+
+Background menu appears only on empty-space right-click.
+
+Commands execute against the correct single item or multi-selection set.
+
+No menu-stacking or orphaned popup behavior.
+
+No regression to marquee, Ctrl-click, or selection paint persistence.
+
+Recommended package name
+FileExplorer_PHASE4P_9BM_FILE_VIEW_CONTEXT_MENU_COMMAND_ROUTING_AND_MULTI_SELECTION_PARITY_HOTFIX159_FULL_PROJECT.zip
+
+After that, the next likely phase would be 4P.9BN — Background Context Menu and Empty-Space Selection Parity.
+
+
+Produce HOTFIX159 / Phase 4P.9BM — File View Context Menu Command Routing and Multi-Selection Parity
+
+
+Thought for 13m 57s
+Done — I produced the fully populated project zip for:
+
+HOTFIX159 / Phase 4P.9BM — File View Context Menu Command Routing and Multi-Selection Parity
+
+
+Included in this phase:
+
+item context menu routing now follows the active selection set across Details, icon, list, tiles, and content views
+
+added Open in new tab to the item menu with new-window fallback
+
+added Pin to Quick access to the item menu for single-folder selections
+
+empty-space right-click now opens a distinct background menu instead of reusing the item menu
+
+background and item menus now dismiss each other so they do not stack
+
+See more Pin to Quick access now pins the active folder into the Home quick-access row for the current session
+
+Updated in the zip:
+
+src/main/java/com/fileexplorer/controller/MainController.java
+
+PHASE_LABEL.txt
+
+CHANGELOG.md
+
+CHANGED_FILES.txt
+
+PHASE4P_9BM_FILE_VIEW_CONTEXT_MENU_COMMAND_ROUTING_AND_MULTI_SELECTION_PARITY_NOTES.txt
+
+I repackaged the full source tree from your latest baseline. I did not rebuild target/classes bytecode in this container.
+
+
+What is the next phase?
+
+The next clean phase is:
+
+HOTFIX160 / Phase 4P.9BN — Background Context Menu and Empty-Space Selection Parity
+
+Goal
+Complete the right-click behavior split so empty-space interaction in every file view matches Windows Explorer more closely.
+
+Scope
+
+Empty-space right-click behavior in:
+
+Extra large icons
+
+Large icons
+
+Medium icons
+
+Small icons
+
+List
+
+Tiles
+
+Content
+
+Details
+
+Enforce Windows-style empty-space rules:
+
+right-click empty space with no modifier intent → show background menu
+
+preserve selection when appropriate for context invocation parity
+
+clear or retain selection only according to the intended Explorer rule path for that surface
+
+Background menu command routing:
+
+View
+
+Sort by
+
+Group by
+
+Refresh
+
+Paste
+
+Paste shortcut
+
+Undo where applicable
+
+New
+
+Properties / folder-surface actions where applicable
+
+Make the background menu anchor to the actual view surface, not a fallback node
+
+Prevent item-menu/background-menu/header-menu overlap
+
+Dismiss correctly on:
+
+outside click
+
+Escape
+
+view switch
+
+folder navigation
+
+focus loss
+
+Acceptance criteria
+
+Empty-space right-click always opens the background menu, never the item menu.
+
+Item selection state behaves consistently and does not glitch across views.
+
+Background commands execute against the current folder surface, not a stale item target.
+
+No stacked popups or orphaned menus remain on screen.
+
+No regressions to marquee selection, Ctrl-click, or current item context-menu behavior.
+
+Recommended package name
+FileExplorer_PHASE4P_9BN_BACKGROUND_CONTEXT_MENU_AND_EMPTY_SPACE_SELECTION_PARITY_HOTFIX160_FULL_PROJECT.zip
+
+After that, the next likely phase is:
+
+4P.9BO — Context Menu Command Enablement, Dynamic Labels, and Shell-State Parity
+
+
+Produce phase HOTFIX160 / Phase 4P.9BN — Background Context Menu and Empty-Space Selection Parity
+
+
+Thought for 8m 45s
+Done — I produced the fully populated project zip for:
+
+HOTFIX160 / Phase 4P.9BN — Background Context Menu and Empty-Space Selection Parity
+
+
+Included in this phase:
+
+distinct empty-space background context menu for file views
+
+background menu now includes:
+
+View
+
+Sort by
+
+Group by placeholder
+
+Undo
+
+Paste
+
+Paste shortcut placeholder
+
+New
+
+Select all
+
+Refresh
+
+Properties
+
+empty-space context menus now anchor to the active file-view surface in both Details and icon-based views
+
+background, item, and header menus dismiss each other cleanly
+
+transient menus now close on view switches and folder navigation
+
+Select all, Select none, and Invert selection now force immediate selection-paint refresh so icon views and Details stay visually in sync
+
+Updated in the zip:
+
+src/main/java/com/fileexplorer/controller/MainController.java
+
+PHASE_LABEL.txt
+
+CHANGELOG.md
+
+CHANGED_FILES.txt
+
+PHASE4P_9BN_BACKGROUND_CONTEXT_MENU_AND_EMPTY_SPACE_SELECTION_PARITY_NOTES.txt
+
+One detail to call out: Paste shortcut is present as a placeholder row and remains disabled in this phase.
+
+
+What is the next phase
+
+The next clean phase is:
+
+HOTFIX161 / Phase 4P.9BO — Context Menu Command Enablement, Dynamic Labels, and Shell-State Parity
+
+Goal
+Now that item and background menus are both present, the next step is to make them behave like real Explorer menus in terms of enabled state, label changes, and per-surface context.
+
+Scope
+
+Apply correct enable/disable logic for item and background context menu commands based on:
+
+no selection
+
+single file selection
+
+single folder selection
+
+mixed multi-selection
+
+clipboard state
+
+current folder surface
+
+Add dynamic label/state parity for commands such as:
+
+Open / default action behavior
+
+Open in new tab
+
+Pin to Quick access
+
+Paste
+
+Undo
+
+Rename
+
+Delete
+
+Properties
+
+Make menu content reflect the active target domain:
+
+selected item(s)
+
+empty-space background
+
+current folder/container
+
+Normalize placeholder rows added in 4P.9BN so they either:
+
+become real routed commands, or
+
+remain intentionally disabled but with correct shell-state handling
+
+Ensure all menu states refresh immediately after:
+
+selection changes
+
+navigation
+
+clipboard changes
+
+rename/delete operations
+
+pin/unpin operations
+
+Acceptance criteria
+
+Disabled items are disabled only when Explorer would reasonably disable them.
+
+Pin to Quick access only enables for valid single-folder targets.
+
+Paste and Undo state updates correctly from current app state.
+
+Dynamic labels and routing always match the active surface and selection set.
+
+No regressions to marquee, Ctrl-click, item menu, or background menu behavior.
+
+Recommended package name
+FileExplorer_PHASE4P_9BO_CONTEXT_MENU_COMMAND_ENABLEMENT_DYNAMIC_LABELS_AND_SHELL_STATE_PARITY_HOTFIX161_FULL_PROJECT.zip
+
+After that, the next likely phase is:
+
+4P.9BP — Background Surface Refresh, Clipboard Action Routing, and New-Menu Real Command Wiring
+
+
+Produce phase HOTFIX161 / Phase 4P.9BO — Context Menu Command Enablement, Dynamic Labels, and Shell-State Parity
+
+
+Thought for 9m 3s
+Done — I produced the fully populated project zip for:
+
+HOTFIX161 / Phase 4P.9BO — Context Menu Command Enablement, Dynamic Labels, and Shell-State Parity
+
+
+Included in this phase:
+
+item and background context menus now refresh enable/disable state immediately after:
+
+selection changes
+
+clipboard changes
+
+navigation/listing refresh
+
+paste completion
+
+Quick access pin/unpin changes
+
+Pin to Quick access now becomes Unpin from Quick access for a single selected folder that is already pinned
+
+item-menu Quick access routing now uses a true pin/unpin toggle path
+
+background Undo label now reflects the current top undo-stack command when available
+
+Paste is now disabled when a cut clipboard payload would just paste back into the same source folder
+
+toolbar Paste now uses the same shell-state gate as the context menus
+
+Updated in the zip:
+
+src/main/java/com/fileexplorer/controller/MainController.java
+
+PHASE_LABEL.txt
+
+CHANGELOG.md
+
+CHANGED_FILES.txt
+
+PHASE4P_9BO_CONTEXT_MENU_COMMAND_ENABLEMENT_DYNAMIC_LABELS_AND_SHELL_STATE_PARITY_NOTES.txt
+
+I was able to patch and package the full source tree here, but I could not run a full Maven compile in this container because Maven is not installed.
+
+
+What is the next phase?
+
+The next clean phase is:
+
+HOTFIX162 / Phase 4P.9BP — Background Surface Refresh, Clipboard Action Routing, and New-Menu Real Command Wiring
+
+Goal
+Finish turning the background context surface into a working Explorer command surface, not just a parity shell.
+
+Scope
+
+Make background-surface commands fully route against the current folder/view host:
+
+Refresh
+
+Paste
+
+Paste shortcut
+
+New
+
+Properties
+
+Replace remaining placeholder behavior with real routed actions where feasible:
+
+New > Folder
+
+New > Text Document
+
+keep unsupported entries clearly disabled instead of half-wired
+
+Normalize clipboard routing so paste operations always target the active folder, never a stale selected item context
+
+Ensure Refresh rebinds and repaints correctly in:
+
+Details
+
+List
+
+Tiles
+
+Content
+
+Small / Medium / Large / Extra Large icon views
+
+Ensure background-surface actions dismiss all transient menus cleanly and do not leave stale hover/selection paint
+
+Keep item-menu, background-menu, and header-menu mutual exclusion intact
+
+Acceptance criteria
+
+Refresh updates the active folder surface immediately and cleanly.
+
+Paste always applies to the current folder target.
+
+New > Folder and New > Text Document create items in the current folder and enter the correct rename path.
+
+Unsupported New entries are visibly disabled, not broken.
+
+No regressions to item context menus, marquee persistence, Ctrl-click, or menu dismissal.
+
+Recommended package name
+FileExplorer_PHASE4P_9BP_BACKGROUND_SURFACE_REFRESH_CLIPBOARD_ACTION_ROUTING_AND_NEW_MENU_REAL_COMMAND_WIRING_HOTFIX162_FULL_PROJECT.zip
+
+After that, the next likely phase is:
+
+4P.9BQ — Rename/Create Commit Pipeline and Explorer Creation-State Parity
+
+
+Produce phase HOTFIX162 / Phase 4P.9BP — Background Surface Refresh, Clipboard Action Routing, and New-Menu Real Command Wiring
+
+
+Thought for 9m 59s
+Done — I produced the fully populated project zip for:
+
+HOTFIX162 / Phase 4P.9BP — Background Surface Refresh, Clipboard Action Routing, and New-Menu Real Command Wiring
+
+
+Included in this phase:
+
+background Refresh now routes through the active folder surface and dismisses transient menus first
+
+background Paste now resolves its target from the active folder surface
+
+background Properties now opens against the current folder surface instead of a stale path
+
+New > Folder now creates in the active folder with collision-safe naming and queues the existing inline-rename path after refresh
+
+New > Text Document now creates New Text Document.txt in the active folder with collision-safe naming and queues the same rename path after refresh
+
+unsupported New template row added as a clearly disabled placeholder
+
+Updated in the zip:
+
+src/main/java/com/fileexplorer/controller/MainController.java
+
+PHASE_LABEL.txt
+
+CHANGELOG.md
+
+CHANGED_FILES.txt
+
+PHASE4P_9BP_BACKGROUND_SURFACE_REFRESH_CLIPBOARD_ACTION_ROUTING_AND_NEW_MENU_REAL_COMMAND_WIRING_NOTES.txt
+
+I packaged the full source tree from your latest baseline here. I did not run a full Maven build in this container.
+
+
+What is the next phase?
+
+The next clean phase is:
+
+HOTFIX163 / Phase 4P.9BQ — Rename/Create Commit Pipeline and Explorer Creation-State Parity
+
+Goal
+Complete the file-creation flow so new items behave like Windows Explorer from creation through rename commit, repaint, and selection persistence.
+
+Scope
+
+Harden the post-create rename pipeline for:
+
+New Folder
+
+New Text Document.txt
+
+Ensure correct Explorer-style state transitions:
+
+newly created item becomes selected
+
+label enters inline rename immediately
+
+text selection is correct
+
+commit/cancel behavior matches Explorer expectations
+
+Normalize commit handling across:
+
+Details
+
+List
+
+Tiles
+
+Content
+
+Small / Medium / Large / Extra Large icon views
+
+Handle collision and validation cases cleanly:
+
+existing name
+
+blank name
+
+illegal filename characters
+
+extension-preservation behavior for text documents
+
+Refresh selection/paint/focus after commit or cancel so there is no stale hover, ghost selection, or lost focus state
+
+Ensure creation flow dismisses transient menus and does not regress marquee or multi-selection behavior
+
+Acceptance criteria
+
+New > Folder creates, selects, and enters inline rename reliably in every view.
+
+New > Text Document does the same, with stable .txt handling.
+
+Rename commit updates the model and UI immediately.
+
+Cancel leaves the newly created item in a valid Explorer-like state.
+
+No regressions to context menus, selection commands, marquee persistence, or background-surface behavior.
+
+Recommended package name
+FileExplorer_PHASE4P_9BQ_RENAME_CREATE_COMMIT_PIPELINE_AND_EXPLORER_CREATION_STATE_PARITY_HOTFIX163_FULL_PROJECT.zip
+
+After that, the next likely phase is:
+
+4P.9BR — Inline Rename Validation, Extension Editing Rules, and Commit/Error UX Parity
+
+
+Proceed with phase HOTFIX163 / Phase 4P.9BQ — Rename/Create Commit Pipeline and Explorer Creation-State Parity
+
+
+Thought for 11m 27s
+Done — I produced the fully populated project zip for:
+
+HOTFIX163 / Phase 4P.9BQ — Rename/Create Commit Pipeline and Explorer Creation-State Parity
+
+
+Included in this phase:
+
+New > Folder and New > Text Document now re-enter inline rename through the active view surface, not just Details view
+
+icon-based views now render an inline rename field on the target item in:
+
+Extra large icons
+
+Large icons
+
+Medium icons
+
+Small icons
+
+List
+
+Tiles
+
+Content
+
+create/cancel/retry now keep the new item selected and drive focus back to the correct surface
+
+file rename selection now targets the basename when an extension exists
+
+inline rename now blocks invalid names and duplicate targets before execution
+
+fallback direct rename no longer uses overwrite behavior
+
+committing a file rename without an explicit extension now preserves the original extension
+
+Updated in the zip:
+
+src/main/java/com/fileexplorer/controller/MainController.java
+
+PHASE_LABEL.txt
+
+CHANGELOG.md
+
+CHANGED_FILES.txt
+
+PHASE4P_9BQ_RENAME_CREATE_COMMIT_PIPELINE_AND_EXPLORER_CREATION_STATE_PARITY_NOTES.txt
+
+I packaged the full source tree from the latest baseline here. I did not run a full Maven build in this container.
+
+
+What is the next phase?
+
+The next clean phase is:
+
+HOTFIX164 / Phase 4P.9BR — Inline Rename Validation, Extension Editing Rules, and Commit/Error UX Parity
+
+Goal
+Finish the rename experience so inline rename behaves like Windows Explorer across all view types, especially around validation, extension handling, and error recovery.
+
+Scope
+
+Normalize inline rename behavior in:
+
+Details
+
+List
+
+Tiles
+
+Content
+
+Small / Medium / Large / Extra Large icon views
+
+Enforce Explorer-style rename rules for:
+
+blank names
+
+whitespace-only names
+
+illegal filename characters
+
+trailing dots / spaces
+
+duplicate target names
+
+Refine extension editing behavior:
+
+for known files, preselect basename and leave extension outside selection
+
+preserve extension when user edits basename only
+
+allow full-name replacement when the user explicitly edits the full text
+
+keep folder rename behavior separate from file rename behavior
+
+Improve commit/cancel/error UX:
+
+Enter commits
+
+Escape cancels
+
+invalid commit keeps rename active and focused
+
+validation feedback does not drop selection or lose the target row/tile
+
+Ensure repaint/focus/selection state remains stable after:
+
+successful rename
+
+canceled rename
+
+failed rename
+
+duplicate-name rejection
+
+Acceptance criteria
+
+Inline rename works consistently in every active file view.
+
+Invalid names are blocked without losing the rename session.
+
+File extension behavior matches Explorer expectations more closely.
+
+Commit and cancel paths leave selection, focus, and paint in a correct state.
+
+No regressions to creation flow, marquee persistence, Ctrl-click, or context menus.
+
+Recommended package name
+FileExplorer_PHASE4P_9BR_INLINE_RENAME_VALIDATION_EXTENSION_EDITING_RULES_AND_COMMIT_ERROR_UX_PARITY_HOTFIX164_FULL_PROJECT.zip
+
+After that, the next likely phase is:
+
+4P.9BS — Newly Created Item Scroll-Into-View, Anchor Stability, and Rename Visibility Parity
+
+
+Proceed with HOTFIX164 / Phase 4P.9BR — Inline Rename Validation, Extension Editing Rules, and Commit/Error UX Parity
+
+
+Thought for 11m 6s
+Done — I produced the fully populated project zip for:
+
+HOTFIX164 / Phase 4P.9BR — Inline Rename Validation, Extension Editing Rules, and Commit/Error UX Parity
+
+
+Included in this phase:
+
+inline rename now rejects:
+
+blank / whitespace-only names
+
+reserved Windows names like CON, PRN, AUX, NUL, COM1…COM9, LPT1…LPT9
+
+illegal filename characters
+
+trailing spaces or trailing dots
+
+invalid rename commits now keep the rename session alive instead of dropping out
+
+the typed rename text is preserved after validation failure and focus is restored to the active rename field
+
+file renames still preserve the original extension during normal basename edits
+
+explicit full-text filename replacement is now tracked so a deliberate whole-name edit can replace the full filename instead of forcing the old extension back on
+
+Updated in the zip:
+
+src/main/java/com/fileexplorer/controller/MainController.java
+
+PHASE_LABEL.txt
+
+CHANGELOG.md
+
+CHANGED_FILES.txt
+
+PHASE4P_9BR_INLINE_RENAME_VALIDATION_EXTENSION_EDITING_RULES_AND_COMMIT_ERROR_UX_PARITY_NOTES.txt
+
+I packaged the full source tree from your latest baseline here. I did not run a full Maven/JavaFX build in this container.
+
+
+What is the next phase?
+
+The next clean phase is:
+
+HOTFIX165 / Phase 4P.9BS — Newly Created Item Scroll-Into-View, Anchor Stability, and Rename Visibility Parity
+
+Goal
+Finish the create/rename experience by making sure the newly created or renamed item is always brought into view, remains visually anchored, and stays fully visible during inline rename across all file views.
+
+Scope
+
+After New Folder or New Text Document, ensure the new item:
+
+scrolls into view reliably
+
+becomes the active anchored item
+
+remains visible when inline rename starts
+
+Apply parity in:
+
+Details
+
+List
+
+Tiles
+
+Content
+
+Small / Medium / Large / Extra Large icon views
+
+Stabilize viewport behavior during:
+
+create
+
+rename start
+
+rename commit
+
+rename cancel
+
+sort/layout refresh after creation
+
+Prevent jumpiness or loss of visibility when:
+
+the item is created near the bottom/right edge
+
+the view reflows during resize
+
+virtualization rebinds rows/cells
+
+Ensure scroll/anchor state does not break:
+
+marquee selection
+
+Ctrl-click selection
+
+context menu targeting
+
+post-create selection persistence
+
+Acceptance criteria
+
+A newly created item is always visible before inline rename begins.
+
+The rename field is not clipped, off-screen, or hidden by reflow.
+
+Commit/cancel keeps the item in a stable visible position.
+
+No viewport jumps or anchor loss after refresh/rebind.
+
+No regressions to creation flow, selection persistence, or context menus.
+
+Recommended package name
+FileExplorer_PHASE4P_9BS_NEWLY_CREATED_ITEM_SCROLL_INTO_VIEW_ANCHOR_STABILITY_AND_RENAME_VISIBILITY_PARITY_HOTFIX165_FULL_PROJECT.zip
+
+After that, the next likely phase is:
+
+4P.9BT — Keyboard Rename Navigation, F2/Tab Commit Flow, and Focus Transfer Parity
+
+
+produce phase HOTFIX165 / Phase 4P.9BS — Newly Created Item Scroll-Into-View, Anchor Stability, and Rename Visibility Parity
+
+
+Thought for 4m 56s
+Done — I produced the fully populated project zip for:
+
+HOTFIX165 / Phase 4P.9BS — Newly Created Item Scroll-Into-View, Anchor Stability, and Rename Visibility Parity
+
+
+Included in this phase:
+
+added repeated visibility stabilization passes so a newly created or restored item stays in view through refresh, rebind, and virtualization pulses
+
+post-create rename now stabilizes the created item before inline rename begins
+
+rename startup in Details and non-Details views now uses the same visibility path
+
+rename cancel / focus restore now reuses the same visibility logic so the target stays visible more reliably
+
+Updated in the zip:
+
+src/main/java/com/fileexplorer/controller/MainController.java
+
+PHASE_LABEL.txt
+
+CHANGELOG.md
+
+CHANGED_FILES.txt
+
+PHASE4P_9BS_NEWLY_CREATED_ITEM_SCROLL_INTO_VIEW_ANCHOR_STABILITY_AND_RENAME_VISIBILITY_PARITY_NOTES.txt
+
+I packaged the full source tree from your latest baseline here. I did not run a full Maven build in this container.
+
+
+
+
