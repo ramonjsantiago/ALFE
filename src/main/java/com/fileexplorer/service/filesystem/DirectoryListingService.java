@@ -131,6 +131,7 @@ public void listProgressiveSync(
         Path dir,
         ListingOptions opts,
         CancellationToken token,
+        int firstBatchSize,
         int batchSize,
         java.util.function.Consumer<java.util.List<FileItem>> onBatch
 ) {
@@ -143,9 +144,12 @@ public void listProgressiveSync(
     boolean foldersFirst = opts.foldersFirst();
 
     int effectiveBatch = Math.max(25, batchSize);
+    int effectiveFirstBatch = Math.max(1, Math.min(effectiveBatch,
+            firstBatchSize <= 0 ? effectiveBatch : firstBatchSize));
 
     java.util.List<FileItem> batch = new java.util.ArrayList<>(effectiveBatch);
     int emitted = 0;
+    int currentTargetBatch = effectiveFirstBatch;
 
     try (DirectoryStream<Path> ds = Files.newDirectoryStream(dir)) {
         for (Path p : ds) {
@@ -166,9 +170,10 @@ public void listProgressiveSync(
             batch.add(new FileItem(p, name, type, size, mod, FileStatus.NONE));
             emitted++;
 
-            if (batch.size() >= effectiveBatch) {
+            if (batch.size() >= currentTargetBatch) {
                 onBatch.accept(java.util.List.copyOf(batch));
                 batch.clear();
+                currentTargetBatch = effectiveBatch;
             }
         }
     } catch (Exception ex) {

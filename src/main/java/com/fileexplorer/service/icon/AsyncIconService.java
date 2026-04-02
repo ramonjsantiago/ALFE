@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Phase 3.5.2: Asynchronous, deduplicated icon loading.
@@ -36,6 +37,8 @@ public final class AsyncIconService {
 
     private final ConcurrentHashMap<IconKey, CompletableFuture<Image>> inFlight = new ConcurrentHashMap<>();
     private final ExecutorService executor;
+    private final AtomicBoolean enabled = new AtomicBoolean(false);
+    private final CompletableFuture<Void> enabledGate = new CompletableFuture<>();
 
 /**
  * AsyncIconService.
@@ -50,6 +53,26 @@ public final class AsyncIconService {
     }
 
     /**
+     * Enables or disables asynchronous icon upgrades.
+     *
+     * <p>The application only transitions from disabled to enabled during normal startup.
+     * Requests made before enablement are deferred behind a single gate so placeholder icons
+     * remain cheap while the first visible batch is being committed.</p>
+     */
+    public void setEnabled(boolean enable) {
+        if (enable && enabled.compareAndSet(false, true)) {
+            enabledGate.complete(null);
+        }
+    }
+
+    /**
+     * Returns whether the asynchronous icon upgrade gate is open.
+     */
+    public boolean isEnabled() {
+        return enabled.get();
+    }
+
+    /**
      * Request an icon for the given identity. The returned future is shared across callers requesting
      * the same (identity,dark,size) while the computation is in-flight.
      */
@@ -58,9 +81,9 @@ public final class AsyncIconService {
         final int clamped = Math.max(12, Math.min(48, size));
         final IconKey key = new IconKey(id, darkTheme, clamped);
 
-        return inFlight.computeIfAbsent(key, k -> CompletableFuture
+        return enabledGate.thenCompose(v -> inFlight.computeIfAbsent(key, k -> CompletableFuture
                 .supplyAsync(() -> IconLoader.loadForIdentity(id, darkTheme, clamped), executor)
-                .whenComplete((img, ex) -> inFlight.remove(k)));
+                .whenComplete((img, ex) -> inFlight.remove(k))));
     }
 
     /** Best-effort shutdown (not required for normal app exit). */

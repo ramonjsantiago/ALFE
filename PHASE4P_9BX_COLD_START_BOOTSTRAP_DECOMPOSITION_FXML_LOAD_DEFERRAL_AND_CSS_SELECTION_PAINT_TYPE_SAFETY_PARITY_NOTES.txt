@@ -1,0 +1,19 @@
+HOTFIX170 / Phase 4P.9BX — Cold-Start Bootstrap Decomposition, FXML Load Deferral, and CSS Selection Paint Type-Safety Parity
+
+Intent
+- Reduce cold first-window startup pressure by shrinking the pre-show stylesheet bundle.
+- Move more first-window work to the post-show path while keeping the shell visually stable.
+- Start initial folder navigation earlier once the main UI is attached.
+- Remove the JavaFX selected-list-cell paint conversion warning caused by variable-based background paint resolution.
+
+Implementation summary
+- Split startup CSS into a smaller shell-only bundle and a main-UI critical bundle in `MainApp`.
+- Attached the shared `StartupWorkQueue` to the scene properties so `MainController` can schedule theme/font/motion work through the same startup budgeter.
+- Added finer startup instrumentation around ExplorerContext creation, overlay root creation, stylesheet bundle application, and controller/progress-pane resolution.
+- Reworked `MainController.setScene(...)` to route deferred theme work through the critical queue and font/motion work through the idle queue when the shared startup queue is available.
+- Removed the extra unconditional `Platform.runLater(...)` hop inside `openInitialFolder(...)` when the call already arrives on the FX thread.
+- Replaced the selected-state `-fx-background-color` rule in `explorer-base.css` with explicit paint values for focused and non-focused selection states.
+
+Notes
+- This hotfix updates source and bundled CSS resources only. The container did not provide the user’s Windows/JDK 25 + Maven build environment, so compiled `.class` outputs were not regenerated here.
+- The shell scene still uses a single-scene bootstrap path; the change is focused on shifting nonessential cost out of the pre-show stage rather than reintroducing multi-scene flashing.

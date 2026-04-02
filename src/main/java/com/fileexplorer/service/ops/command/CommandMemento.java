@@ -20,7 +20,7 @@ public final class CommandMemento implements Serializable {
  * <p>
  * Auto-generated API documentation for this type.
  */
-    public enum Kind { COPY, MOVE, DELETE, BATCH, UNKNOWN }
+    public enum Kind { COPY, MOVE, DELETE, CREATE_DIRECTORY, RENAME_PATH, BATCH, UNKNOWN }
 
     private final Kind kind;
     private final String id;

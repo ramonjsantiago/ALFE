@@ -103,6 +103,32 @@ public final class CommandManager {
         persistBestEffort();
     }
 
+    /**
+     * Removes a matching command from the undo stack without executing it.
+     *
+     * @param commandId stable identifier of the command to discard
+     * @return true when a matching undo-stack entry was removed
+     */
+    public synchronized boolean discardUndoCommand(String commandId) {
+        if (commandId == null || commandId.isBlank() || undoStack.isEmpty()) {
+            return false;
+        }
+        boolean removed = false;
+        java.util.Iterator<ExecutedCommand> iterator = undoStack.iterator();
+        while (iterator.hasNext()) {
+            ExecutedCommand executedCommand = iterator.next();
+            if (executedCommand != null && executedCommand.command() != null && commandId.equals(executedCommand.command().id())) {
+                iterator.remove();
+                removed = true;
+                break;
+            }
+        }
+        if (removed) {
+            persistBestEffort();
+        }
+        return removed;
+    }
+
 
 
 /**
@@ -288,6 +314,8 @@ public final class CommandManager {
             case COPY -> CopyCommand.fromMemento(m.id(), m.label(), toRequest(m));
             case MOVE -> MoveCommand.fromMemento(m.id(), m.label(), toRequest(m));
             case DELETE -> DeleteCommand.fromMemento(m.id(), m.label(), toRequest(m));
+            case CREATE_DIRECTORY -> CreateDirectoryCommand.fromMemento(m.id(), m.label(), firstSourcePath(m));
+            case RENAME_PATH -> RenamePathCommand.fromMemento(m.id(), m.label(), firstSourcePath(m), renameTargetPath(m));
             case BATCH -> {
                 List<Command> kids = new ArrayList<>();
                 if (m.children() != null) {
@@ -315,6 +343,31 @@ public final class CommandManager {
         List<Path> sources = m.sources() == null ? List.of() : m.sources().stream().map(Paths::get).toList();
         Path targetDir = (m.targetDirectory() == null || m.targetDirectory().isBlank()) ? null : Paths.get(m.targetDirectory());
         return new FileOperationRequest(type, sources, targetDir, m.newName(), m.overwrite(), m.skipConflicts(), m.sendToTrash());
+    }
+
+    private static Path firstSourcePath(CommandMemento m) {
+        if (m.sources() == null || m.sources().isEmpty()) {
+            throw new IllegalArgumentException("Command memento missing source path: " + m.label());
+        }
+        return Paths.get(m.sources().get(0));
+    }
+
+    private static Path renameTargetPath(CommandMemento m) {
+        Path source = firstSourcePath(m);
+        if (m.targetDirectory() == null || m.targetDirectory().isBlank()) {
+            Path parent = source.getParent();
+            if (parent == null) {
+                throw new IllegalArgumentException("Rename memento missing target directory: " + m.label());
+            }
+            if (m.newName() == null || m.newName().isBlank()) {
+                throw new IllegalArgumentException("Rename memento missing target name: " + m.label());
+            }
+            return parent.resolve(m.newName());
+        }
+        if (m.newName() == null || m.newName().isBlank()) {
+            throw new IllegalArgumentException("Rename memento missing target name: " + m.label());
+        }
+        return Paths.get(m.targetDirectory()).resolve(m.newName());
     }
 
 /**

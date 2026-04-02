@@ -86,6 +86,10 @@ private static final Set<String> LOGGED_RESOURCES = ConcurrentHashMap.newKeySet(
     private static volatile boolean RESOURCE_LOGGER_CONFIGURED;
     private static final String PROP_UI_FONT_PX = "main.uiFontPx";
     private static final String PROP_UI_FONT_FAMILY = "main.uiFontFamily";
+    public static final String PROP_STARTUP_WORK_QUEUE = "fileexplorer.startupWorkQueue";
+    public static final String PROP_STARTUP_STYLE_PROFILE = "fileexplorer.startupStyleProfile";
+    private static final String STARTUP_STYLE_PROFILE_SHELL = "shell";
+    private static final String STARTUP_STYLE_PROFILE_MAIN_UI = "main-ui";
 
     // Diagnostics (printed once per process).
     // Disable via: -Dfileexplorer.debug.printJvmArgs=false
@@ -419,8 +423,9 @@ try {
     shellScene.setFill(dark ? Color.web("#181818") : Color.web("#f3f3f3"));
 } catch (Throwable ignored) {
 }
-attachCriticalStylesheets(shellScene, dark);
-StartupTrace.mark("stylesheets attach (startup critical) end");
+attachStartupShellStylesheets(shellScene, dark);
+shellScene.getProperties().put(PROP_STARTUP_STYLE_PROFILE, STARTUP_STYLE_PROFILE_SHELL);
+StartupTrace.mark("stylesheets attach (startup critical shell) end");
 stage.setScene(shellScene);
 StartupTrace.mark("stage.setScene (styled shell scene)");
 if (!stage.isShowing()) {
@@ -577,6 +582,7 @@ stage.setOnCloseRequest(e -> {
         FileMetadataService fileMetadataService = new FileMetadataService();
         TreeBuildService treeBuildService = new TreeBuildService();
         EventBus eventBus = new EventBus();
+        StartupTrace.mark("ExplorerContext create begin");
         ExplorerContext context = new ExplorerContext(
                 themeService,
                 fileMetadataService,
@@ -586,11 +592,13 @@ stage.setOnCloseRequest(e -> {
                 isSafeMode()
         );
         contextRef.set(context);
+        StartupTrace.mark("ExplorerContext create end");
         ZoomRoot zoomRoot = new ZoomRoot(root);
 
 
 // Phase 4C.1: wrap UI root in a StackPane so we can host an optional perf HUD overlay.
 StackPane overlayRoot = new StackPane(zoomRoot.getRoot());
+StartupTrace.mark("overlay root created");
 	Scene scene = shellScene;
 
 	// Phase 4A.2: variables captured by deferred lambdas must be effectively final.
@@ -600,6 +608,12 @@ StackPane overlayRoot = new StackPane(zoomRoot.getRoot());
 // Phase 4A.2 / Phase 4M: centralize post-scene startup scheduling (CSS staging, idle work budget, bounded deferral).
 final com.fileexplorer.util.StartupWorkQueue workQueue = new com.fileexplorer.util.StartupWorkQueue();
 workQueue.attachToScene(scene);
+scene.getProperties().put(PROP_STARTUP_WORK_QUEUE, workQueue);
+
+StartupTrace.mark("stylesheets attach (main-ui critical) begin");
+attachMainUiCriticalStylesheets(sceneForCss, darkActualForCss);
+sceneForCss.getProperties().put(PROP_STARTUP_STYLE_PROFILE, STARTUP_STYLE_PROFILE_MAIN_UI);
+StartupTrace.mark("stylesheets attach (main-ui critical) end");
 
 // Swap root in-place (single Scene) to avoid Scene churn during startup.
 scene.setRoot(overlayRoot);
@@ -609,8 +623,7 @@ markBootstrapState(stage, BootstrapState.MAIN_UI_ATTACHED);
 // Mark UI ready once the main root is installed; critical startup work can now drain promptly.
 workQueue.markUiReady();
 
-// Critical stylesheets are already attached before stage.show() so the shell and main UI
-// stay on one styled Scene from first frame onward. Keep only the deferred/noncritical layer here.
+// Keep only the noncritical layer here once the main UI critical bundle is present.
 final boolean deferCss = Boolean.parseBoolean(System.getProperty("fileexplorer.startup.deferCss", "true"));
 if (!deferCss) {
     StartupTrace.mark("stylesheets attach (deferred layer immediate) begin");
@@ -625,7 +638,9 @@ if (!deferCss) {
 }
 
         // Wire controller
+        StartupTrace.mark("controller resolve begin");
         MainController controller = loader.getController();
+        StartupTrace.mark("controller resolve end");
         ProgressPaneController progressPaneController = null;
         if (controller != null) {
             mainControllerRef.set(controller);
@@ -635,8 +650,10 @@ if (!deferCss) {
             StartupTrace.mark("controller.attach exit");
 
             // Phase 3.6.2: attach included controllers (e.g., ProgressPane)
+            StartupTrace.mark("progressPane controller resolve begin");
             Object ppcObj = loader.getNamespace().get("progressPaneController");
             progressPaneController = ppcObj instanceof ProgressPaneController ppc ? ppc : null;
+            StartupTrace.mark("progressPane controller resolve end");
             if (progressPaneController != null) {
                 progressPaneController.attach(context);
             }
@@ -675,11 +692,6 @@ if (!deferCss) {
         // Swap root in-place (single Scene) to avoid Scene churn during startup.
         StartupTrace.mark("shellScene.setRoot (main UI)");
 
-        // Phase 4M: enable thumbnail decoding on the idle queue instead of immediately after root swap.
-        workQueue.runIdle(() ->
-                com.fileexplorer.service.icon.AsyncThumbnailService.getInstance().setEnabled(true)
-        );
-
         // Phase 4C.1: heap pressure monitor (best-effort) to trim caches and prevent long-run creep.
         final com.fileexplorer.util.HeapPressureService heapPressure = new com.fileexplorer.util.HeapPressureService(
                 Double.parseDouble(System.getProperty("fileexplorer.heapPressure.threshold", "0.85")),
@@ -695,9 +707,10 @@ if (!deferCss) {
         // Ensure monitor stops on close (integrated into the existing close handler).
         heapPressureRef.set(heapPressure);
 
-        // Open the initial folder on the critical queue so the shell-to-content handoff is predictable.
+        // Phase 4P.9BY: keep shell-first startup minimal, then begin directory hydration only after
+        // the post-show handoff is complete.
         if (controller != null && initialFolder != null && claimInitialFolderOpen(stage)) {
-            workQueue.runCritical(() -> controller.openInitialFolder(initialFolder));
+            workQueue.runCritical(() -> controller.beginPostShowHydration(initialFolder));
         }
 
         // Phase 4C.1: optional successive-folder navigation soak runner.
@@ -834,16 +847,20 @@ if (!deferCss) {
 
 
 
-    private static void attachCriticalStylesheets(Scene scene, boolean darkActual) {
+    private static void attachStartupShellStylesheets(Scene scene, boolean darkActual) {
+        addStylesheet(scene, darkActual ? "/com/fileexplorer/ui/css/explorer-dark-win.css" : "/com/fileexplorer/ui/css/explorer-light-win.css");
+        addStylesheet(scene, "/com/fileexplorer/ui/css/window-chrome-parity.css");
+    }
+
+    private static void attachMainUiCriticalStylesheets(Scene scene, boolean darkActual) {
         addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-base.css");
+        addStylesheet(scene, darkActual ? "/com/fileexplorer/ui/css/explorer-dark-win.css" : "/com/fileexplorer/ui/css/explorer-light-win.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-win11.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-fluent.css");
-        addStylesheet(scene, darkActual ? "/com/fileexplorer/ui/css/explorer-dark-win.css" : "/com/fileexplorer/ui/css/explorer-light-win.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-win.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/ui_fixes.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/fluent-explorer.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/explorer-override-everything.css");
-        addStylesheet(scene, "/com/fileexplorer/ui/css/window-chrome-parity.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/address-command-parity.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/navigation-pane-parity.css");
         addStylesheet(scene, "/com/fileexplorer/ui/css/selection-state-tokens.css");

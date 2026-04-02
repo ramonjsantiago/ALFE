@@ -168,6 +168,55 @@ final class CommandStackStore {
             return CommandMemento.forBatch(cmd.id(), cmd.label(), at, cmd.isUndoable(), kids);
         }
 
+        if (cmd instanceof CreateDirectoryCommand createDirectoryCommand) {
+            Path directoryPath = createDirectoryCommand.directoryPath();
+            String target = directoryPath != null && directoryPath.getParent() != null
+                    ? directoryPath.getParent().toString()
+                    : null;
+            String newName = directoryPath != null && directoryPath.getFileName() != null
+                    ? directoryPath.getFileName().toString()
+                    : null;
+            return CommandMemento.forFileOp(
+                    CommandMemento.Kind.CREATE_DIRECTORY,
+                    cmd.id(),
+                    cmd.label(),
+                    at,
+                    cmd.isUndoable(),
+                    "CREATE_DIRECTORY",
+                    directoryPath == null ? List.of() : List.of(directoryPath.toString()),
+                    target,
+                    newName,
+                    false,
+                    false,
+                    false
+            );
+        }
+
+        if (cmd instanceof RenamePathCommand renamePathCommand) {
+            Path source = renamePathCommand.sourcePath();
+            Path targetPath = renamePathCommand.targetPath();
+            String targetDir = targetPath != null && targetPath.getParent() != null
+                    ? targetPath.getParent().toString()
+                    : null;
+            String newName = targetPath != null && targetPath.getFileName() != null
+                    ? targetPath.getFileName().toString()
+                    : null;
+            return CommandMemento.forFileOp(
+                    CommandMemento.Kind.RENAME_PATH,
+                    cmd.id(),
+                    cmd.label(),
+                    at,
+                    cmd.isUndoable(),
+                    "RENAME_PATH",
+                    source == null ? List.of() : List.of(source.toString()),
+                    targetDir,
+                    newName,
+                    false,
+                    false,
+                    false
+            );
+        }
+
         // File op
         if (cmd instanceof FileOperationCommand foc) {
             var req = foc.request();

@@ -1,1 +1,1 @@
-HOTFIX162 / Phase 4P.9BP — Background Surface Refresh, Clipboard Action Routing, and New-Menu Real Command Wiring
+HOTFIX171 / Phase 4P.9BY — Post-Show Directory Hydration, Deferred Icon/Thumbnail Warmup, and First-Interaction Readiness Parity

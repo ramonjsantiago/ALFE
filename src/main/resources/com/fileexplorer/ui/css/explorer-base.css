@@ -163,9 +163,16 @@
 /* Selection */
 .list-cell:selected,
 .tree-cell:selected,
-.table-row-cell:filled:selected,
+.table-row-cell:filled:selected {
+    -fx-background-color: #233a59;
+    -fx-background-insets: 0;
+}
+
+.list-cell:selected:focused,
+.tree-cell:selected:focused,
 .table-row-cell:filled:selected:focused {
-    -fx-background-color: -fx-selection-bar;
+    -fx-background-color: #2a4a7a;
+    -fx-background-insets: 0;
 }
 
 

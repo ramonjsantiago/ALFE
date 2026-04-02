@@ -164,6 +164,7 @@ public final class DirectoryLoadManager {
 public void loadProgressive(
         Path dir,
         boolean includeHidden,
+        int firstBatchSize,
         int batchSize,
         java.util.function.Consumer<java.util.List<FileItem>> onBatch,
         Runnable onDone,
@@ -194,7 +195,7 @@ if (dir == null) {
             // ignore stale start
             if (!Objects.equals(activeDir, dir) || activeCancel != cancel) return;
 
-            listingService.listProgressiveSync(dir, opts, cancel.token(), batchSize, batch -> {
+            listingService.listProgressiveSync(dir, opts, cancel.token(), firstBatchSize, batchSize, batch -> {
                 // stop if cancelled/stale
                 if (cancel.token().isCancelled()) return;
                 if (!Objects.equals(activeDir, dir) || activeCancel != cancel) return;

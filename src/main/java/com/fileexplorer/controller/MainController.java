@@ -108,6 +108,7 @@ import java.util.logging.Logger;
 import java.util.logging.Level;
 import com.fileexplorer.util.LogSupport;
 import com.fileexplorer.util.StartupTrace;
+import com.fileexplorer.util.StartupWorkQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -176,6 +177,7 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     private static final Insets FOLDER_TREE_CELL_PADDING = new Insets(4.0, 8.0, 4.0, 6.0);
     private static final String EXPLORER_ICON_TILE_PATH_KEY = "explorer.iconTilePath";
     private static final String EXPLORER_ICON_TILE_HOVER_HANDLER_KEY = "explorer.iconTileHoverHandlerInstalled";
+    private static final String EXPLORER_ICON_TILE_INLINE_RENAME_NODE_KEY = "explorer.iconTileInlineRenameNode";
     private static final double UI_FONT_DEFAULT_PX = 16.0;
     private static final double UI_FONT_MIN_PX = 12.0;
     private static final double UI_FONT_MAX_PX = 32.0;
@@ -304,6 +306,90 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     private Path inlineRenameTreePath;
     private Path pendingInlineRenameSelectionPath;
     private int pendingInlineRenameSelectionIndex = -1;
+    private Path pendingCreateAndRenamePath;
+    private InlineRenameSession pendingCreatedInlineRenameSession;
+    private InlineRenameSession activeInlineRenameSession;
+    private InlineRenameSession pendingInlineRenameRestoreSession;
+    private Path pendingInlineRenameDraftPath;
+    private String pendingInlineRenameDraftText;
+    private boolean pendingInlineRenameDraftSelectAll;
+    private Path inlineRenameEditTrackingPath;
+    private boolean inlineRenameExplicitFullNameEdit;
+    private InlineRenameSession pendingShellCommandRestoreSession;
+    private Path pendingShellCommandRestorePath;
+    private boolean pendingShellCommandRestoreFocusActiveSurface;
+    private boolean pendingReselectPreferIndexOnMissing;
+
+    private enum InlineRenameSessionKind { RENAME_EXISTING, CREATE_NEW }
+
+    private enum InlineRenameSurface { FILE_DETAILS, FILE_ICON, TREE }
+
+    private enum ExplorerCommandAction { EXECUTE, UNDO, REDO }
+
+    private static final class InlineRenameSession {
+        private final InlineRenameSessionKind kind;
+        private final InlineRenameSurface surface;
+        private final Path sourcePath;
+        private final String originalDisplayName;
+        private final java.util.List<Path> selectedPathsBefore;
+        private final Path focusPathBefore;
+        private final Path anchorPathBefore;
+        private final Path treeSelectionPathBefore;
+        private final int selectedIndexBefore;
+        private final int focusedIndexBefore;
+        private final ViewMode viewModeBefore;
+        private final boolean treeFocusedBefore;
+        private final boolean tableFocusedBefore;
+        private final boolean iconSurfaceFocusedBefore;
+        private final java.lang.ref.WeakReference<Node> priorFocusOwnerRef;
+        private String requestedName;
+        private Path pendingResultPath;
+        private boolean awaitingCompletion;
+        private Path commitViewportAnchorPath;
+        private int commitViewportAnchorIndex = -1;
+        private int commitViewportVisibleCount = -1;
+        private double commitFlowScrollValue = Double.NaN;
+        private double commitVirtualGridScrollValue = Double.NaN;
+        private double commitVirtualListScrollValue = Double.NaN;
+        private String originatingCommandId;
+
+        private InlineRenameSession(InlineRenameSessionKind kind,
+                                    InlineRenameSurface surface,
+                                    Path sourcePath,
+                                    String originalDisplayName,
+                                    java.util.List<Path> selectedPathsBefore,
+                                    Path focusPathBefore,
+                                    Path anchorPathBefore,
+                                    Path treeSelectionPathBefore,
+                                    int selectedIndexBefore,
+                                    int focusedIndexBefore,
+                                    ViewMode viewModeBefore,
+                                    boolean treeFocusedBefore,
+                                    boolean tableFocusedBefore,
+                                    boolean iconSurfaceFocusedBefore,
+                                    Node priorFocusOwner) {
+            this.kind = kind;
+            this.surface = surface;
+            this.sourcePath = sourcePath;
+            this.originalDisplayName = originalDisplayName;
+            this.selectedPathsBefore = selectedPathsBefore != null
+                    ? new java.util.ArrayList<>(selectedPathsBefore)
+                    : new java.util.ArrayList<>();
+            this.focusPathBefore = focusPathBefore;
+            this.anchorPathBefore = anchorPathBefore;
+            this.treeSelectionPathBefore = treeSelectionPathBefore;
+            this.selectedIndexBefore = selectedIndexBefore;
+            this.focusedIndexBefore = focusedIndexBefore;
+            this.viewModeBefore = viewModeBefore;
+            this.treeFocusedBefore = treeFocusedBefore;
+            this.tableFocusedBefore = tableFocusedBefore;
+            this.iconSurfaceFocusedBefore = iconSurfaceFocusedBefore;
+            this.priorFocusOwnerRef = new java.lang.ref.WeakReference<>(priorFocusOwner);
+        }
+    }
+
+    private int inlineRenameFocusGuardPulsesRemaining;
+    private boolean suppressTreeInlineRenameCancelEvent;
     private final java.util.List<Path> recentHomeLocations = new java.util.ArrayList<>();
     private final java.util.List<Path> userPinnedHomeLocations = new java.util.ArrayList<>();
     private boolean homeActive = false;
@@ -436,6 +522,12 @@ private volatile long hugeFolderScannedTotal = 0L;
     private final java.util.concurrent.atomic.AtomicBoolean startupTreeRootVisibleMarked = new java.util.concurrent.atomic.AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicBoolean startupInitialDirectoryLoadStarted = new java.util.concurrent.atomic.AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicBoolean startupInitialDirectoryLoadFinished = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicBoolean startupPostShowHydrationScheduled = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicBoolean startupInitialDirectoryFirstBatchCommitted = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicBoolean startupIconWarmupGateOpened = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicBoolean startupThumbnailWarmupGateOpened = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicBoolean startupFirstInteractionTrackingArmed = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicBoolean startupFirstInteractionReadyMarked = new java.util.concurrent.atomic.AtomicBoolean(false);
     private volatile boolean directoryLoading;
     private final List<Path> backHistory;
     private final List<Path> forwardHistory;
@@ -502,6 +594,12 @@ private final ExecutorService hoverPrefetchExecutor;
             javafx.util.Duration.millis(Long.getLong("fileexplorer.thumb.warmup.delayMs", 220L))
     );
     private final java.util.concurrent.atomic.AtomicLong folderThumbnailWarmupSeq = new java.util.concurrent.atomic.AtomicLong(0L);
+    private final javafx.animation.PauseTransition startupThumbnailGateDebounce = new javafx.animation.PauseTransition(
+            javafx.util.Duration.millis(Long.getLong("fileexplorer.startup.thumbnailGateDelayMs", 320L))
+    );
+    private final javafx.animation.PauseTransition startupFirstInteractionFallback = new javafx.animation.PauseTransition(
+            javafx.util.Duration.millis(Long.getLong("fileexplorer.startup.firstInteractionFallbackMs", 900L))
+    );
     // Phase 4I: coalesce expensive table.refresh() calls triggered by metadata fill.
     private final javafx.animation.PauseTransition tableRefreshDebounce = new javafx.animation.PauseTransition(
             javafx.util.Duration.millis(Long.getLong("fileexplorer.table.refreshDebounceMs", 75L))
@@ -567,6 +665,8 @@ private boolean hoverPrefetchEnabled;
         this.commandBarCompactionDebounce.setOnFinished(_ -> applyCommandBarCompactionNow(pendingCommandBarWidth));
         this.previewLoadDebounce.setOnFinished(_ -> loadPreviewThumbnailNow(previewLoadSeq.get(), pendingPreviewPath));
         this.folderThumbnailWarmupDebounce.setOnFinished(_ -> warmCurrentFolderThumbnailsNow(folderThumbnailWarmupSeq.get()));
+        this.startupThumbnailGateDebounce.setOnFinished(_ -> openStartupThumbnailWarmupGate());
+        this.startupFirstInteractionFallback.setOnFinished(_ -> noteStartupInteractionReady());
         this.iconViewportLayoutDebounce.setOnFinished(_ -> applyResponsiveIconViewportLayoutNow());
         this.tableViewportLayoutDebounce.setOnFinished(_ -> applyResponsiveTableViewportLayoutNow());
         this.tableRefreshDebounce.setOnFinished(_ -> {
@@ -1234,9 +1334,10 @@ private void initializeWithContext() {
                 uiFontFamilyResolved = s;
             }
         }
-        // Phase 4M: split deferred scene work into theme, font metrics, and motion so the first usable frame
-        // is not competing with every global CSS/layout pass at once.
-        Platform.runLater(() -> {
+        // Phase 4P.9BX: route theme/font/motion startup work through the shared startup queue when present
+        // so cold-start shell visibility is not competing with all follow-on CSS/layout work at once.
+        final StartupWorkQueue startupWorkQueue = scene.getProperties().get(MainApp.PROP_STARTUP_WORK_QUEUE) instanceof StartupWorkQueue q ? q : null;
+        final Runnable themeTask = () -> {
             try {
                 StartupTrace.mark("MainController.setScene deferred theme begin");
             } catch (Throwable ignored) {}
@@ -1248,34 +1349,43 @@ private void initializeWithContext() {
             try {
                 StartupTrace.mark("MainController.setScene deferred theme end");
             } catch (Throwable ignored) {}
-
+        };
+        final Runnable fontTask = () -> {
+            try {
+                StartupTrace.mark("MainController.setScene deferred font begin");
+            } catch (Throwable ignored) {}
+            try {
+                applyUiFontSize(scene);
+            } catch (Throwable ignored) {
+            }
+            try {
+                StartupTrace.mark("MainController.setScene deferred font end");
+            } catch (Throwable ignored) {}
+        };
+        final Runnable motionTask = () -> {
+            try {
+                StartupTrace.mark("MainController.setScene deferred motion begin");
+            } catch (Throwable ignored) {}
+            try {
+                FluentMotionSupport.install(root != null ? root : scene.getRoot());
+                Platform.runLater(() -> FluentMotionSupport.install(root != null ? root : scene.getRoot()));
+            } catch (Throwable ignored) {
+            }
+            try {
+                StartupTrace.mark("MainController.setScene deferred motion end");
+            } catch (Throwable ignored) {}
+        };
+        if (startupWorkQueue != null) {
+            startupWorkQueue.runCritical(themeTask);
+            startupWorkQueue.runIdle(fontTask);
+            startupWorkQueue.runIdle(motionTask);
+        } else {
             Platform.runLater(() -> {
-                try {
-                    StartupTrace.mark("MainController.setScene deferred font begin");
-                } catch (Throwable ignored) {}
-                try {
-                    applyUiFontSize(scene);
-                } catch (Throwable ignored) {
-                }
-                try {
-                    StartupTrace.mark("MainController.setScene deferred font end");
-                } catch (Throwable ignored) {}
+                themeTask.run();
+                Platform.runLater(fontTask);
+                Platform.runLater(() -> Platform.runLater(motionTask));
             });
-
-            Platform.runLater(() -> Platform.runLater(() -> {
-                try {
-                    StartupTrace.mark("MainController.setScene deferred motion begin");
-                } catch (Throwable ignored) {}
-                try {
-                    FluentMotionSupport.install(root != null ? root : scene.getRoot());
-                    Platform.runLater(() -> FluentMotionSupport.install(root != null ? root : scene.getRoot()));
-                } catch (Throwable ignored) {
-                }
-                try {
-                    StartupTrace.mark("MainController.setScene deferred motion end");
-                } catch (Throwable ignored) {}
-            }));
-        });
+        }
         // Phase 4B.2+: feed user-activity signals to the metadata budgeter so it can stay idle during interaction.
         try {
             scene.addEventFilter(javafx.scene.input.InputEvent.ANY, e -> {
@@ -1283,6 +1393,9 @@ private void initializeWithContext() {
                     metadataBudgetService.notifyUserActivity();
                 }
             });
+            scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> noteStartupInteractionReady());
+            scene.addEventFilter(javafx.scene.input.ScrollEvent.SCROLL, e -> noteStartupInteractionReady());
+            scene.addEventFilter(javafx.scene.input.KeyEvent.KEY_PRESSED, e -> noteStartupInteractionReady());
         } catch (Exception ignored) {
         }
         Platform.runLater(() -> {
@@ -1335,6 +1448,9 @@ private void initializeWithContext() {
         if (SAFE_MODE && !Boolean.getBoolean("fileexplorer.safeMode.allowInitialDirectoryLoad")) {
             setStatus("Safe Mode enabled: initial directory load is disabled. "
                 + "To load the initial directory anyway, run with -Dfileexplorer.safeMode.allowInitialDirectoryLoad=true.");
+            noteStartupInitialDirectoryFirstBatchCommitted();
+            noteStartupInteractionReady();
+            openStartupThumbnailWarmupGate();
             return;
         }
         if (SAFE_MODE) {
@@ -1344,12 +1460,17 @@ private void initializeWithContext() {
             return;
         }
         Path target = initialFolder.normalize();
-        Platform.runLater(() -> {
+        Runnable openTask = () -> {
             if (startupInitialDirectoryLoadStarted.compareAndSet(false, true)) {
-                StartupTrace.mark("initial directory load begin: " + target);
+                StartupTrace.mark("initial directory hydration begin: " + target);
             }
             navigateToFolder(target, false);
-        });
+        };
+        if (Platform.isFxApplicationThread()) {
+            openTask.run();
+        } else {
+            Platform.runLater(openTask);
+        }
     }
 
     /**
@@ -1366,6 +1487,66 @@ private void initializeWithContext() {
      */
     public com.fileexplorer.service.filesystem.FileMetadataBudgetService getMetadataBudgetService() {
         return metadataBudgetService;
+    }
+
+    /**
+     * Schedules the first directory hydration after the shell and main UI have both painted.
+     *
+     * @param initialFolder directory to hydrate once post-show startup work begins
+     */
+    public void beginPostShowHydration(Path initialFolder) {
+        if (initialFolder == null) {
+            return;
+        }
+        if (!startupPostShowHydrationScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        StartupTrace.mark("post-show hydration scheduled");
+        Runnable task = () -> {
+            startupFirstInteractionTrackingArmed.set(true);
+            StartupTrace.mark("begin post-show hydration");
+            openInitialFolder(initialFolder);
+        };
+        if (Platform.isFxApplicationThread()) {
+            Platform.runLater(() -> Platform.runLater(task));
+        } else {
+            Platform.runLater(() -> Platform.runLater(task));
+        }
+    }
+
+    private void noteStartupInitialDirectoryFirstBatchCommitted() {
+        if (!startupInitialDirectoryFirstBatchCommitted.compareAndSet(false, true)) {
+            return;
+        }
+        StartupTrace.mark("initial directory hydration first batch committed");
+        if (startupIconWarmupGateOpened.compareAndSet(false, true)) {
+            AsyncIconService.getInstance().setEnabled(true);
+            StartupTrace.mark("icon warmup gate open");
+        }
+        startupFirstInteractionFallback.playFromStart();
+    }
+
+    private void noteStartupInteractionReady() {
+        if (!startupFirstInteractionTrackingArmed.get() || !startupInitialDirectoryFirstBatchCommitted.get()) {
+            return;
+        }
+        if (!startupFirstInteractionReadyMarked.compareAndSet(false, true)) {
+            return;
+        }
+        StartupTrace.mark("first interaction ready");
+        startupThumbnailGateDebounce.playFromStart();
+    }
+
+    private void openStartupThumbnailWarmupGate() {
+        if (!startupFirstInteractionReadyMarked.get()) {
+            return;
+        }
+        if (!startupThumbnailWarmupGateOpened.compareAndSet(false, true)) {
+            return;
+        }
+        AsyncThumbnailService.getInstance().setEnabled(true);
+        StartupTrace.mark("thumbnail warmup gate open");
+        scheduleCurrentFolderThumbnailWarmup();
     }
     // ---------------------------------------------------------------------
     // FXML actions
@@ -1469,6 +1650,14 @@ private void initializeWithContext() {
             case "SIZE", "Size" -> SortKey.SIZE;
             default -> SortKey.NAME;
         };
+        toggleSortKeyFromToolbarMenu(newKey);
+        e.consume();
+    }
+
+    private void toggleSortKeyFromToolbarMenu(SortKey newKey) {
+        if (newKey == null) {
+            newKey = SortKey.NAME;
+        }
         if (newKey == currentSortKey) {
             sortAscending = !sortAscending;
         } else {
@@ -1476,7 +1665,23 @@ private void initializeWithContext() {
             sortAscending = true;
         }
         applyToolbarSort();
-        e.consume();
+    }
+
+    private void setSortKeyFromBackgroundMenu(SortKey newKey) {
+        if (newKey == null) {
+            newKey = SortKey.NAME;
+        }
+        if (newKey != currentSortKey) {
+            currentSortKey = newKey;
+            sortAscending = true;
+        }
+        applyToolbarSort();
+        setStatus("Sort by: " + switch (newKey) {
+            case NAME -> "Name";
+            case MODIFIED -> "Date modified";
+            case TYPE -> "Type";
+            case SIZE -> "Size";
+        });
     }
     @FXML
 /**
@@ -1539,19 +1744,9 @@ private void initializeWithContext() {
  * applyToolbarSort.
  *
  */
-    private void applyToolbarSort() {
-        if (tableItems == null) return;
-        // IMPORTANT: The TableView is bound to a SortedList whose comparator is driven by
-        // the TableView's internal sort order. If any column sort order is active (even implicitly),
-        // it will override the underlying list order.
-        // Toolbar sort is intended to behave like Explorer's sort button, so we clear any
-        // active column sort order first and then sort the backing list.
-        if (fileTable != null) {
-            try {
-                fileTable.getSortOrder().clear();
-            } catch (Exception ignore) {
-                // ignore
-            }
+    private void applyExplorerSortToTableItems() {
+        if (tableItems == null) {
+            return;
         }
         // Phase 4B.3: Huge-folder mode is optimized for low CPU; avoid expensive filesystem stat sorts.
         if (hugeFolderModeActive && (currentSortKey == SortKey.SIZE || currentSortKey == SortKey.MODIFIED)) {
@@ -1580,10 +1775,28 @@ private void initializeWithContext() {
                 try { return java.nio.file.Files.getLastModifiedTime(fi.path()).toMillis(); } catch (Exception ex) { return 0L; }
             }).thenComparing(fi -> fi.name() == null ? "" : fi.name(), String.CASE_INSENSITIVE_ORDER);
         };
-        // Explorer-style: directories first
+        // Explorer-style: directories first.
         cmp = java.util.Comparator.comparing((FileItem fi) -> !java.nio.file.Files.isDirectory(fi.path())).thenComparing(cmp);
-        if (!sortAscending) cmp = cmp.reversed();
+        if (!sortAscending) {
+            cmp = cmp.reversed();
+        }
         javafx.collections.FXCollections.sort(tableItems, cmp);
+    }
+
+    private void applyToolbarSort() {
+        // IMPORTANT: The TableView is bound to a SortedList whose comparator is driven by
+        // the TableView's internal sort order. If any column sort order is active (even implicitly),
+        // it will override the underlying list order.
+        // Toolbar sort is intended to behave like Explorer's sort button, so we clear any
+        // active column sort order first and then sort the backing list.
+        if (fileTable != null) {
+            try {
+                fileTable.getSortOrder().clear();
+            } catch (Exception ignore) {
+                // ignore
+            }
+        }
+        applyExplorerSortToTableItems();
         // Ensure TableView refreshes after a toolbar-driven resort.
         if (fileTable != null) {
             try {
@@ -1816,7 +2029,12 @@ if (e.isControlDown() && !e.isAltDown() && !e.isMetaDown() && !e.isShiftDown()) 
         if (code == KeyCode.Z) {
             try {
                 if (context != null && context.commandManager() != null && context.commandManager().canUndo()) {
+                    com.fileexplorer.service.ops.command.CommandManager.ExecutedCommand undoCommand = peekUndoCommand();
+                    InlineRenameSession shellStateSession = captureShellCommandRefreshSessionForUndoRedo(undoCommand != null ? undoCommand.command() : null);
                     context.commandManager().undo();
+                    applyShellStateRefreshPlanForUndoRedo(undoCommand != null ? undoCommand.command() : null,
+                            ExplorerCommandAction.UNDO,
+                            shellStateSession);
                 }
             } catch (Exception ex) {
                 LOG.log(Level.WARNING, "Undo failed", ex);
@@ -1827,7 +2045,12 @@ if (e.isControlDown() && !e.isAltDown() && !e.isMetaDown() && !e.isShiftDown()) 
         if (code == KeyCode.Y) {
             try {
                 if (context != null && context.commandManager() != null && context.commandManager().canRedo()) {
+                    com.fileexplorer.service.ops.command.CommandManager.ExecutedCommand redoCommand = peekRedoCommand();
+                    InlineRenameSession shellStateSession = captureShellCommandRefreshSessionForUndoRedo(redoCommand != null ? redoCommand.command() : null);
                     context.commandManager().redo();
+                    applyShellStateRefreshPlanForUndoRedo(redoCommand != null ? redoCommand.command() : null,
+                            ExplorerCommandAction.REDO,
+                            shellStateSession);
                 }
             } catch (Exception ex) {
                 LOG.log(Level.WARNING, "Redo failed", ex);
@@ -2493,6 +2716,21 @@ folderTree.setCellFactory(tv -> {
                 return new SimplePathTreeCell(treeFixedCellSize, treeBuildService, this::commitTreeInlineRename);
             }
             return new IconPathTreeCell(treeFixedCellSize, themeService, treeBuildService, this::commitTreeInlineRename);
+        });
+        folderTree.setOnEditCancel(event -> {
+            if (suppressTreeInlineRenameCancelEvent) {
+                return;
+            }
+            Path cancelledPath = null;
+            if (event != null && event.getTreeItem() != null) {
+                cancelledPath = event.getTreeItem().getValue();
+            }
+            if (cancelledPath == null) {
+                cancelledPath = inlineRenameTreePath;
+            }
+            if (cancelledPath != null) {
+                cancelInlineRenameSession(cancelledPath);
+            }
         });
         
         configureTreeContextMenu();
@@ -4038,12 +4276,14 @@ colType.setCellValueFactory(param -> {
                 }
             });
             renameField.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+                captureExplicitFullNameEditIntent(resolveEditingPath(), renameField, e);
                 if (e.getCode() == KeyCode.ESCAPE) {
                     suppressFocusCommit = true;
                     cancelInlineRename();
                     e.consume();
                 }
             });
+            renameField.addEventFilter(KeyEvent.KEY_TYPED, e -> captureExplicitFullNameEditIntent(resolveEditingPath(), renameField, e.getCharacter()));
             tableRowProperty().addListener((obs, oldR, newR) -> {
                 if (oldR != null) {
                     oldR.selectedProperty().removeListener(rowStateSync);
@@ -4055,9 +4295,13 @@ colType.setCellValueFactory(param -> {
             });
         }
 
-        private boolean isEditingTarget() {
+        private Path resolveEditingPath() {
             FileItem fi = getTableRow() != null ? getTableRow().getItem() : null;
-            Path p = fi != null ? fi.path() : null;
+            return fi != null ? fi.path() : null;
+        }
+
+        private boolean isEditingTarget() {
+            Path p = resolveEditingPath();
             return p != null && p.equals(inlineRenameTablePath);
         }
 
@@ -4091,13 +4335,13 @@ colType.setCellValueFactory(param -> {
             setText(null);
             if (isEditingTarget()) {
                 suppressFocusCommit = false;
-                renameField.setText(item);
+                renameField.setText(resolveInlineRenameInitialText(p, item));
                 box.getChildren().setAll(iconView, renameField);
                 setGraphic(box);
                 setMouseTransparent(false);
                 Platform.runLater(() -> {
                     renameField.requestFocus();
-                    renameField.selectAll();
+                    applyInlineRenameSelection(renameField, p, shouldSelectAllInlineRenameText(p));
                 });
             } else {
                 textLabel.setText(item);
@@ -4117,6 +4361,7 @@ colType.setCellValueFactory(param -> {
         private void cancelInlineRename() {
             suppressFocusCommit = false;
             Path p = inlineRenameTablePath;
+            clearPendingInlineRenameDraft();
             clearInlineRenameTargets();
             Platform.runLater(() -> restoreFocusToTablePath(p));
         }
@@ -5084,11 +5329,21 @@ colType.setCellValueFactory(param -> {
     private transient javafx.scene.control.MenuItem fileOpsDeleteItem;
     private transient javafx.scene.control.MenuItem fileOpsPropertiesItem;
     private transient javafx.scene.control.ContextMenu fileViewBackgroundMenu;
+    private transient javafx.scene.control.Menu fileViewBackgroundViewMenu;
+    private transient javafx.scene.control.Menu fileViewBackgroundSortMenu;
+    private transient javafx.scene.control.Menu fileViewBackgroundGroupMenu;
+    private transient javafx.scene.control.Menu fileViewBackgroundNewMenu;
+    private transient javafx.scene.control.MenuItem fileViewBackgroundUndoItem;
     private transient javafx.scene.control.MenuItem fileViewBackgroundPasteItem;
+    private transient javafx.scene.control.MenuItem fileViewBackgroundPasteShortcutItem;
     private transient javafx.scene.control.MenuItem fileViewBackgroundNewFolderItem;
+    private transient javafx.scene.control.MenuItem fileViewBackgroundNewTextDocumentItem;
+    private transient javafx.scene.control.MenuItem fileViewBackgroundNewUnsupportedItem;
     private transient javafx.scene.control.MenuItem fileViewBackgroundSelectAllItem;
     private transient javafx.scene.control.MenuItem fileViewBackgroundRefreshItem;
     private transient javafx.scene.control.MenuItem fileViewBackgroundPropertiesItem;
+    private transient java.util.EnumMap<ViewMode, javafx.scene.control.RadioMenuItem> fileViewBackgroundViewModeItems;
+    private transient java.util.EnumMap<SortKey, javafx.scene.control.RadioMenuItem> fileViewBackgroundSortItems;
     private FileItem getFocusedOrSelectedFileItem() {
         if (fileTable == null || fileTable.getItems() == null) {
             return null;
@@ -5141,12 +5396,245 @@ colType.setCellValueFactory(param -> {
         if (idx < 0) {
             return;
         }
-        fileTable.getSelectionModel().clearAndSelect(idx);
+        if (fileTable.getSelectionModel() != null) {
+            fileTable.getSelectionModel().clearAndSelect(idx);
+        }
         if (fileTable.getFocusModel() != null) {
             fileTable.getFocusModel().focus(idx);
         }
-        fileTable.scrollTo(Math.max(0, idx - 2));
-        fileTable.requestFocus();
+        scheduleExplorerPathVisibilityStabilization(path, true);
+    }
+
+    private void scheduleExplorerPathVisibilityStabilization(Path path, boolean focusActiveSurface) {
+        if (path == null) {
+            return;
+        }
+        ensureExplorerPathVisible(path, focusActiveSurface);
+        Platform.runLater(() -> {
+            ensureExplorerPathVisible(path, focusActiveSurface);
+            Platform.runLater(() -> {
+                ensureExplorerPathVisible(path, focusActiveSurface);
+                Platform.runLater(() -> ensureExplorerPathVisible(path, focusActiveSurface));
+            });
+        });
+    }
+
+    private void ensureExplorerPathVisible(Path path, boolean focusActiveSurface) {
+        if (path == null || fileTable == null) {
+            return;
+        }
+        int idx = findTableIndexForPath(path);
+        if (idx < 0) {
+            return;
+        }
+        if (fileTable.getFocusModel() != null) {
+            fileTable.getFocusModel().focus(idx);
+        }
+        if (viewMode == ViewMode.DETAILS) {
+            fileTable.scrollTo(Math.max(0, idx - 2));
+            if (focusActiveSurface) {
+                fileTable.requestFocus();
+            }
+            return;
+        }
+        refreshActiveSelectionPresentation();
+        scrollActiveIconPathIntoView(path);
+        if (focusActiveSurface) {
+            requestActiveIconSurfaceFocus();
+        }
+    }
+
+    private void scrollActiveIconPathIntoView(Path path) {
+        if (path == null || !isIconMode(viewMode)) {
+            return;
+        }
+        int idx = findTableIndexForPath(path);
+        if (idx < 0) {
+            return;
+        }
+        if (virtualIconListView != null && virtualIconListView.isVisible()) {
+            virtualIconListView.scrollTo(Math.max(0, idx - 2));
+            return;
+        }
+        if (virtualIconGridView != null && virtualIconGridView.isVisible()) {
+            Object configuredItemsPerRow = virtualIconGridView.getProperties().get("iconGridItemsPerRow");
+            int itemsPerRow = configuredItemsPerRow instanceof Number number ? Math.max(1, number.intValue()) : Math.max(1, computeItemsPerIconRow());
+            int rowIndex = Math.max(0, idx / itemsPerRow);
+            virtualIconGridView.scrollTo(Math.max(0, rowIndex - 1));
+            return;
+        }
+        if (iconScroll == null || !iconScroll.isVisible()) {
+            return;
+        }
+        Platform.runLater(() -> {
+            Node tile = findVisibleExplorerIconTileByPath(path);
+            if (tile != null) {
+                ensureExplorerIconTileVisible(tile);
+            }
+        });
+    }
+
+    private boolean isPathVisibleInDetailsViewport(Path path) {
+        if (path == null || fileTable == null || !fileTable.isVisible()) {
+            return false;
+        }
+        java.util.List<TableRow<FileItem>> rows = collectVisibleDetailsRows();
+        for (TableRow<FileItem> row : rows) {
+            if (row != null && row.getItem() != null && java.util.Objects.equals(path, row.getItem().path())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void minimallyRevealPathInDetailsViewport(Path path, boolean focusActiveSurface) {
+        if (path == null || fileTable == null) {
+            return;
+        }
+        int idx = findTableIndexForPath(path);
+        if (idx < 0) {
+            return;
+        }
+        java.util.List<TableRow<FileItem>> rows = collectVisibleDetailsRows();
+        if (rows.isEmpty()) {
+            fileTable.scrollTo(Math.max(0, idx - 2));
+        } else {
+            int first = rows.get(0).getIndex();
+            int last = rows.get(rows.size() - 1).getIndex();
+            if (idx < first) {
+                fileTable.scrollTo(idx);
+            } else if (idx > last) {
+                int visibleCount = Math.max(1, rows.size());
+                fileTable.scrollTo(Math.max(0, idx - visibleCount + 1));
+            }
+        }
+        if (fileTable.getFocusModel() != null) {
+            fileTable.getFocusModel().focus(idx);
+        }
+        if (focusActiveSurface) {
+            fileTable.requestFocus();
+        }
+    }
+
+    private boolean isPathVisibleInIconViewport(Path path) {
+        if (path == null || !isIconMode(viewMode)) {
+            return false;
+        }
+        return findVisibleExplorerIconTileByPath(path) != null;
+    }
+
+    private void minimallyRevealPathInIconViewport(Path path, boolean focusActiveSurface) {
+        if (path == null || !isIconMode(viewMode)) {
+            return;
+        }
+        refreshActiveSelectionPresentation();
+        if (!isPathVisibleInIconViewport(path)) {
+            scrollActiveIconPathIntoView(path);
+        }
+        if (focusActiveSurface) {
+            requestActiveIconSurfaceFocus();
+        }
+    }
+
+    private void restoreInlineRenameCommitViewport(InlineRenameSession session) {
+        if (session == null || session.surface == InlineRenameSurface.TREE) {
+            return;
+        }
+        if (viewMode == ViewMode.DETAILS) {
+            if (fileTable == null) {
+                return;
+            }
+            Path anchorPath = session.commitViewportAnchorPath;
+            if (anchorPath != null) {
+                int idx = findTableIndexForPath(anchorPath);
+                if (idx >= 0) {
+                    fileTable.scrollTo(idx);
+                }
+            }
+            return;
+        }
+        if (virtualIconGridView != null && virtualIconGridView.isVisible()) {
+            restoreVerticalScrollValue(virtualIconGridView, session.commitVirtualGridScrollValue);
+        }
+        if (virtualIconListView != null && virtualIconListView.isVisible()) {
+            restoreVerticalScrollValue(virtualIconListView, session.commitVirtualListScrollValue);
+        }
+        if (iconScroll != null && iconScroll.isVisible() && !Double.isNaN(session.commitFlowScrollValue)) {
+            double clamped = Math.max(0.0, Math.min(1.0, session.commitFlowScrollValue));
+            Platform.runLater(() -> iconScroll.setVvalue(clamped));
+        }
+        if (session.commitViewportAnchorPath != null && !java.util.Objects.equals(session.commitViewportAnchorPath, session.pendingResultPath)) {
+            Platform.runLater(() -> {
+                if (!isPathVisibleInIconViewport(session.commitViewportAnchorPath)) {
+                    scrollActiveIconPathIntoView(session.commitViewportAnchorPath);
+                }
+            });
+        }
+    }
+
+    private void restoreInlineRenameCommitViewportAndReveal(InlineRenameSession session,
+                                                            Path committedPath,
+                                                            boolean focusActiveSurface) {
+        if (session == null) {
+            if (committedPath != null) {
+                scheduleExplorerPathVisibilityStabilization(committedPath, focusActiveSurface);
+            }
+            return;
+        }
+        restoreInlineRenameCommitViewport(session);
+        Platform.runLater(() -> {
+            if (viewMode == ViewMode.DETAILS) {
+                minimallyRevealPathInDetailsViewport(committedPath, focusActiveSurface);
+                Platform.runLater(() -> minimallyRevealPathInDetailsViewport(committedPath, focusActiveSurface));
+                return;
+            }
+            minimallyRevealPathInIconViewport(committedPath, focusActiveSurface);
+            Platform.runLater(() -> minimallyRevealPathInIconViewport(committedPath, focusActiveSurface));
+        });
+    }
+
+    private Node findVisibleExplorerIconTileByPath(Path path) {
+        if (path == null) {
+            return null;
+        }
+        for (Node tile : collectVisibleExplorerIconTiles()) {
+            if (java.util.Objects.equals(path, pathForExplorerIconTile(tile))) {
+                return tile;
+            }
+        }
+        return null;
+    }
+
+    private void ensureExplorerIconTileVisible(Node tile) {
+        if (tile == null || iconScroll == null || iconFlow == null) {
+            return;
+        }
+        Bounds tileBounds = iconFlow.sceneToLocal(tile.localToScene(tile.getBoundsInLocal()));
+        Bounds viewportBounds = iconScroll.getViewportBounds();
+        if (tileBounds == null || viewportBounds == null) {
+            return;
+        }
+        double contentHeight = iconFlow.getBoundsInLocal().getHeight();
+        double viewportHeight = viewportBounds.getHeight();
+        if (contentHeight <= 0.0 || viewportHeight <= 0.0 || contentHeight <= viewportHeight) {
+            return;
+        }
+        double currentPixels = iconScroll.getVvalue() * Math.max(0.0, contentHeight - viewportHeight);
+        double tileMinY = tileBounds.getMinY();
+        double tileMaxY = tileBounds.getMaxY();
+        double targetPixels = currentPixels;
+        if (tileMinY < currentPixels) {
+            targetPixels = tileMinY;
+        } else if (tileMaxY > currentPixels + viewportHeight) {
+            targetPixels = tileMaxY - viewportHeight;
+        }
+        double maxPixels = Math.max(0.0, contentHeight - viewportHeight);
+        double clampedPixels = Math.max(0.0, Math.min(maxPixels, targetPixels));
+        if (maxPixels <= 0.0) {
+            iconScroll.setVvalue(0.0);
+            return;
+        }
+        iconScroll.setVvalue(clampedPixels / maxPixels);
     }
 
     private void hideExplorerTransientUi() {
@@ -5208,7 +5696,7 @@ colType.setCellValueFactory(param -> {
             fileOpsMenu = createExplorerContextMenu();
             fileOpsOpenItem = createExplorerMenuItem("Open", "", this::openSelection);
             fileOpsOpenInNewTabItem = createExplorerMenuItem("Open in new tab", "", this::openSelectionInNewTab);
-            fileOpsPinToQuickAccessItem = createExplorerMenuItem("Pin to Quick access", "", this::pinSelectionToQuickAccess);
+            fileOpsPinToQuickAccessItem = createExplorerMenuItem("Pin to Quick access", "", this::toggleSelectionQuickAccessPin);
             fileOpsCopyItem = createExplorerMenuItem("Copy", "", () -> copySelection(false));
             fileOpsCutItem = createExplorerMenuItem("Cut", "", () -> copySelection(true));
             fileOpsPasteItem = createExplorerMenuItem("Paste", "", this::pasteIntoCurrentDirectory);
@@ -5229,24 +5717,7 @@ colType.setCellValueFactory(param -> {
                     fileOpsDeleteItem,
                     createExplorerSeparator(),
                     fileOpsPropertiesItem);
-            fileOpsMenu.setOnShowing(e -> {
-                int selectionCount = fileTable.getSelectionModel() != null
-                        ? fileTable.getSelectionModel().getSelectedItems().size()
-                        : 0;
-                boolean hasSelection = selectionCount > 0;
-                boolean singleSelection = selectionCount == 1;
-                Path primarySelection = getPrimarySelection();
-                boolean singleDirectorySelection = singleSelection && isDirectoryPath(primarySelection);
-                fileOpsOpenItem.setDisable(!hasSelection);
-                fileOpsOpenInNewTabItem.setDisable(!singleDirectorySelection);
-                fileOpsPinToQuickAccessItem.setDisable(!singleDirectorySelection);
-                fileOpsCopyItem.setDisable(!hasSelection);
-                fileOpsCutItem.setDisable(!hasSelection);
-                fileOpsPasteItem.setDisable(currentDirectory == null || clipboardPaths.isEmpty());
-                fileOpsRenameItem.setDisable(!singleSelection);
-                fileOpsDeleteItem.setDisable(!hasSelection);
-                fileOpsPropertiesItem.setDisable(!singleSelection);
-            });
+            fileOpsMenu.setOnShowing(e -> syncFileOpsMenuState());
             fileTable.getProperties().put(com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.PROP_FILEOPS_MENU, fileOpsMenu);
         }
         Object header = fileTable.getProperties().get(com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.PROP_HEADER_MENU);
@@ -5260,6 +5731,1252 @@ colType.setCellValueFactory(param -> {
             return;
         }
         fileOpsMenu.show(anchor, screenX, screenY);
+    }
+
+    private void setExplorerMenuItemLabel(javafx.scene.control.MenuItem item, String text) {
+        if (item == null || text == null) {
+            return;
+        }
+        if (!java.util.Objects.equals(item.getText(), text)) {
+            item.setText(text);
+        }
+    }
+
+    private com.fileexplorer.service.ops.command.CommandManager.ExecutedCommand peekUndoCommand() {
+        try {
+            if (context == null || context.commandManager() == null) {
+                return null;
+            }
+            java.util.List<com.fileexplorer.service.ops.command.CommandManager.ExecutedCommand> undoStack =
+                    context.commandManager().undoStackSnapshot();
+            return undoStack.isEmpty() ? null : undoStack.get(0);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private com.fileexplorer.service.ops.command.CommandManager.ExecutedCommand peekRedoCommand() {
+        try {
+            if (context == null || context.commandManager() == null) {
+                return null;
+            }
+            java.util.List<com.fileexplorer.service.ops.command.CommandManager.ExecutedCommand> redoStack =
+                    context.commandManager().redoStackSnapshot();
+            return redoStack.isEmpty() ? null : redoStack.get(0);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private boolean isShellStateManagedCommand(com.fileexplorer.service.ops.command.Command command) {
+        return command instanceof com.fileexplorer.service.ops.command.CreateDirectoryCommand
+                || command instanceof com.fileexplorer.service.ops.command.RenamePathCommand;
+    }
+
+    private InlineRenameSession captureShellCommandRefreshSessionForUndoRedo(com.fileexplorer.service.ops.command.Command command) {
+        if (!isShellStateManagedCommand(command)) {
+            return null;
+        }
+        Path sourcePath = null;
+        if (command instanceof com.fileexplorer.service.ops.command.CreateDirectoryCommand createDirectoryCommand) {
+            sourcePath = createDirectoryCommand.directoryPath();
+        } else if (command instanceof com.fileexplorer.service.ops.command.RenamePathCommand renamePathCommand) {
+            sourcePath = renamePathCommand.sourcePath();
+        }
+        InlineRenameSession session = captureInlineRenameSession(sourcePath,
+                InlineRenameSessionKind.RENAME_EXISTING,
+                resolveInlineRenameSurfaceForCurrentView());
+        captureInlineRenameCommitViewport(session);
+        return session;
+    }
+
+    private void scheduleShellCommandRestoreAfterRefresh(InlineRenameSession session,
+                                                         Path targetPath,
+                                                         boolean focusActiveSurface) {
+        pendingShellCommandRestoreSession = session;
+        pendingShellCommandRestorePath = targetPath;
+        pendingShellCommandRestoreFocusActiveSurface = focusActiveSurface;
+    }
+
+    private void clearPendingShellCommandRestore() {
+        pendingShellCommandRestoreSession = null;
+        pendingShellCommandRestorePath = null;
+        pendingShellCommandRestoreFocusActiveSurface = false;
+    }
+
+    private void applyShellStateRefreshPlanForUndoRedo(com.fileexplorer.service.ops.command.Command command,
+                                                       ExplorerCommandAction action,
+                                                       InlineRenameSession session) {
+        if (!isShellStateManagedCommand(command) || session == null) {
+            syncExplorerContextMenuShellState();
+            return;
+        }
+        if (command instanceof com.fileexplorer.service.ops.command.CreateDirectoryCommand createDirectoryCommand) {
+            Path directoryPath = createDirectoryCommand.directoryPath();
+            if (action == ExplorerCommandAction.UNDO) {
+                pendingRestoreSelection = true;
+                pendingReselectPath = directoryPath;
+                pendingReselectIndex = findTableIndexForPath(directoryPath);
+                pendingReselectPreferIndexOnMissing = true;
+                scheduleShellCommandRestoreAfterRefresh(session, null, true);
+            } else {
+                pendingInlineRenameSelectionPath = directoryPath;
+                pendingInlineRenameSelectionIndex = findTableIndexForPath(directoryPath);
+                pendingReselectPreferIndexOnMissing = false;
+                scheduleShellCommandRestoreAfterRefresh(session, directoryPath, true);
+            }
+            refresh();
+            syncExplorerContextMenuShellState();
+            return;
+        }
+        if (command instanceof com.fileexplorer.service.ops.command.RenamePathCommand renamePathCommand) {
+            Path targetPath = action == ExplorerCommandAction.UNDO
+                    ? renamePathCommand.sourcePath()
+                    : renamePathCommand.targetPath();
+            pendingInlineRenameSelectionPath = targetPath;
+            pendingInlineRenameSelectionIndex = findTableIndexForPath(action == ExplorerCommandAction.UNDO
+                    ? renamePathCommand.targetPath()
+                    : renamePathCommand.sourcePath());
+            pendingReselectPreferIndexOnMissing = false;
+            scheduleShellCommandRestoreAfterRefresh(session, targetPath, true);
+            refresh();
+            syncExplorerContextMenuShellState();
+        }
+    }
+
+    private void applyPendingShellCommandRestoreIfNeeded(Path directory) {
+        if (pendingShellCommandRestoreSession == null) {
+            return;
+        }
+        InlineRenameSession session = pendingShellCommandRestoreSession;
+        Path targetPath = pendingShellCommandRestorePath;
+        if (targetPath != null && directory != null && targetPath.getParent() != null
+                && !java.util.Objects.equals(directory, targetPath.getParent())) {
+            return;
+        }
+        boolean focusActiveSurface = pendingShellCommandRestoreFocusActiveSurface;
+        clearPendingShellCommandRestore();
+        if (targetPath != null) {
+            restoreInlineRenameCommitViewportAndReveal(session, targetPath, focusActiveSurface);
+            Platform.runLater(() -> requestFocusForInlineRenameSession(session));
+            armInlineRenameFocusGuard();
+            return;
+        }
+        restoreInlineRenameCommitViewport(session);
+        Platform.runLater(() -> requestFocusForInlineRenameSession(session));
+        armInlineRenameFocusGuard();
+    }
+
+    private String formatUndoMenuLabel() {
+        com.fileexplorer.service.ops.command.CommandManager.ExecutedCommand undoCommand = peekUndoCommand();
+        if (undoCommand == null || undoCommand.command() == null) {
+            return "Undo";
+        }
+        String label;
+        try {
+            label = undoCommand.command().label();
+        } catch (Exception ex) {
+            label = null;
+        }
+        if (label == null || label.isBlank()) {
+            return "Undo";
+        }
+        String compact = label.strip();
+        if (compact.length() > 72) {
+            compact = compact.substring(0, 71) + "…";
+        }
+        return "Undo " + compact;
+    }
+
+    private boolean isPathPinnedToQuickAccess(Path path) {
+        if (path == null) {
+            return false;
+        }
+        Path normalized = path.normalize();
+        for (Path existing : userPinnedHomeLocations) {
+            if (existing != null && java.util.Objects.equals(existing.normalize(), normalized)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean canPasteIntoCurrentDirectory() {
+        Path targetDirectory = resolveActiveDirectoryForShellCommands();
+        if (targetDirectory == null || clipboardPaths.isEmpty()) {
+            return false;
+        }
+        if (!clipboardCut) {
+            return true;
+        }
+        Path normalizedTarget = targetDirectory.normalize();
+        for (Path clipboardPath : clipboardPaths) {
+            if (clipboardPath == null) {
+                return true;
+            }
+            Path parent = clipboardPath.getParent();
+            if (parent == null || !java.util.Objects.equals(parent.normalize(), normalizedTarget)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void syncFileOpsMenuState() {
+        int selectionCount = fileTable != null && fileTable.getSelectionModel() != null
+                ? fileTable.getSelectionModel().getSelectedItems().size()
+                : 0;
+        boolean hasSelection = selectionCount > 0;
+        boolean singleSelection = selectionCount == 1;
+        Path primarySelection = getPrimarySelection();
+        boolean singleDirectorySelection = singleSelection && isDirectoryPath(primarySelection);
+        boolean pinnedDirectorySelection = singleDirectorySelection && isPathPinnedToQuickAccess(primarySelection);
+        if (fileOpsOpenItem != null) {
+            setExplorerMenuItemLabel(fileOpsOpenItem, "Open");
+            fileOpsOpenItem.setDisable(!hasSelection);
+        }
+        if (fileOpsOpenInNewTabItem != null) {
+            setExplorerMenuItemLabel(fileOpsOpenInNewTabItem, "Open in new tab");
+            fileOpsOpenInNewTabItem.setDisable(!singleDirectorySelection);
+        }
+        if (fileOpsPinToQuickAccessItem != null) {
+            setExplorerMenuItemLabel(fileOpsPinToQuickAccessItem,
+                    pinnedDirectorySelection ? "Unpin from Quick access" : "Pin to Quick access");
+            fileOpsPinToQuickAccessItem.setDisable(!singleDirectorySelection);
+        }
+        if (fileOpsCopyItem != null) {
+            setExplorerMenuItemLabel(fileOpsCopyItem, "Copy");
+            fileOpsCopyItem.setDisable(!hasSelection);
+        }
+        if (fileOpsCutItem != null) {
+            setExplorerMenuItemLabel(fileOpsCutItem, "Cut");
+            fileOpsCutItem.setDisable(!hasSelection);
+        }
+        if (fileOpsPasteItem != null) {
+            setExplorerMenuItemLabel(fileOpsPasteItem, "Paste");
+            fileOpsPasteItem.setDisable(!canPasteIntoCurrentDirectory());
+        }
+        if (fileOpsRenameItem != null) {
+            setExplorerMenuItemLabel(fileOpsRenameItem, "Rename");
+            fileOpsRenameItem.setDisable(!singleSelection);
+        }
+        if (fileOpsDeleteItem != null) {
+            setExplorerMenuItemLabel(fileOpsDeleteItem, "Delete");
+            fileOpsDeleteItem.setDisable(!hasSelection);
+        }
+        if (fileOpsPropertiesItem != null) {
+            setExplorerMenuItemLabel(fileOpsPropertiesItem, "Properties");
+            fileOpsPropertiesItem.setDisable(!singleSelection);
+        }
+    }
+
+    private void syncExplorerContextMenuShellState() {
+        syncFileOpsMenuState();
+        syncFileViewBackgroundMenuState();
+    }
+
+    private Node resolveExplorerContextMenuAnchor(Node requestedAnchor) {
+        if (requestedAnchor != null && requestedAnchor.getScene() != null) {
+            if (requestedAnchor == fileTable || requestedAnchor == detailsViewShell || requestedAnchor == viewHost) {
+                return requestedAnchor;
+            }
+            if (isNodeWithinActiveIconSurface(requestedAnchor) || isNodeWithinDetailsSelectionSurface(requestedAnchor)) {
+                return requestedAnchor;
+            }
+        }
+        return getActiveFileOpsMenuAnchor();
+    }
+
+
+    private Path resolveActiveDirectoryForShellCommands() {
+        if (currentDirectory != null) {
+            return currentDirectory;
+        }
+        if (context != null) {
+            try {
+                return context.currentDirectory();
+            } catch (Exception ex) {
+                LOG.log(Level.FINEST, "Could not resolve current directory from context", ex);
+            }
+        }
+        return null;
+    }
+
+
+    private InlineRenameSurface resolveInlineRenameSurfaceForCurrentView() {
+        return viewMode == ViewMode.DETAILS ? InlineRenameSurface.FILE_DETAILS : InlineRenameSurface.FILE_ICON;
+    }
+
+    private Scene resolveControllerScene() {
+        if (boundScene != null) {
+            return boundScene;
+        }
+        if (root != null && root.getScene() != null) {
+            return root.getScene();
+        }
+        if (fileTable != null && fileTable.getScene() != null) {
+            return fileTable.getScene();
+        }
+        if (folderTree != null && folderTree.getScene() != null) {
+            return folderTree.getScene();
+        }
+        return null;
+    }
+
+    private InlineRenameSession captureInlineRenameSession(Path path,
+                                                           InlineRenameSessionKind kind,
+                                                           InlineRenameSurface surface) {
+        Path treeSelectionPath = null;
+        if (folderTree != null && folderTree.getSelectionModel() != null) {
+            TreeItem<Path> treeSelection = folderTree.getSelectionModel().getSelectedItem();
+            treeSelectionPath = treeSelection != null ? treeSelection.getValue() : null;
+        }
+        Scene scene = resolveControllerScene();
+        Node priorFocusOwner = scene != null ? scene.getFocusOwner() : null;
+        Path focusPath = getFocusedOrSelectedPath();
+        Path anchorPath = iconSelectionAnchorPath != null ? iconSelectionAnchorPath : focusPath;
+        int selectedIndex = fileTable != null && fileTable.getSelectionModel() != null
+                ? fileTable.getSelectionModel().getSelectedIndex()
+                : -1;
+        int focusedIndex = fileTable != null && fileTable.getFocusModel() != null
+                ? fileTable.getFocusModel().getFocusedIndex()
+                : -1;
+        return new InlineRenameSession(
+                kind,
+                surface,
+                path,
+                displayNameForTable(path),
+                getSelectedItems(),
+                focusPath,
+                anchorPath,
+                treeSelectionPath,
+                selectedIndex,
+                focusedIndex,
+                viewMode,
+                folderTree != null && folderTree.isFocused(),
+                fileTable != null && fileTable.isFocused(),
+                isIconMode(viewMode) && isActiveIconSurfaceFocused(),
+                priorFocusOwner);
+    }
+
+    private void captureInlineRenameCommitViewport(InlineRenameSession session) {
+        if (session == null || session.surface == InlineRenameSurface.TREE) {
+            return;
+        }
+        session.commitViewportAnchorPath = null;
+        session.commitViewportAnchorIndex = -1;
+        session.commitViewportVisibleCount = -1;
+        session.commitFlowScrollValue = Double.NaN;
+        session.commitVirtualGridScrollValue = Double.NaN;
+        session.commitVirtualListScrollValue = Double.NaN;
+        if (viewMode == ViewMode.DETAILS) {
+            java.util.List<TableRow<FileItem>> rows = collectVisibleDetailsRows();
+            session.commitViewportVisibleCount = rows.size();
+            for (TableRow<FileItem> row : rows) {
+                if (row == null || row.getItem() == null || row.getItem().path() == null) {
+                    continue;
+                }
+                Path candidate = row.getItem().path();
+                if (!java.util.Objects.equals(candidate, session.sourcePath)) {
+                    session.commitViewportAnchorPath = candidate;
+                    session.commitViewportAnchorIndex = row.getIndex();
+                    break;
+                }
+            }
+            if (session.commitViewportAnchorPath == null && !rows.isEmpty()) {
+                TableRow<FileItem> row = rows.get(0);
+                if (row != null && row.getItem() != null) {
+                    session.commitViewportAnchorPath = row.getItem().path();
+                    session.commitViewportAnchorIndex = row.getIndex();
+                }
+            }
+            return;
+        }
+        if (iconScroll != null && iconScroll.isVisible()) {
+            session.commitFlowScrollValue = iconScroll.getVvalue();
+        }
+        session.commitVirtualGridScrollValue = captureVerticalScrollValue(virtualIconGridView);
+        session.commitVirtualListScrollValue = captureVerticalScrollValue(virtualIconListView);
+        session.commitViewportAnchorPath = captureFirstVisibleExplorerIconPath(session.sourcePath);
+    }
+
+    private double captureVerticalScrollValue(Node control) {
+        ScrollBar scrollBar = findVerticalScrollBar(control);
+        if (scrollBar == null) {
+            return Double.NaN;
+        }
+        return scrollBar.getValue();
+    }
+
+    private void restoreVerticalScrollValue(Node control, double value) {
+        if (control == null || Double.isNaN(value)) {
+            return;
+        }
+        Platform.runLater(() -> {
+            ScrollBar scrollBar = findVerticalScrollBar(control);
+            if (scrollBar == null) {
+                return;
+            }
+            double clamped = Math.max(scrollBar.getMin(), Math.min(scrollBar.getMax(), value));
+            scrollBar.setValue(clamped);
+        });
+    }
+
+    private Path captureFirstVisibleExplorerIconPath(Path excludedPath) {
+        java.util.List<Node> visibleTiles = collectVisibleExplorerIconTiles();
+        if (visibleTiles.isEmpty()) {
+            return null;
+        }
+        visibleTiles.sort((left, right) -> {
+            Bounds leftBounds = left.localToScene(left.getBoundsInLocal());
+            Bounds rightBounds = right.localToScene(right.getBoundsInLocal());
+            double leftMinY = leftBounds == null ? Double.MAX_VALUE : leftBounds.getMinY();
+            double rightMinY = rightBounds == null ? Double.MAX_VALUE : rightBounds.getMinY();
+            int cmp = Double.compare(leftMinY, rightMinY);
+            if (cmp != 0) {
+                return cmp;
+            }
+            double leftMinX = leftBounds == null ? Double.MAX_VALUE : leftBounds.getMinX();
+            double rightMinX = rightBounds == null ? Double.MAX_VALUE : rightBounds.getMinX();
+            return Double.compare(leftMinX, rightMinX);
+        });
+        Path fallback = null;
+        for (Node tile : visibleTiles) {
+            Path tilePath = pathForExplorerIconTile(tile);
+            if (tilePath == null) {
+                continue;
+            }
+            if (fallback == null) {
+                fallback = tilePath;
+            }
+            if (!java.util.Objects.equals(tilePath, excludedPath)) {
+                return tilePath;
+            }
+        }
+        return fallback;
+    }
+
+    private InlineRenameSession consumePendingCreatedInlineRenameSession(Path path) {
+        if (path == null || pendingCreatedInlineRenameSession == null) {
+            return null;
+        }
+        if (!java.util.Objects.equals(path, pendingCreatedInlineRenameSession.sourcePath)) {
+            return null;
+        }
+        InlineRenameSession session = pendingCreatedInlineRenameSession;
+        pendingCreatedInlineRenameSession = null;
+        pendingCreateAndRenamePath = null;
+        return session;
+    }
+
+    private boolean isInlineRenameFocusGuardActive() {
+        return inlineRenameFocusGuardPulsesRemaining > 0
+                || (activeInlineRenameSession != null && activeInlineRenameSession.awaitingCompletion);
+    }
+
+    private void armInlineRenameFocusGuard() {
+        inlineRenameFocusGuardPulsesRemaining = Math.max(inlineRenameFocusGuardPulsesRemaining, 4);
+        Platform.runLater(this::advanceInlineRenameFocusGuard);
+    }
+
+    private void advanceInlineRenameFocusGuard() {
+        if (inlineRenameFocusGuardPulsesRemaining <= 0) {
+            return;
+        }
+        inlineRenameFocusGuardPulsesRemaining--;
+        if (inlineRenameFocusGuardPulsesRemaining > 0) {
+            Platform.runLater(this::advanceInlineRenameFocusGuard);
+        }
+    }
+
+    private boolean restorePriorInlineRenameFocusOwner(InlineRenameSession session) {
+        if (session == null || session.priorFocusOwnerRef == null) {
+            return false;
+        }
+        Node priorFocusOwner = session.priorFocusOwnerRef.get();
+        if (priorFocusOwner == null || priorFocusOwner.getScene() == null) {
+            return false;
+        }
+        try {
+            priorFocusOwner.requestFocus();
+            return priorFocusOwner.isFocused();
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    private void requestFocusForInlineRenameSession(InlineRenameSession session) {
+        if (restorePriorInlineRenameFocusOwner(session)) {
+            return;
+        }
+        if (session != null && (session.surface == InlineRenameSurface.TREE || session.treeFocusedBefore)) {
+            if (folderTree != null) {
+                folderTree.requestFocus();
+                return;
+            }
+        }
+        if (session != null && (session.surface == InlineRenameSurface.FILE_ICON || session.iconSurfaceFocusedBefore)) {
+            requestActiveIconSurfaceFocus();
+            return;
+        }
+        requestActiveDetailsSurfaceFocus();
+    }
+
+    private void clearSelectionWithoutStatusUpdate() {
+        if (fileTable != null && fileTable.getSelectionModel() != null) {
+            fileTable.getSelectionModel().clearSelection();
+        }
+        if (fileTable != null && fileTable.getFocusModel() != null) {
+            fileTable.getFocusModel().focus(-1);
+        }
+        iconSelectionAnchorPath = null;
+        replaceDetailsPresentationSelectedPaths(java.util.Collections.emptySet());
+        replaceIconPresentationSelectedPaths(java.util.Collections.emptySet());
+        refreshActiveSelectionPresentation();
+    }
+
+    private void restoreInlineRenameSessionSelectionAndFocus(InlineRenameSession session) {
+        if (session == null) {
+            return;
+        }
+        if (session.surface == InlineRenameSurface.TREE) {
+            if (session.treeSelectionPathBefore != null) {
+                expandAndSelectFolder(session.treeSelectionPathBefore);
+            }
+            Platform.runLater(() -> requestFocusForInlineRenameSession(session));
+            return;
+        }
+        if (!session.selectedPathsBefore.isEmpty()) {
+            Path focusPath = session.focusPathBefore;
+            if (focusPath == null || !session.selectedPathsBefore.contains(focusPath)) {
+                focusPath = session.anchorPathBefore != null && session.selectedPathsBefore.contains(session.anchorPathBefore)
+                        ? session.anchorPathBefore
+                        : session.selectedPathsBefore.get(0);
+            }
+            applyExplorerPathSelection(session.selectedPathsBefore, focusPath);
+            if (focusPath != null) {
+                scheduleExplorerPathVisibilityStabilization(focusPath, false);
+            }
+        } else if (session.focusPathBefore != null) {
+            restoreFocusToTablePath(session.focusPathBefore);
+        } else {
+            clearSelectionWithoutStatusUpdate();
+        }
+        Platform.runLater(() -> requestFocusForInlineRenameSession(session));
+    }
+
+    private void finalizeInlineRenameCommitSuccess(InlineRenameSession session, Path committedPath) {
+        finalizeInlineRenameCommitSuccess(session, committedPath, false);
+    }
+
+    private void finalizeInlineRenameCommitSuccess(InlineRenameSession session,
+                                                   Path committedPath,
+                                                   boolean preserveViewport) {
+        if (session == null) {
+            return;
+        }
+        session.awaitingCompletion = false;
+        session.pendingResultPath = null;
+        clearPendingInlineRenameDraft();
+        if (activeInlineRenameSession == session) {
+            activeInlineRenameSession = null;
+        }
+        if (committedPath != null) {
+            if (session.surface == InlineRenameSurface.TREE) {
+                expandAndSelectFolder(committedPath);
+                Platform.runLater(() -> requestFocusForInlineRenameSession(session));
+            } else {
+                applyExplorerPathSelection(java.util.Set.of(committedPath), committedPath);
+                if (preserveViewport) {
+                    restoreInlineRenameCommitViewportAndReveal(session, committedPath, true);
+                    Platform.runLater(() -> requestFocusForInlineRenameSession(session));
+                } else {
+                    scheduleExplorerPathVisibilityStabilization(committedPath, true);
+                    Platform.runLater(() -> requestFocusForInlineRenameSession(session));
+                }
+            }
+        } else {
+            restoreInlineRenameSessionSelectionAndFocus(session);
+        }
+        armInlineRenameFocusGuard();
+    }
+
+    private void handleInlineRenameOperationFailed(InlineRenameSession session, Path source, String requestedName, String statusMessage) {
+        pendingInlineRenameSelectionPath = null;
+        pendingInlineRenameSelectionIndex = -1;
+        if (session != null) {
+            session.awaitingCompletion = false;
+            session.pendingResultPath = null;
+            activeInlineRenameSession = session;
+        }
+        if (statusMessage != null && !statusMessage.isBlank()) {
+            setStatus(statusMessage);
+        }
+        if (source != null && Files.exists(source)) {
+            retryInlineRename(source, requestedName, true);
+            return;
+        }
+        if (session != null) {
+            restoreInlineRenameSessionSelectionAndFocus(session);
+            if (activeInlineRenameSession == session) {
+                activeInlineRenameSession = null;
+            }
+        }
+    }
+
+    private void bindInlineRenameOperationHandle(com.fileexplorer.service.ops.OperationHandle handle,
+                                                 InlineRenameSession session,
+                                                 Path source,
+                                                 String requestedName) {
+        if (handle == null) {
+            refresh();
+            return;
+        }
+        handle.statusProperty().addListener(new javafx.beans.value.ChangeListener<com.fileexplorer.service.ops.OperationStatus>() {
+            @Override
+            public void changed(javafx.beans.value.ObservableValue<? extends com.fileexplorer.service.ops.OperationStatus> observable,
+                                com.fileexplorer.service.ops.OperationStatus oldValue,
+                                com.fileexplorer.service.ops.OperationStatus newValue) {
+                if (newValue == null) {
+                    return;
+                }
+                switch (newValue) {
+                    case COMPLETED -> {
+                        observable.removeListener(this);
+                        Platform.runLater(() -> {
+                            if (session != null && session.awaitingCompletion) {
+                                refresh();
+                            }
+                        });
+                    }
+                    case FAILED -> {
+                        observable.removeListener(this);
+                        Platform.runLater(() -> handleInlineRenameOperationFailed(session, source, requestedName, "Rename failed."));
+                    }
+                    case CANCELLED -> {
+                        observable.removeListener(this);
+                        Platform.runLater(() -> handleInlineRenameOperationFailed(session, source, requestedName, "Rename cancelled."));
+                    }
+                    default -> {
+                    }
+                }
+            }
+        });
+    }
+
+    private void restoreInlineRenameSessionAfterRefreshIfNeeded(Path directory) {
+        if (pendingInlineRenameRestoreSession == null) {
+            return;
+        }
+        InlineRenameSession session = pendingInlineRenameRestoreSession;
+        if (directory != null && session.sourcePath != null && session.sourcePath.getParent() != null
+                && !java.util.Objects.equals(directory, session.sourcePath.getParent())) {
+            return;
+        }
+        pendingInlineRenameRestoreSession = null;
+        Platform.runLater(() -> restoreInlineRenameSessionSelectionAndFocus(session));
+    }
+
+    private void finalizeAwaitingInlineRenameCommitIfPresent(Path directory, java.util.List<com.fileexplorer.model.FileItem> listing) {
+        InlineRenameSession session = activeInlineRenameSession;
+        if (session == null || !session.awaitingCompletion || session.pendingResultPath == null || directory == null || listing == null) {
+            return;
+        }
+        Path committedPath = session.pendingResultPath;
+        Path parent = committedPath.getParent();
+        if (parent != null && !java.util.Objects.equals(directory, parent)) {
+            return;
+        }
+        for (com.fileexplorer.model.FileItem item : listing) {
+            if (item != null && java.util.Objects.equals(committedPath, item.path())) {
+                Platform.runLater(() -> finalizeInlineRenameCommitSuccess(session, committedPath, true));
+                return;
+            }
+        }
+    }
+
+    private void reopenInlineRenameEditor(Path source) {
+        if (source == null) {
+            return;
+        }
+        InlineRenameSession session = activeInlineRenameSession;
+        if (session != null && session.surface == InlineRenameSurface.TREE) {
+            expandAndSelectFolder(source);
+            TreeItem<Path> selectedItem = folderTree != null && folderTree.getSelectionModel() != null
+                    ? folderTree.getSelectionModel().getSelectedItem()
+                    : null;
+            if (selectedItem != null && java.util.Objects.equals(source, selectedItem.getValue())) {
+                beginTreeInlineRename(selectedItem);
+                return;
+            }
+        }
+        beginTableInlineRename(source);
+    }
+
+    private void cancelInlineRenameSession(Path source) {
+        clearPendingInlineRenameDraft();
+        InlineRenameSession session = activeInlineRenameSession;
+        activeInlineRenameSession = null;
+        clearInlineRenameTargets();
+        armInlineRenameFocusGuard();
+        if (session != null && session.kind == InlineRenameSessionKind.CREATE_NEW && source != null) {
+            if (session.originatingCommandId != null && context != null && context.commandManager() != null) {
+                try {
+                    context.commandManager().discardUndoCommand(session.originatingCommandId);
+                } catch (Exception ex) {
+                    LOG.log(Level.FINE, "Failed to discard transient create command after rename cancel", ex);
+                }
+            }
+            try {
+                Files.deleteIfExists(source);
+            } catch (Exception ex) {
+                LOG.log(Level.FINE, "Failed to discard transient created item during rename cancel", ex);
+            }
+            pendingInlineRenameSelectionPath = null;
+            pendingInlineRenameSelectionIndex = -1;
+            pendingInlineRenameRestoreSession = session;
+            refresh();
+            return;
+        }
+        if (session != null) {
+            restoreInlineRenameSessionSelectionAndFocus(session);
+            return;
+        }
+        Platform.runLater(() -> restoreFocusToTablePath(source));
+    }
+
+    private void refreshActiveFolderSurface() {
+        hideExplorerTransientUi();
+        clearInlineRenameTargets();
+        refresh();
+        Platform.runLater(this::refreshActiveSelectionPresentation);
+    }
+
+    private void queueInlineRenameForCreatedPath(Path path, String originatingCommandId) {
+        if (path == null) {
+            return;
+        }
+        pendingCreatedInlineRenameSession = captureInlineRenameSession(path,
+                InlineRenameSessionKind.CREATE_NEW,
+                resolveInlineRenameSurfaceForCurrentView());
+        if (pendingCreatedInlineRenameSession != null) {
+            pendingCreatedInlineRenameSession.originatingCommandId = originatingCommandId;
+        }
+        activeInlineRenameSession = null;
+        pendingCreateAndRenamePath = path;
+        pendingInlineRenameSelectionPath = path;
+        pendingInlineRenameSelectionIndex = -1;
+        pendingRestoreSelection = true;
+        pendingReselectPath = path;
+        pendingReselectIndex = -1;
+        pendingReselectPreferIndexOnMissing = false;
+    }
+
+    private void rememberPendingInlineRenameDraft(Path path, String text, boolean selectAll) {
+        pendingInlineRenameDraftPath = path;
+        pendingInlineRenameDraftText = text;
+        pendingInlineRenameDraftSelectAll = selectAll;
+    }
+
+    private void clearPendingInlineRenameDraft() {
+        pendingInlineRenameDraftPath = null;
+        pendingInlineRenameDraftText = null;
+        pendingInlineRenameDraftSelectAll = false;
+    }
+
+    private String resolveInlineRenameInitialText(Path path, String fallbackText) {
+        if (path != null && java.util.Objects.equals(path, pendingInlineRenameDraftPath) && pendingInlineRenameDraftText != null) {
+            return pendingInlineRenameDraftText;
+        }
+        return fallbackText == null ? "" : fallbackText;
+    }
+
+    private boolean shouldSelectAllInlineRenameText(Path path) {
+        return path != null && java.util.Objects.equals(path, pendingInlineRenameDraftPath) && pendingInlineRenameDraftSelectAll;
+    }
+
+    private void beginInlineRenameEditTracking(Path path) {
+        inlineRenameEditTrackingPath = path;
+        inlineRenameExplicitFullNameEdit = false;
+    }
+
+    private void clearInlineRenameEditTracking() {
+        inlineRenameEditTrackingPath = null;
+        inlineRenameExplicitFullNameEdit = false;
+    }
+
+    private boolean isExplicitFullNameEditRequested(Path path) {
+        return path != null
+                && java.util.Objects.equals(path, inlineRenameEditTrackingPath)
+                && inlineRenameExplicitFullNameEdit;
+    }
+
+    private boolean isWholeTextSelection(TextField renameField) {
+        if (renameField == null) {
+            return false;
+        }
+        javafx.scene.control.IndexRange selection = renameField.getSelection();
+        String text = renameField.getText();
+        int length = text == null ? 0 : text.length();
+        return selection != null && selection.getStart() == 0 && selection.getEnd() == length && length > 0;
+    }
+
+    private void captureExplicitFullNameEditIntent(Path path, TextField renameField, KeyEvent event) {
+        if (path == null || renameField == null || event == null) {
+            return;
+        }
+        if (!java.util.Objects.equals(path, inlineRenameEditTrackingPath)) {
+            return;
+        }
+        if (!isWholeTextSelection(renameField)) {
+            return;
+        }
+        KeyCode code = event.getCode();
+        if (code == KeyCode.BACK_SPACE || code == KeyCode.DELETE) {
+            inlineRenameExplicitFullNameEdit = true;
+        }
+    }
+
+    private void captureExplicitFullNameEditIntent(Path path, TextField renameField, String typedText) {
+        if (path == null || renameField == null) {
+            return;
+        }
+        if (!java.util.Objects.equals(path, inlineRenameEditTrackingPath)) {
+            return;
+        }
+        if (!isWholeTextSelection(renameField)) {
+            return;
+        }
+        if (typedText == null || typedText.isEmpty()) {
+            return;
+        }
+        if (typedText.chars().allMatch(Character::isISOControl)) {
+            return;
+        }
+        inlineRenameExplicitFullNameEdit = true;
+    }
+
+    private boolean isIconInlineRenameTarget(Path path) {
+        return isIconMode(viewMode) && path != null && java.util.Objects.equals(path, inlineRenameTablePath);
+    }
+
+    private TextField createExplorerInlineRenameField(Path path, String initialText) {
+        String resolvedText = resolveInlineRenameInitialText(path, initialText);
+        TextField renameField = new TextField(resolvedText);
+        renameField.getStyleClass().add("explorer-inline-rename-field");
+        renameField.setMaxWidth(Double.MAX_VALUE);
+        renameField.setOnAction(e -> commitInlineRename(path, renameField.getText()));
+        final boolean[] suppressFocusCommit = {false};
+        renameField.focusedProperty().addListener((obs, oldV, newV) -> {
+            if (!newV && java.util.Objects.equals(path, inlineRenameTablePath) && !suppressFocusCommit[0]) {
+                commitInlineRename(path, renameField.getText());
+            }
+        });
+        renameField.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            captureExplicitFullNameEditIntent(path, renameField, e);
+            if (e.getCode() == KeyCode.ESCAPE) {
+                suppressFocusCommit[0] = true;
+                cancelInlineRenameFromExplorerSurface(path);
+                e.consume();
+            }
+        });
+        renameField.addEventFilter(KeyEvent.KEY_TYPED, e -> captureExplicitFullNameEditIntent(path, renameField, e.getCharacter()));
+        Platform.runLater(() -> {
+            renameField.requestFocus();
+            applyInlineRenameSelection(renameField, path, shouldSelectAllInlineRenameText(path));
+        });
+        return renameField;
+    }
+
+    private void cancelInlineRenameFromExplorerSurface(Path source) {
+        cancelInlineRenameSession(source);
+    }
+
+    private void applyInlineRenameSelection(TextField renameField, Path path) {
+        applyInlineRenameSelection(renameField, path, false);
+    }
+
+    private void applyInlineRenameSelection(TextField renameField, Path path, boolean selectAll) {
+        if (renameField == null) {
+            return;
+        }
+        String text = renameField.getText();
+        if (text == null) {
+            renameField.selectAll();
+            return;
+        }
+        if (selectAll) {
+            renameField.selectAll();
+            return;
+        }
+        int end = resolveInlineRenameSelectionEnd(path, text);
+        renameField.selectRange(0, Math.max(0, end));
+    }
+
+    private int resolveInlineRenameSelectionEnd(Path path, String displayName) {
+        if (displayName == null || displayName.isEmpty()) {
+            return 0;
+        }
+        if (path == null || isDirectoryPath(path)) {
+            return displayName.length();
+        }
+        int dotIndex = displayName.lastIndexOf('.');
+        if (dotIndex <= 0) {
+            return displayName.length();
+        }
+        if (dotIndex == displayName.length() - 1) {
+            return displayName.length();
+        }
+        return dotIndex;
+    }
+
+    private boolean isBlankInlineRename(String requestedName) {
+        return requestedName == null || requestedName.isBlank();
+    }
+
+    private boolean containsIllegalInlineRenameCharacters(String requestedName) {
+        if (requestedName == null || requestedName.isBlank()) {
+            return false;
+        }
+        for (int i = 0; i < requestedName.length(); i++) {
+            char ch = requestedName.charAt(i);
+            if (ch < 32 || "\\/:*?\"<>|".indexOf(ch) >= 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean endsWithInvalidInlineRenameSuffix(String requestedName) {
+        if (requestedName == null || requestedName.isEmpty()) {
+            return false;
+        }
+        char last = requestedName.charAt(requestedName.length() - 1);
+        return Character.isWhitespace(last) || last == '.';
+    }
+
+    private boolean isReservedInlineRenameName(String requestedName) {
+        if (requestedName == null || requestedName.isBlank()) {
+            return false;
+        }
+        String candidate = requestedName;
+        int dotIndex = candidate.indexOf('.');
+        if (dotIndex > 0) {
+            candidate = candidate.substring(0, dotIndex);
+        }
+        String upper = candidate.toUpperCase(java.util.Locale.ROOT);
+        return switch (upper) {
+            case "CON", "PRN", "AUX", "NUL",
+                 "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+                 "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9" -> true;
+            default -> false;
+        };
+    }
+
+    private String extensionForInlineRename(Path path) {
+        if (path == null || path.getFileName() == null) {
+            return "";
+        }
+        String fileName = path.getFileName().toString();
+        int dotIndex = fileName.lastIndexOf('.');
+        if (dotIndex <= 0 || dotIndex >= fileName.length() - 1) {
+            return "";
+        }
+        return fileName.substring(dotIndex);
+    }
+
+    private String normalizeInlineRenameRequestedName(Path source, String requestedName) {
+        String normalized = requestedName == null ? "" : requestedName;
+        if (normalized.isEmpty()) {
+            return normalized;
+        }
+        if (source != null && !isDirectoryPath(source) && !normalized.contains(".") && !isExplicitFullNameEditRequested(source)) {
+            String extension = extensionForInlineRename(source);
+            if (!extension.isEmpty()) {
+                normalized = normalized + extension;
+            }
+        }
+        return normalized;
+    }
+
+    private void retryInlineRename(Path source) {
+        if (source == null) {
+            return;
+        }
+        Platform.runLater(() -> reopenInlineRenameEditor(source));
+    }
+
+    private void retryInlineRename(Path source, String draftText, boolean selectAll) {
+        if (source == null) {
+            return;
+        }
+        rememberPendingInlineRenameDraft(source, draftText, selectAll);
+        Platform.runLater(() -> reopenInlineRenameEditor(source));
+    }
+
+    private Path nextAvailableCreatedPath(Path directory, String baseName, String duplicatePattern, String extension) {
+        if (directory == null || baseName == null || baseName.isBlank()) {
+            return null;
+        }
+        String normalizedExtension = extension == null ? "" : extension;
+        Path candidate = directory.resolve(baseName + normalizedExtension);
+        if (!Files.exists(candidate)) {
+            return candidate;
+        }
+        for (int i = 2; i <= 999; i++) {
+            Path next = directory.resolve(String.format(duplicatePattern, i) + normalizedExtension);
+            if (!Files.exists(next)) {
+                return next;
+            }
+        }
+        return candidate;
+    }
+
+    private void createNewTextDocument() {
+        LogSupport.enter(LOG, "createNewTextDocument");
+        Path dir = resolveActiveDirectoryForShellCommands();
+        if (dir == null) {
+            setStatus("No folder available for new text document.");
+            return;
+        }
+        Path target = nextAvailableCreatedPath(dir, "New Text Document", "New Text Document (%d)", ".txt");
+        if (target == null) {
+            setStatus("Failed to resolve a name for the new text document.");
+            return;
+        }
+        try {
+            Files.writeString(
+                    target,
+                    "",
+                    java.nio.charset.StandardCharsets.UTF_8,
+                    java.nio.file.StandardOpenOption.CREATE_NEW,
+                    java.nio.file.StandardOpenOption.WRITE);
+            queueInlineRenameForCreatedPath(target, null);
+            refresh();
+            setStatus("Created: " + target.getFileName());
+        } catch (Exception ex) {
+            LOG.log(Level.WARNING, "Failed to create new text document", ex);
+            setStatus("Failed to create text document.");
+        }
+    }
+
+    private void performBackgroundPasteIntoCurrentDirectory() {
+        hideExplorerTransientUi();
+        pasteIntoCurrentDirectory();
+    }
+
+    private void openCurrentFolderProperties() {
+        Path dir = resolveActiveDirectoryForShellCommands();
+        if (dir == null) {
+            setStatus("No folder available.");
+            return;
+        }
+        hideExplorerTransientUi();
+        openPropertiesForPath(dir);
+    }
+
+    private void createNewFolderFromBackgroundMenu() {
+        hideExplorerTransientUi();
+        createNewFolder();
+    }
+
+    private void createNewTextDocumentFromBackgroundMenu() {
+        hideExplorerTransientUi();
+        createNewTextDocument();
+    }
+
+    private javafx.scene.control.Menu buildFileViewBackgroundViewMenu() {
+        javafx.scene.control.Menu menu = new javafx.scene.control.Menu("View");
+        menu.getStyleClass().add("explorer-flyout-submenu");
+        fileViewBackgroundViewModeItems = new java.util.EnumMap<>(ViewMode.class);
+        javafx.scene.control.ToggleGroup toggleGroup = new javafx.scene.control.ToggleGroup();
+        for (ViewMode mode : java.util.List.of(
+                ViewMode.EXTRA_LARGE_ICONS,
+                ViewMode.LARGE_ICONS,
+                ViewMode.MEDIUM_ICONS,
+                ViewMode.SMALL_ICONS,
+                ViewMode.LIST,
+                ViewMode.DETAILS,
+                ViewMode.TILES,
+                ViewMode.CONTENT)) {
+            javafx.scene.control.RadioMenuItem item = new javafx.scene.control.RadioMenuItem(viewModeLabel(mode));
+            item.getStyleClass().add("explorer-menu-item");
+            item.setToggleGroup(toggleGroup);
+            item.setOnAction(e -> setViewMode(mode));
+            fileViewBackgroundViewModeItems.put(mode, item);
+            menu.getItems().add(item);
+        }
+        return menu;
+    }
+
+    private javafx.scene.control.Menu buildFileViewBackgroundSortMenu() {
+        javafx.scene.control.Menu menu = new javafx.scene.control.Menu("Sort by");
+        menu.getStyleClass().add("explorer-flyout-submenu");
+        fileViewBackgroundSortItems = new java.util.EnumMap<>(SortKey.class);
+        javafx.scene.control.ToggleGroup toggleGroup = new javafx.scene.control.ToggleGroup();
+        java.util.Map<SortKey, String> labels = java.util.Map.of(
+                SortKey.NAME, "Name",
+                SortKey.MODIFIED, "Date modified",
+                SortKey.TYPE, "Type",
+                SortKey.SIZE, "Size");
+        for (SortKey key : java.util.List.of(SortKey.NAME, SortKey.MODIFIED, SortKey.TYPE, SortKey.SIZE)) {
+            javafx.scene.control.RadioMenuItem item = new javafx.scene.control.RadioMenuItem(labels.getOrDefault(key, key.name()));
+            item.getStyleClass().add("explorer-menu-item");
+            item.setToggleGroup(toggleGroup);
+            item.setOnAction(e -> setSortKeyFromBackgroundMenu(key));
+            fileViewBackgroundSortItems.put(key, item);
+            menu.getItems().add(item);
+        }
+        return menu;
+    }
+
+    private javafx.scene.control.Menu buildFileViewBackgroundGroupMenu() {
+        javafx.scene.control.Menu menu = new javafx.scene.control.Menu("Group by");
+        menu.getStyleClass().add("explorer-flyout-submenu");
+        javafx.scene.control.MenuItem disabledItem = createExplorerMenuItem("None", null, () -> setStatus("Group by: not implemented yet."));
+        disabledItem.setDisable(true);
+        menu.getItems().add(disabledItem);
+        return menu;
+    }
+
+    private javafx.scene.control.Menu buildFileViewBackgroundNewMenu() {
+        javafx.scene.control.Menu menu = new javafx.scene.control.Menu("New");
+        menu.getStyleClass().add("explorer-flyout-submenu");
+        fileViewBackgroundNewFolderItem = createExplorerMenuItem("Folder", "", this::createNewFolderFromBackgroundMenu);
+        fileViewBackgroundNewTextDocumentItem = createExplorerMenuItem("Text Document", "", this::createNewTextDocumentFromBackgroundMenu);
+        fileViewBackgroundNewUnsupportedItem = createExplorerMenuItem("Bitmap image", "", () -> setStatus("Bitmap image: not implemented yet."));
+        fileViewBackgroundNewUnsupportedItem.setDisable(true);
+        menu.getItems().addAll(
+                fileViewBackgroundNewFolderItem,
+                fileViewBackgroundNewTextDocumentItem,
+                createExplorerSeparator(),
+                fileViewBackgroundNewUnsupportedItem);
+        return menu;
+    }
+
+    private void syncFileViewBackgroundMenuState() {
+        boolean hasDirectory = resolveActiveDirectoryForShellCommands() != null;
+        boolean hasVisibleItems = fileTable != null && fileTable.getItems() != null && !fileTable.getItems().isEmpty();
+        boolean canUndo = false;
+        try {
+            canUndo = context != null && context.commandManager() != null && context.commandManager().canUndo();
+        } catch (Exception ex) {
+            canUndo = false;
+        }
+        if (fileViewBackgroundUndoItem != null) {
+            setExplorerMenuItemLabel(fileViewBackgroundUndoItem, formatUndoMenuLabel());
+            fileViewBackgroundUndoItem.setDisable(!canUndo);
+        }
+        if (fileViewBackgroundPasteItem != null) {
+            setExplorerMenuItemLabel(fileViewBackgroundPasteItem, "Paste");
+            fileViewBackgroundPasteItem.setDisable(!canPasteIntoCurrentDirectory());
+        }
+        if (fileViewBackgroundPasteShortcutItem != null) {
+            setExplorerMenuItemLabel(fileViewBackgroundPasteShortcutItem, "Paste shortcut");
+            fileViewBackgroundPasteShortcutItem.setDisable(true);
+        }
+        if (fileViewBackgroundNewFolderItem != null) {
+            setExplorerMenuItemLabel(fileViewBackgroundNewFolderItem, "Folder");
+            fileViewBackgroundNewFolderItem.setDisable(!hasDirectory);
+        }
+        if (fileViewBackgroundNewTextDocumentItem != null) {
+            setExplorerMenuItemLabel(fileViewBackgroundNewTextDocumentItem, "Text Document");
+            fileViewBackgroundNewTextDocumentItem.setDisable(!hasDirectory);
+        }
+        if (fileViewBackgroundNewUnsupportedItem != null) {
+            setExplorerMenuItemLabel(fileViewBackgroundNewUnsupportedItem, "Bitmap image");
+            fileViewBackgroundNewUnsupportedItem.setDisable(true);
+        }
+        if (fileViewBackgroundSelectAllItem != null) {
+            setExplorerMenuItemLabel(fileViewBackgroundSelectAllItem, "Select all");
+            fileViewBackgroundSelectAllItem.setDisable(!hasVisibleItems);
+        }
+        if (fileViewBackgroundRefreshItem != null) {
+            setExplorerMenuItemLabel(fileViewBackgroundRefreshItem, "Refresh");
+            fileViewBackgroundRefreshItem.setDisable(!hasDirectory);
+        }
+        if (fileViewBackgroundPropertiesItem != null) {
+            setExplorerMenuItemLabel(fileViewBackgroundPropertiesItem, "Properties");
+            fileViewBackgroundPropertiesItem.setDisable(!hasDirectory);
+        }
+        if (fileViewBackgroundViewModeItems != null) {
+            for (java.util.Map.Entry<ViewMode, javafx.scene.control.RadioMenuItem> entry : fileViewBackgroundViewModeItems.entrySet()) {
+                entry.getValue().setSelected(entry.getKey() == viewMode);
+            }
+        }
+        if (fileViewBackgroundSortItems != null) {
+            for (java.util.Map.Entry<SortKey, javafx.scene.control.RadioMenuItem> entry : fileViewBackgroundSortItems.entrySet()) {
+                entry.getValue().setSelected(entry.getKey() == currentSortKey);
+            }
+        }
+        if (fileViewBackgroundGroupMenu != null) {
+            fileViewBackgroundGroupMenu.setDisable(true);
+        }
+    }
+
+    private void performBackgroundUndo() {
+        try {
+            if (context != null && context.commandManager() != null && context.commandManager().canUndo()) {
+                com.fileexplorer.service.ops.command.CommandManager.ExecutedCommand undoCommand = peekUndoCommand();
+                InlineRenameSession shellStateSession = captureShellCommandRefreshSessionForUndoRedo(undoCommand != null ? undoCommand.command() : null);
+                context.commandManager().undo();
+                applyShellStateRefreshPlanForUndoRedo(undoCommand != null ? undoCommand.command() : null,
+                        ExplorerCommandAction.UNDO,
+                        shellStateSession);
+                setStatus("Undid last action.");
+                syncExplorerContextMenuShellState();
+            }
+        } catch (Exception ex) {
+            LOG.log(Level.WARNING, "Undo failed", ex);
+            setStatus("Undo failed.");
+        }
+    }
+
+    private void showFileViewBackgroundContextMenu(Node requestedAnchor, double screenX, double screenY) {
+        Node anchor = resolveExplorerContextMenuAnchor(requestedAnchor);
+        if (anchor == null) {
+            return;
+        }
+        if (fileViewBackgroundMenu == null) {
+            fileViewBackgroundMenu = createExplorerContextMenu();
+            fileViewBackgroundViewMenu = buildFileViewBackgroundViewMenu();
+            fileViewBackgroundSortMenu = buildFileViewBackgroundSortMenu();
+            fileViewBackgroundGroupMenu = buildFileViewBackgroundGroupMenu();
+            fileViewBackgroundUndoItem = createExplorerMenuItem("Undo", "", this::performBackgroundUndo);
+            fileViewBackgroundPasteItem = createExplorerMenuItem("Paste", "", this::performBackgroundPasteIntoCurrentDirectory);
+            fileViewBackgroundPasteShortcutItem = createExplorerMenuItem("Paste shortcut", "", () -> setStatus("Paste shortcut: not implemented yet."));
+            fileViewBackgroundNewMenu = buildFileViewBackgroundNewMenu();
+            fileViewBackgroundSelectAllItem = createExplorerMenuItem("Select all", "", this::selectAll);
+            fileViewBackgroundRefreshItem = createExplorerMenuItem("Refresh", "", this::refreshActiveFolderSurface);
+            fileViewBackgroundPropertiesItem = createExplorerMenuItem("Properties", "", this::openCurrentFolderProperties);
+            fileViewBackgroundMenu.getItems().addAll(
+                    fileViewBackgroundViewMenu,
+                    fileViewBackgroundSortMenu,
+                    fileViewBackgroundGroupMenu,
+                    createExplorerSeparator(),
+                    fileViewBackgroundUndoItem,
+                    fileViewBackgroundPasteItem,
+                    fileViewBackgroundPasteShortcutItem,
+                    createExplorerSeparator(),
+                    fileViewBackgroundNewMenu,
+                    fileViewBackgroundSelectAllItem,
+                    createExplorerSeparator(),
+                    fileViewBackgroundRefreshItem,
+                    createExplorerSeparator(),
+                    fileViewBackgroundPropertiesItem);
+            fileViewBackgroundMenu.setOnShowing(e -> syncFileViewBackgroundMenuState());
+        }
+        if (fileOpsMenu != null) {
+            fileOpsMenu.hide();
+        }
+        if (fileTable != null) {
+            Object header = fileTable.getProperties().get(com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.PROP_HEADER_MENU);
+            if (header instanceof javafx.scene.control.ContextMenu cm) {
+                cm.hide();
+            }
+        }
+        fileViewBackgroundMenu.hide();
+        fileViewBackgroundMenu.show(anchor, screenX, screenY);
     }
 
     private Node getActiveFileOpsMenuAnchor() {
@@ -5289,50 +7006,6 @@ colType.setCellValueFactory(param -> {
         return fileTable != null && fileTable.getScene() != null ? fileTable : null;
     }
 
-
-    private void showFileViewBackgroundContextMenu(double screenX, double screenY) {
-        Node anchor = getActiveFileOpsMenuAnchor();
-        if (anchor == null) {
-            return;
-        }
-        if (fileViewBackgroundMenu == null) {
-            fileViewBackgroundMenu = createExplorerContextMenu();
-            fileViewBackgroundPasteItem = createExplorerMenuItem("Paste", "", this::pasteIntoCurrentDirectory);
-            fileViewBackgroundNewFolderItem = createExplorerMenuItem("New folder", "", this::createNewFolder);
-            fileViewBackgroundSelectAllItem = createExplorerMenuItem("Select all", "", this::selectAll);
-            fileViewBackgroundRefreshItem = createExplorerMenuItem("Refresh", "", this::refresh);
-            fileViewBackgroundPropertiesItem = createExplorerMenuItem("Properties", "", () -> openPropertiesForPath(currentDirectory));
-            fileViewBackgroundMenu.getItems().addAll(
-                    fileViewBackgroundPasteItem,
-                    createExplorerSeparator(),
-                    fileViewBackgroundNewFolderItem,
-                    fileViewBackgroundSelectAllItem,
-                    createExplorerSeparator(),
-                    fileViewBackgroundRefreshItem,
-                    createExplorerSeparator(),
-                    fileViewBackgroundPropertiesItem);
-            fileViewBackgroundMenu.setOnShowing(e -> {
-                boolean hasDirectory = currentDirectory != null;
-                boolean hasVisibleItems = fileTable != null && fileTable.getItems() != null && !fileTable.getItems().isEmpty();
-                fileViewBackgroundPasteItem.setDisable(!hasDirectory || clipboardPaths.isEmpty());
-                fileViewBackgroundNewFolderItem.setDisable(!hasDirectory);
-                fileViewBackgroundSelectAllItem.setDisable(!hasVisibleItems);
-                fileViewBackgroundRefreshItem.setDisable(!hasDirectory);
-                fileViewBackgroundPropertiesItem.setDisable(!hasDirectory);
-            });
-        }
-        if (fileOpsMenu != null) {
-            fileOpsMenu.hide();
-        }
-        if (fileTable != null) {
-            Object header = fileTable.getProperties().get(com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.PROP_HEADER_MENU);
-            if (header instanceof javafx.scene.control.ContextMenu cm) {
-                cm.hide();
-            }
-        }
-        fileViewBackgroundMenu.hide();
-        fileViewBackgroundMenu.show(anchor, screenX, screenY);
-    }
     /**
      * Phase 3.6.0: Table context menu + keyboard shortcuts for file operations.
      */
@@ -5345,12 +7018,17 @@ colType.setCellValueFactory(param -> {
                     // Header menu and row-specific context menu handlers manage these cases.
                     return;
                 }
-                showFileViewBackgroundContextMenu(ev.getScreenX(), ev.getScreenY());
+                javafx.scene.Node target = (ev.getPickResult() != null) ? ev.getPickResult().getIntersectedNode() : null;
+                showFileViewBackgroundContextMenu(target != null ? target : fileTable, ev.getScreenX(), ev.getScreenY());
                 ev.consume();
             } catch (Throwable ignored) {
                 // keep context menu best-effort
             }
         });
+        if (fileTable.getSelectionModel() != null) {
+            fileTable.getSelectionModel().getSelectedItems().addListener(
+                    (javafx.collections.ListChangeListener<FileItem>) change -> syncExplorerContextMenuShellState());
+        }
         fileTable.addEventFilter(javafx.scene.input.KeyEvent.KEY_PRESSED, e -> {
             if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
                 Path restorePath = inlineRenameTablePath;
@@ -5368,7 +7046,7 @@ colType.setCellValueFactory(param -> {
                 } else {
                     Bounds tableBounds = fileTable.localToScreen(fileTable.getBoundsInLocal());
                     if (tableBounds != null) {
-                        showFileViewBackgroundContextMenu(tableBounds.getMinX() + 48.0, tableBounds.getMinY() + 48.0);
+                        showFileViewBackgroundContextMenu(fileTable, tableBounds.getMinX() + 48.0, tableBounds.getMinY() + 48.0);
                     }
                 }
                 e.consume();
@@ -5443,6 +7121,7 @@ colType.setCellValueFactory(param -> {
         if (statusLabel != null) {
             statusLabel.setText((cut ? "Cut" : "Copied") + " " + clipboardPaths.size() + " item(s)");
         }
+        syncExplorerContextMenuShellState();
     }
 /**
  * pasteIntoCurrentDirectory.
@@ -5450,7 +7129,7 @@ colType.setCellValueFactory(param -> {
  */
     private void pasteIntoCurrentDirectory() {
         if (context == null || fileOperationService == null) return;
-        java.nio.file.Path targetDir = context.currentDirectory();
+        java.nio.file.Path targetDir = resolveActiveDirectoryForShellCommands();
         if (targetDir == null) return;
         if (clipboardPaths.isEmpty()) return;
         com.fileexplorer.service.ops.FileOperationType type =
@@ -5489,6 +7168,7 @@ colType.setCellValueFactory(param -> {
             clipboardPaths.clear();
             clipboardCut = false;
         }
+        syncExplorerContextMenuShellState();
     }
 /**
  * deleteSelection.
@@ -5969,8 +7649,9 @@ private String displayNameForTable(Path p) {
             listing = java.util.List.of();
         }
         tableItems.setAll(listing);
+        applyExplorerSortToTableItems();
         updateStatusCounts();
-        rebuildTableIndexCache(listing);
+        rebuildTableIndexCache(tableItems);
         rememberRecentHomeLocation(directory);
         refreshHomeSurface();
         homeActive = false;
@@ -5979,15 +7660,26 @@ private String displayNameForTable(Path p) {
         updateSearchPrompt(directory);
         updateTopChromeState();
         if (startupInitialDirectoryLoadStarted.get() && startupInitialDirectoryLoadFinished.compareAndSet(false, true)) {
-            StartupTrace.mark("initial directory load finished: success");
+            StartupTrace.mark("initial directory hydration finished: success");
         }
-        
+
+        InlineRenameSession awaitingInlineRenameSession = activeInlineRenameSession;
+        boolean deferAggressiveRestore = awaitingInlineRenameSession != null
+                && awaitingInlineRenameSession.awaitingCompletion
+                && awaitingInlineRenameSession.pendingResultPath != null
+                && java.util.Objects.equals(directory, awaitingInlineRenameSession.pendingResultPath.getParent());
+
+        Path restoreVisiblePath = null;
         // Phase 3.5.1: Restore selection after refresh if possible.
         if (pendingRestoreSelection && pendingReselectPath != null) {
+            Path requestedPath = pendingReselectPath;
             int idx = -1;
-            for (int i = 0; i < listing.size(); i++) {
-                com.fileexplorer.model.FileItem it = listing.get(i);
-                if (it != null && pendingReselectPath.equals(it.path())) {
+            ObservableList<FileItem> visibleItems = fileTable != null && fileTable.getItems() != null
+                    ? fileTable.getItems()
+                    : tableItems;
+            for (int i = 0; i < visibleItems.size(); i++) {
+                FileItem it = visibleItems.get(i);
+                if (it != null && requestedPath.equals(it.path())) {
                     idx = i;
                     break;
                 }
@@ -5995,14 +7687,32 @@ private String displayNameForTable(Path p) {
             if (fileTable != null) {
                 if (idx >= 0) {
                     fileTable.getSelectionModel().clearAndSelect(idx);
-                    fileTable.scrollTo(Math.max(0, idx - 2));
-                } else if (pendingReselectIndex >= 0 && pendingReselectIndex < listing.size()) {
-                    fileTable.scrollTo(Math.max(0, pendingReselectIndex - 2));
+                    if (fileTable.getFocusModel() != null) {
+                        fileTable.getFocusModel().focus(idx);
+                    }
+                    if (!deferAggressiveRestore) {
+                        fileTable.scrollTo(Math.max(0, idx - 2));
+                        restoreVisiblePath = requestedPath;
+                    }
+                } else if (!deferAggressiveRestore && pendingReselectIndex >= 0 && pendingReselectIndex < visibleItems.size()) {
+                    if (pendingReselectPreferIndexOnMissing) {
+                        int fallbackIndex = Math.max(0, Math.min(visibleItems.size() - 1, pendingReselectIndex));
+                        fileTable.getSelectionModel().clearAndSelect(fallbackIndex);
+                        if (fileTable.getFocusModel() != null) {
+                            fileTable.getFocusModel().focus(fallbackIndex);
+                        }
+                        fileTable.scrollTo(Math.max(0, fallbackIndex - 2));
+                        FileItem fallbackItem = visibleItems.get(fallbackIndex);
+                        restoreVisiblePath = fallbackItem != null ? fallbackItem.path() : null;
+                    } else {
+                        fileTable.scrollTo(Math.max(0, pendingReselectIndex - 2));
+                    }
                 }
             }
             pendingRestoreSelection = false;
             pendingReselectPath = null;
             pendingReselectIndex = -1;
+            pendingReselectPreferIndexOnMissing = false;
             pendingInlineRenameSelectionPath = null;
             pendingInlineRenameSelectionIndex = -1;
         }
@@ -6012,6 +7722,31 @@ private String displayNameForTable(Path p) {
         } else {
             requestCoalescedTableRefresh();
         }
+        if (restoreVisiblePath != null) {
+            scheduleExplorerPathVisibilityStabilization(restoreVisiblePath, false);
+        }
+        if (pendingCreateAndRenamePath != null && java.util.Objects.equals(directory, pendingCreateAndRenamePath.getParent())) {
+            Path createdPath = pendingCreateAndRenamePath;
+            boolean present = false;
+            for (com.fileexplorer.model.FileItem it : listing) {
+                if (it != null && java.util.Objects.equals(createdPath, it.path())) {
+                    present = true;
+                    break;
+                }
+            }
+            if (present) {
+                scheduleExplorerPathVisibilityStabilization(createdPath, false);
+                Platform.runLater(() -> {
+                    if (java.util.Objects.equals(createdPath, pendingCreateAndRenamePath)) {
+                        beginTableInlineRename(createdPath);
+                    }
+                });
+            }
+        }
+        finalizeAwaitingInlineRenameCommitIfPresent(directory, listing);
+        restoreInlineRenameSessionAfterRefreshIfNeeded(directory);
+        applyPendingShellCommandRestoreIfNeeded(directory);
+        syncExplorerContextMenuShellState();
     }
     /**
      * UI-thread handler invoked by the DirectoryCoordinator via the event bus.
@@ -6284,7 +8019,8 @@ private String displayNameForTable(Path p) {
         if (renameButton != null) renameButton.setDisable(!singleSelection);
         if (deleteButton != null) deleteButton.setDisable(!hasSelection);
         if (shareButton != null) shareButton.setDisable(!singleSelection);
-        if (pasteButton != null) pasteButton.setDisable(homeActive || currentDirectory == null);
+        if (pasteButton != null) pasteButton.setDisable(homeActive || !canPasteIntoCurrentDirectory());
+        syncExplorerContextMenuShellState();
     }
 
     private void syncPaneTogglesFromUiState() {
@@ -6325,7 +8061,7 @@ private String displayNameForTable(Path p) {
         }
         updateNavigationButtonsState();
         if (startupInitialDirectoryLoadStarted.get() && startupInitialDirectoryLoadFinished.compareAndSet(false, true)) {
-            StartupTrace.mark("initial directory load finished: failed");
+            StartupTrace.mark("initial directory hydration finished: failed");
         }
     }
 /**
@@ -6824,6 +8560,11 @@ private void loadDirectoryIntoTableAsync(Path directory, boolean keepExistingUnt
     lastRequestedShowHidden = showHiddenItems;
     lastRequestedRequestId = token;
     int batchSize = Integer.getInteger("fileexplorer.dirload.chunkSize", 350);
+    int firstBatchSize = Integer.getInteger("fileexplorer.dirload.firstBatchSize", Math.min(batchSize, 96));
+    if (!startupInitialDirectoryFirstBatchCommitted.get()) {
+        batchSize = Integer.getInteger("fileexplorer.dirload.startupBatchSize", Math.max(96, Math.min(batchSize, 160)));
+        firstBatchSize = Integer.getInteger("fileexplorer.dirload.startupFirstBatchSize", Math.min(batchSize, 48));
+    }
 // Phase 4B.1 (tier ~250k): Huge-folder mode with paging (bounded TableView list).
 final int hugeThreshold = Integer.getInteger("fileexplorer.hugeFolder.threshold", 50000);
 final int hugePageSize = Integer.getInteger("fileexplorer.hugeFolder.pageSize",
@@ -6833,6 +8574,7 @@ final java.util.concurrent.atomic.AtomicLong scannedCount = new java.util.concur
 final java.util.concurrent.atomic.AtomicBoolean hugeMode = new java.util.concurrent.atomic.AtomicBoolean(false);
 final java.util.concurrent.atomic.AtomicBoolean scanCancelled = new java.util.concurrent.atomic.AtomicBoolean(false);
     final java.util.concurrent.atomic.AtomicBoolean firstBatch = new java.util.concurrent.atomic.AtomicBoolean(true);
+    final java.util.concurrent.atomic.AtomicBoolean firstVisualCommit = new java.util.concurrent.atomic.AtomicBoolean(false);
     // Phase 4A.6: snapshot hydration state (diffing + stable scroll/selection).
     final FolderSnapshotCache.FolderSnapshot hydrationSnapshot =
             keepExistingUntilFirstBatch ? activeHydrationSnapshot : null;
@@ -6842,6 +8584,7 @@ final java.util.concurrent.atomic.AtomicBoolean scanCancelled = new java.util.co
     directoryLoadManager.loadProgressive(
             directory,
             showHiddenItems,
+            firstBatchSize,
             batchSize,
             batch -> javafx.application.Platform.runLater(() -> {
                 if (token != progressiveLoadSeq.get()) return;
@@ -6941,11 +8684,17 @@ if (hugeMode.get()) {
                     // Keep table responsive; avoid heavy sort during stream.
                     fileTable.refresh();
                 }
+                if (firstVisualCommit.compareAndSet(false, true)) {
+                    noteStartupInitialDirectoryFirstBatchCommitted();
+                }
                 scheduleCurrentFolderThumbnailWarmup();
             }),
             () -> javafx.application.Platform.runLater(() -> {
                 if (token != progressiveLoadSeq.get()) return;
                 directoryLoading = false;
+                if (firstVisualCommit.compareAndSet(false, true)) {
+                    noteStartupInitialDirectoryFirstBatchCommitted();
+                }
                 // Phase 4A.6: If we hydrated over a snapshot, truncate any stale tail items that were never produced
                 // by the live progressive loader (e.g., deleted files), and drop the active snapshot handle.
                 if (hydratingOverSnapshot) {
@@ -7369,6 +9118,9 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (SAFE_MODE) {
             return;
         }
+        if (!startupThumbnailWarmupGateOpened.get()) {
+            return;
+        }
         if (!Boolean.parseBoolean(System.getProperty("fileexplorer.thumb.warmup.enabled", "true"))) {
             return;
         }
@@ -7381,6 +9133,9 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             return;
         }
         if (SAFE_MODE) {
+            return;
+        }
+        if (!startupThumbnailWarmupGateOpened.get()) {
             return;
         }
         if (!Boolean.parseBoolean(System.getProperty("fileexplorer.thumb.warmup.enabled", "true"))) {
@@ -7588,6 +9343,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (mode == null) {
             return;
         }
+        hideExplorerTransientUi();
         if (SAFE_MODE && !isTableMode(mode)) {
             // Safe Mode: force table-based views only.
             mode = ViewMode.DETAILS;
@@ -8817,27 +10573,34 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             textCol.setAlignment(Pos.CENTER_LEFT);
             textCol.getStyleClass().add("explorer-tile-text-column");
             textCol.setPrefWidth(tileRowTextWidthForMode(viewMode));
-            Label name = new Label(displayNameForTable(p));
-            name.getStyleClass().add("explorer-icon-name-label");
-            name.setWrapText(false);
-            name.setTextOverrun(OverrunStyle.ELLIPSIS);
-            name.setMaxWidth(Double.MAX_VALUE);
-            textCol.getChildren().add(name);
-            if (!isList) {
-                String typeText = typeForTable(p);
-                String sizeText = sizeForTable(p);
-                String meta = typeText;
-                if (sizeText != null && !sizeText.isBlank()) {
-                    meta = meta + " · " + sizeText;
-                }
-                Label line2 = new Label(meta);
-                line2.getStyleClass().add("explorer-icon-meta-label");
-                textCol.getChildren().add(line2);
-                if (isContent) {
-                    String modified = modifiedForTable(p);
-                    Label line3 = new Label(modified);
-                    line3.getStyleClass().addAll("explorer-icon-meta-label", "explorer-icon-modified-label");
-                    textCol.getChildren().add(line3);
+            if (isIconInlineRenameTarget(p)) {
+                TextField renameField = createExplorerInlineRenameField(p, displayNameForTable(p));
+                renameField.setPrefWidth(tileRowTextWidthForMode(viewMode));
+                textCol.getChildren().add(renameField);
+                row.getProperties().put(EXPLORER_ICON_TILE_INLINE_RENAME_NODE_KEY, renameField);
+            } else {
+                Label name = new Label(displayNameForTable(p));
+                name.getStyleClass().add("explorer-icon-name-label");
+                name.setWrapText(false);
+                name.setTextOverrun(OverrunStyle.ELLIPSIS);
+                name.setMaxWidth(Double.MAX_VALUE);
+                textCol.getChildren().add(name);
+                if (!isList) {
+                    String typeText = typeForTable(p);
+                    String sizeText = sizeForTable(p);
+                    String meta = typeText;
+                    if (sizeText != null && !sizeText.isBlank()) {
+                        meta = meta + " · " + sizeText;
+                    }
+                    Label line2 = new Label(meta);
+                    line2.getStyleClass().add("explorer-icon-meta-label");
+                    textCol.getChildren().add(line2);
+                    if (isContent) {
+                        String modified = modifiedForTable(p);
+                        Label line3 = new Label(modified);
+                        line3.getStyleClass().addAll("explorer-icon-meta-label", "explorer-icon-modified-label");
+                        textCol.getChildren().add(line3);
+                    }
                 }
             }
             row.getChildren().addAll(icon, textCol);
@@ -8856,16 +10619,25 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         tile.setMaxWidth(w);
         tile.setPadding(iconGridTilePaddingForMode(viewMode));
         Node icon = buildIconNode(p, iconSizePx, "tile-item-icon");
-        Label name = new Label(displayNameForTable(p));
-        name.getStyleClass().add("explorer-icon-name-label");
-        name.setWrapText(true);
-        name.setTextOverrun(OverrunStyle.ELLIPSIS);
-        name.setMaxWidth(iconGridLabelWidthForMode(viewMode));
-        name.setMinHeight(iconGridLabelMinHeightForMode(viewMode));
-        name.setAlignment(Pos.TOP_CENTER);
-        tile.getChildren().addAll(icon, name);
-        markExplorerIconTileChild(icon);
-        markExplorerIconTileChild(name);
+        if (isIconInlineRenameTarget(p)) {
+            TextField renameField = createExplorerInlineRenameField(p, displayNameForTable(p));
+            renameField.setMaxWidth(iconGridLabelWidthForMode(viewMode));
+            tile.getChildren().addAll(icon, renameField);
+            tile.getProperties().put(EXPLORER_ICON_TILE_INLINE_RENAME_NODE_KEY, renameField);
+            markExplorerIconTileChild(icon);
+            markExplorerIconTileChild(renameField);
+        } else {
+            Label name = new Label(displayNameForTable(p));
+            name.getStyleClass().add("explorer-icon-name-label");
+            name.setWrapText(true);
+            name.setTextOverrun(OverrunStyle.ELLIPSIS);
+            name.setMaxWidth(iconGridLabelWidthForMode(viewMode));
+            name.setMinHeight(iconGridLabelMinHeightForMode(viewMode));
+            name.setAlignment(Pos.TOP_CENTER);
+            tile.getChildren().addAll(icon, name);
+            markExplorerIconTileChild(icon);
+            markExplorerIconTileChild(name);
+        }
         installExplorerItemTooltip(tile, () -> buildExplorerItemTooltipText(p));
         tile.setOnMouseEntered(_ -> scheduleHoverPrefetch(p));
         installExplorerIconTileSelectionHandlers(tile, p);
@@ -9036,6 +10808,14 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             }
         }
         applyExplorerPathSelection(paths, targetPath);
+    }
+
+    private boolean isActiveIconSurfaceFocused() {
+        return (virtualIconGridView != null && virtualIconGridView.isVisible() && virtualIconGridView.isFocused())
+                || (virtualIconListView != null && virtualIconListView.isVisible() && virtualIconListView.isFocused())
+                || (iconFlow != null && iconFlow.isVisible() && iconFlow.isFocused())
+                || (iconScroll != null && iconScroll.isVisible() && iconScroll.isFocused())
+                || (viewHost != null && viewHost.isFocused());
     }
 
     private void requestActiveIconSurfaceFocus() {
@@ -9249,6 +11029,10 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (event == null || event.getButton() != MouseButton.PRIMARY || !isSelectionMarqueeMode(viewMode)) {
             return;
         }
+        if (isInlineRenameFocusGuardActive()) {
+            event.consume();
+            return;
+        }
         Node target = resolveEventTargetNode(event);
         boolean pressOnExistingItem = false;
         if (viewMode == ViewMode.DETAILS) {
@@ -9318,6 +11102,12 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
     }
 
     private void handleExplorerFileViewMouseReleased(MouseEvent event) {
+        if (isInlineRenameFocusGuardActive()) {
+            if (event != null) {
+                event.consume();
+            }
+            return;
+        }
         if (!iconMarqueePressArmed || event == null) {
             return;
         }
@@ -9390,6 +11180,10 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (event == null || !isIconMode(viewMode)) {
             return;
         }
+        if (isInlineRenameFocusGuardActive()) {
+            event.consume();
+            return;
+        }
         Node target = event.getPickResult() != null && event.getPickResult().getIntersectedNode() != null
                 ? event.getPickResult().getIntersectedNode()
                 : (event.getTarget() instanceof Node node ? node : null);
@@ -9401,7 +11195,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         }
         hideExplorerMetadataPopup();
         requestActiveIconSurfaceFocus();
-        showFileViewBackgroundContextMenu(event.getScreenX(), event.getScreenY());
+        showFileViewBackgroundContextMenu(target != null ? target : viewHost, event.getScreenX(), event.getScreenY());
         event.consume();
     }
 
@@ -10078,6 +11872,18 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         pinPathToQuickAccess(primarySelection);
     }
 
+    private void toggleSelectionQuickAccessPin() {
+        Path primarySelection = getPrimarySelection();
+        if (!isDirectoryPath(primarySelection)) {
+            return;
+        }
+        if (isPathPinnedToQuickAccess(primarySelection)) {
+            unpinPathFromQuickAccess(primarySelection);
+        } else {
+            pinPathToQuickAccess(primarySelection);
+        }
+    }
+
     private void pinPathToQuickAccess(Path path) {
         if (!isDirectoryPath(path)) {
             setStatus("Only folders can be pinned to Quick access.");
@@ -10090,7 +11896,23 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             userPinnedHomeLocations.remove(userPinnedHomeLocations.size() - 1);
         }
         refreshHomeSurface();
+        syncExplorerContextMenuShellState();
         setStatus("Pinned to Quick access: " + directoryDisplayName(normalized));
+    }
+
+    private void unpinPathFromQuickAccess(Path path) {
+        if (path == null) {
+            return;
+        }
+        Path normalized = path.normalize();
+        boolean removed = userPinnedHomeLocations.removeIf(existing -> existing != null && Objects.equals(existing.normalize(), normalized));
+        refreshHomeSurface();
+        syncExplorerContextMenuShellState();
+        if (removed) {
+            setStatus("Unpinned from Quick access: " + directoryDisplayName(normalized));
+        } else {
+            setStatus("Folder was not pinned: " + directoryDisplayName(normalized));
+        }
     }
 
     private void rebuildHomePinnedRow() {
@@ -10180,6 +12002,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
  */
     private void navigateToFolder(Path target, boolean pushHistory) {
         LogSupport.enter(LOG, "navigateToFolder");
+        hideExplorerTransientUi();
         if (target == null) {
             return;
         }
@@ -10317,11 +12140,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             return;
         }
         fileTable.getSelectionModel().selectAll();
-        if (viewMode != ViewMode.DETAILS) {
-            syncIconPresentationSelectedPathsFromTableSelection();
-            refreshVisibleIconTileSelectionState();
-        }
-        updateSelectionCommandState();
+        refreshActiveSelectionPresentation();
         setStatus("Selected all.");
     }
 
@@ -10330,7 +12149,11 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             return;
         }
         fileTable.getSelectionModel().clearSelection();
-        updateSelectionCommandState();
+        if (fileTable.getFocusModel() != null) {
+            fileTable.getFocusModel().focus(-1);
+        }
+        iconSelectionAnchorPath = null;
+        refreshActiveSelectionPresentation();
         setStatus("Selection cleared.");
     }
 
@@ -10345,8 +12168,21 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                 fileTable.getSelectionModel().select(i);
             }
         }
-        updateSelectionCommandState();
+        refreshActiveSelectionPresentation();
         setStatus("Selection inverted.");
+    }
+
+    private void refreshActiveSelectionPresentation() {
+        if (viewMode == ViewMode.DETAILS) {
+            syncDetailsPresentationSelectedPathsFromTableSelection();
+            syncVisibleDetailsHoverRows();
+            if (fileTable != null) {
+                fileTable.refresh();
+            }
+        } else {
+            refreshVisibleIconSelectionPresentation();
+        }
+        updateSelectionCommandState();
     }
 
     private void copyPrimaryPathToClipboard() {
@@ -10617,25 +12453,31 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
  */
 private void createNewFolder() {
         LogSupport.enter(LOG, "createNewFolder");
-        Path dir = currentDirectory;
+        Path dir = resolveActiveDirectoryForShellCommands();
         if (dir == null) {
+            setStatus("No folder available for new folder.");
             return;
         }
-        Path target = dir.resolve("New folder");
-        if (Files.exists(target)) {
-            for (int i = 2; i <= 999; i++) {
-                Path p = dir.resolve("New folder (" + i + ")");
-                if (!Files.exists(p)) {
-                    target = p;
-                    break;
-                }
-            }
+        Path target = nextAvailableCreatedPath(dir, "New folder", "New folder (%d)", "");
+        if (target == null) {
+            setStatus("Failed to resolve a name for the new folder.");
+            return;
         }
         try {
-            Files.createDirectories(target);
+            String commandId = null;
+            if (context != null && context.commandManager() != null) {
+                com.fileexplorer.service.ops.command.CreateDirectoryCommand createDirectoryCommand =
+                        new com.fileexplorer.service.ops.command.CreateDirectoryCommand("Create folder " + target.getFileName(), target);
+                context.commandManager().execute(createDirectoryCommand);
+                commandId = createDirectoryCommand.id();
+            } else {
+                Files.createDirectory(target);
+            }
+            queueInlineRenameForCreatedPath(target, commandId);
             refresh();
             setStatus("Created: " + target.getFileName());
         } catch (Exception ex) {
+            LOG.log(Level.WARNING, "Failed to create folder", ex);
             setStatus("Failed to create folder.");
         }
     }
@@ -10667,24 +12509,60 @@ private void createNewFolder() {
         if (path == null || fileTable == null) {
             return;
         }
+        InlineRenameSession session = consumePendingCreatedInlineRenameSession(path);
+        if (session == null) {
+            if (activeInlineRenameSession != null
+                    && !activeInlineRenameSession.awaitingCompletion
+                    && java.util.Objects.equals(path, activeInlineRenameSession.sourcePath)) {
+                session = activeInlineRenameSession;
+            } else {
+                session = captureInlineRenameSession(path,
+                        InlineRenameSessionKind.RENAME_EXISTING,
+                        resolveInlineRenameSurfaceForCurrentView());
+            }
+        }
+        activeInlineRenameSession = session;
         hideExplorerTransientUi();
+        beginInlineRenameEditTracking(path);
         int idx = findTableIndexForPath(path);
         if (idx >= 0) {
-            fileTable.getSelectionModel().clearAndSelect(idx);
+            if (fileTable.getSelectionModel() != null) {
+                fileTable.getSelectionModel().clearAndSelect(idx);
+            }
             if (fileTable.getFocusModel() != null) {
                 fileTable.getFocusModel().focus(idx);
             }
-            fileTable.scrollTo(Math.max(0, idx - 2));
         }
         inlineRenameTreePath = null;
         inlineRenameTablePath = path;
-        fileTable.refresh();
-        fileTable.requestFocus();
+        if (viewMode == ViewMode.DETAILS) {
+            fileTable.refresh();
+            scheduleExplorerPathVisibilityStabilization(path, true);
+            return;
+        }
+        refreshActiveSelectionPresentation();
+        rebuildIconTiles();
+        scheduleExplorerPathVisibilityStabilization(path, true);
+        Platform.runLater(() -> {
+            if (!java.util.Objects.equals(path, inlineRenameTablePath)) {
+                return;
+            }
+            rebuildIconTiles();
+            scheduleExplorerPathVisibilityStabilization(path, true);
+        });
     }
 
     private void beginTreeInlineRename(TreeItem<Path> treeItem) {
         if (treeItem == null || treeItem.getValue() == null || treeItem.getParent() == null || folderTree == null) {
             return;
+        }
+        if (activeInlineRenameSession == null
+                || activeInlineRenameSession.awaitingCompletion
+                || !java.util.Objects.equals(treeItem.getValue(), activeInlineRenameSession.sourcePath)
+                || activeInlineRenameSession.surface != InlineRenameSurface.TREE) {
+            activeInlineRenameSession = captureInlineRenameSession(treeItem.getValue(),
+                    InlineRenameSessionKind.RENAME_EXISTING,
+                    InlineRenameSurface.TREE);
         }
         inlineRenameTablePath = null;
         inlineRenameTreePath = treeItem.getValue();
@@ -10695,60 +12573,114 @@ private void createNewFolder() {
     private void clearInlineRenameTargets() {
         inlineRenameTablePath = null;
         inlineRenameTreePath = null;
+        clearInlineRenameEditTracking();
         if (folderTree != null) {
-            folderTree.edit(null);
+            suppressTreeInlineRenameCancelEvent = true;
+            try {
+                folderTree.edit(null);
+            } finally {
+                suppressTreeInlineRenameCancelEvent = false;
+            }
             folderTree.refresh();
         }
         if (fileTable != null) {
             fileTable.refresh();
         }
+        if (!homeActive && isIconMode(viewMode)) {
+            rebuildIconTiles();
+            Platform.runLater(this::refreshVisibleIconSelectionPresentation);
+        }
     }
 
     private void commitInlineRename(Path source, String requestedName) {
+        InlineRenameSession session = activeInlineRenameSession;
+        if (session == null || !java.util.Objects.equals(source, session.sourcePath)) {
+            session = captureInlineRenameSession(source,
+                    InlineRenameSessionKind.RENAME_EXISTING,
+                    resolveInlineRenameSurfaceForCurrentView());
+            activeInlineRenameSession = session;
+        }
         if (source == null) {
+            clearPendingInlineRenameDraft();
             clearInlineRenameTargets();
+            activeInlineRenameSession = null;
             return;
         }
         String currentName = displayNameForTable(source);
-        String newName = requestedName == null ? "" : requestedName.trim();
-        if (newName.isEmpty() || Objects.equals(newName, currentName)) {
+        String requested = requestedName == null ? "" : requestedName;
+        session.requestedName = requested;
+        if (isBlankInlineRename(requested)) {
+            setStatus("Rename failed: name cannot be blank.");
+            session.awaitingCompletion = false;
+            retryInlineRename(source, requested, true);
+            return;
+        }
+        String newName = normalizeInlineRenameRequestedName(source, requested);
+        if (Objects.equals(newName, currentName)) {
+            clearPendingInlineRenameDraft();
             clearInlineRenameTargets();
-            Platform.runLater(() -> restoreFocusToTablePath(source));
+            if (session.kind == InlineRenameSessionKind.CREATE_NEW) {
+                finalizeInlineRenameCommitSuccess(session, source);
+            } else {
+                activeInlineRenameSession = null;
+                restoreInlineRenameSessionSelectionAndFocus(session);
+                armInlineRenameFocusGuard();
+            }
             return;
         }
         Path parent = source.getParent();
         if (parent == null) {
+            clearPendingInlineRenameDraft();
             clearInlineRenameTargets();
-            Platform.runLater(() -> restoreFocusToTablePath(source));
+            activeInlineRenameSession = null;
+            restoreInlineRenameSessionSelectionAndFocus(session);
+            armInlineRenameFocusGuard();
+            return;
+        }
+        if (".".equals(newName) || "..".equals(newName)) {
+            setStatus("Rename failed: invalid name.");
+            session.awaitingCompletion = false;
+            retryInlineRename(source, requested, true);
+            return;
+        }
+        if (containsIllegalInlineRenameCharacters(newName) || endsWithInvalidInlineRenameSuffix(newName) || isReservedInlineRenameName(newName)) {
+            setStatus("Rename failed: invalid name.");
+            session.awaitingCompletion = false;
+            retryInlineRename(source, requested, true);
             return;
         }
         Path dest = parent.resolve(newName);
-        pendingInlineRenameSelectionPath = dest;
-        pendingInlineRenameSelectionIndex = findTableIndexForPath(source);
-        clearInlineRenameTargets();
-        if (fileOperationService != null) {
-            context.operationQueueService().enqueue(new com.fileexplorer.service.ops.FileOperationRequest(
-                    com.fileexplorer.service.ops.FileOperationType.RENAME,
-                    java.util.List.of(source),
-                    null,
-                    newName,
-                    false,
-                    false,
-                    false
-            ));
-            setStatus("Renaming…");
+        if (!java.util.Objects.equals(source, dest) && Files.exists(dest)) {
+            setStatus("Rename failed: an item with that name already exists.");
+            session.awaitingCompletion = false;
+            retryInlineRename(source, requested, true);
             return;
         }
+        session.pendingResultPath = dest;
+        session.awaitingCompletion = true;
+        captureInlineRenameCommitViewport(session);
+        pendingInlineRenameSelectionPath = dest;
+        pendingInlineRenameSelectionIndex = findTableIndexForPath(source);
+        clearPendingInlineRenameDraft();
+        clearInlineRenameTargets();
+        armInlineRenameFocusGuard();
         try {
-            Files.move(source, dest, new CopyOption[]{StandardCopyOption.REPLACE_EXISTING});
+            if (context != null && context.commandManager() != null) {
+                String label = "Rename " + displayNameForTable(source) + " → " + newName;
+                context.commandManager().execute(new com.fileexplorer.service.ops.command.RenamePathCommand(label, source, dest));
+            } else {
+                Files.move(source, dest);
+            }
             refresh();
             setStatus("Renamed.");
         } catch (Exception ex) {
             pendingInlineRenameSelectionPath = null;
             pendingInlineRenameSelectionIndex = -1;
+            session.awaitingCompletion = false;
+            session.pendingResultPath = null;
             setStatus("Rename failed.");
             LOG.log(Level.FINE, "Inline rename failed", ex);
-            Platform.runLater(() -> restoreFocusToTablePath(source));
+            retryInlineRename(source, requested, true);
         }
     }
 
@@ -10951,6 +12883,7 @@ private void createNewFolder() {
             pendingRestoreSelection = false;
             pendingReselectPath = null;
             pendingReselectIndex = -1;
+            pendingReselectPreferIndexOnMissing = false;
         }
         // Refresh the selected tree node (re-probe chevron/children) if it supports lazy loading.
         refreshSelectedTreeNode();

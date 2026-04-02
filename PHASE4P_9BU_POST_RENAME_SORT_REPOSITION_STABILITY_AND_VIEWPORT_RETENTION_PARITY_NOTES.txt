@@ -1,0 +1,19 @@
+HOTFIX167 / Phase 4P.9BU — Post-Rename Sort/Reposition Stability and Viewport Retention Parity
+
+Summary
+- Added a post-commit viewport snapshot for inline rename/create flows so commit refreshes can restore the pre-commit viewport anchor before revealing the renamed item.
+- Changed rename/create commit finalization to preserve the existing viewport whenever possible and only minimally reveal the committed item if sorting moved it outside the visible region.
+- Reapplied the active Explorer sort order to refreshed listings before selection restore, so post-rename item repositioning now follows the current sort semantics more consistently across Details and icon-based views.
+
+Primary implementation notes
+- MainController now captures visible-row/icon-surface viewport state at rename commit time, excluding the source item when possible so the viewport anchor survives when the renamed item moves to a new sorted position.
+- MainController.applyDirectoryListing(Path, List<FileItem>) now reapplies the current Explorer sort to the refreshed listing and suppresses the older aggressive scroll-to-target path restore while a rename/create commit is still awaiting completion.
+- MainController.finalizeInlineRenameCommitSuccess(...) now restores the saved viewport first, then performs a minimal reveal for the committed item instead of forcing a jump-to-top style stabilization pass.
+- Details-view restore now uses visible-row range checks for minimal movement, while icon/list/tile/content restore reuses the existing surface scroll state and only scrolls when the committed item is actually outside the current viewport.
+
+Files changed
+- src/main/java/com/fileexplorer/controller/MainController.java
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE4P_9BU_POST_RENAME_SORT_REPOSITION_STABILITY_AND_VIEWPORT_RETENTION_PARITY_NOTES.txt
