@@ -1,5 +1,10 @@
 package com.fileexplorer.controller;
 import com.fileexplorer.app.MainApp;
+import com.fileexplorer.perf.viewport.BudgetedViewportScheduler;
+import com.fileexplorer.perf.viewport.RealizationPriorityBand;
+import com.fileexplorer.perf.viewport.ViewportBandClassifier;
+import com.fileexplorer.perf.viewport.ViewportSchedulerTelemetry;
+import com.fileexplorer.perf.viewport.ViewportWorkItem;
 import com.fileexplorer.util.CompositeCloseable;
 import com.fileexplorer.util.FolderSnapshotCache;
 import com.fileexplorer.lifecycle.Lifecycle;
@@ -7,6 +12,7 @@ import com.fileexplorer.service.filesystem.FileMetadataService;
 import com.fileexplorer.service.theme.ThemeService;
 import com.fileexplorer.service.filesystem.TreeBuildService;
 import java.io.File;
+import java.time.Clock;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.file.CopyOption;
@@ -29,6 +35,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyObjectWrapper;
@@ -126,6 +133,9 @@ import com.fileexplorer.controller.breadcrumb.BreadcrumbController;
 import com.fileexplorer.util.IconLoader;
 import com.fileexplorer.util.ImageSupport;
 import com.fileexplorer.app.ExplorerContext;
+import com.fileexplorer.ui.fileview.details.DetailsViewController;
+import com.fileexplorer.ui.fileview.host.FileViewHost;
+import com.fileexplorer.ui.fileview.shared.AbstractIconFlowFileViewController;
 import com.fileexplorer.service.icon.AsyncIconService;
 import com.fileexplorer.service.icon.AsyncThumbnailService;
 import com.fileexplorer.service.icon.IconCacheService;
@@ -173,8 +183,8 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     private static final boolean RESOURCE_AUDIT = Boolean.getBoolean("fileexplorer.resourceAudit");
     // Fix16: diagnostics guard against VirtualFlow runaway cell creation during preferred-size computation
     private static final java.util.concurrent.atomic.AtomicInteger TREE_CELL_CREATED = new java.util.concurrent.atomic.AtomicInteger();
-    private static final double FOLDER_TREE_ROW_HEIGHT_PX = 39.0;
-    private static final Insets FOLDER_TREE_CELL_PADDING = new Insets(4.0, 8.0, 4.0, 6.0);
+    private static final double FOLDER_TREE_ROW_HEIGHT_PX = 24.0;
+    private static final Insets FOLDER_TREE_CELL_PADDING = new Insets(1.0, 8.0, 1.0, 6.0);
     private static final String EXPLORER_ICON_TILE_PATH_KEY = "explorer.iconTilePath";
     private static final String EXPLORER_ICON_TILE_HOVER_HANDLER_KEY = "explorer.iconTileHoverHandlerInstalled";
     private static final String EXPLORER_ICON_TILE_INLINE_RENAME_NODE_KEY = "explorer.iconTileInlineRenameNode";
@@ -193,6 +203,24 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     private static final double STARTUP_HEIGHT = 800.0;
     private static final double MIN_WINDOW_WIDTH = 980.0;
     private static final double MIN_WINDOW_HEIGHT = 640.0;
+    private static final String REALIZATION_ICON_STAMP_KEY = "explorer.iconStamp";
+    private static final int DETAILS_PREFETCH_ROWS_BEFORE = Integer.getInteger("fileexplorer.realization.details.prefetchBefore", 16);
+    private static final int DETAILS_PREFETCH_ROWS_AFTER = Integer.getInteger("fileexplorer.realization.details.prefetchAfter", 32);
+    private static final int ICON_PREFETCH_ROWS_BEFORE = Integer.getInteger("fileexplorer.realization.icon.prefetchBeforeRows", 1);
+    private static final int ICON_PREFETCH_ROWS_AFTER = Integer.getInteger("fileexplorer.realization.icon.prefetchAfterRows", 2);
+    private static final long SCROLL_HITCH_LOG_THRESHOLD_MS = Long.getLong("fileexplorer.scroll.hitchLogThresholdMs", 28L);
+    private static final boolean LOG_SCROLL_TELEMETRY = Boolean.getBoolean("fileexplorer.scroll.telemetry");
+    private static final boolean LOG_REALIZATION_TELEMETRY = Boolean.getBoolean("fileexplorer.realization.telemetry");
+    private static final long VIEWPORT_SETTLE_PASS_DELAY_MS = Long.getLong("fileexplorer.realization.settlePassDelayMs", 135L);
+    private static final long VIEWPORT_FRAME_BUDGET_NANOS = Long.getLong("fileexplorer.realization.frameBudgetNanos", 6_000_000L);
+    private static final long VIEWPORT_SCROLL_STOP_QUIET_MS = Long.getLong("fileexplorer.realization.scrollStopQuietMs", 120L);
+    private static final int VIEWPORT_NEAR_THRESHOLD_CELLS = Integer.getInteger("fileexplorer.realization.nearThresholdCells", 12);
+    private static final int VIEWPORT_FAR_WORK_LIMIT = Integer.getInteger("fileexplorer.realization.farWorkLimit", 24);
+    private static final long VIEWPORT_VISIBLE_REALIZE_ESTIMATE_NANOS = Long.getLong("fileexplorer.realization.visibleRealizeEstimateNanos", 55_000L);
+    private static final long VIEWPORT_NEAR_REALIZE_ESTIMATE_NANOS = Long.getLong("fileexplorer.realization.nearRealizeEstimateNanos", 40_000L);
+    private static final long VIEWPORT_FAR_REALIZE_ESTIMATE_NANOS = Long.getLong("fileexplorer.realization.farRealizeEstimateNanos", 25_000L);
+    private static final long VIEWPORT_VISIBLE_PROMOTION_ESTIMATE_NANOS = Long.getLong("fileexplorer.realization.visiblePromotionEstimateNanos", 30_000L);
+    private static final long VIEWPORT_NEAR_PROMOTION_ESTIMATE_NANOS = Long.getLong("fileexplorer.realization.nearPromotionEstimateNanos", 20_000L);
     private static final String PREF_WIN_W = "main.window.width";
     private static final String PREF_WIN_H = "main.window.height";
     private static final String PREF_WIN_MAX = "main.window.maximized";
@@ -205,6 +233,63 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
         DETAILS,
         TILES,
         CONTENT
+    }
+
+    private enum ScrollVelocityBucket {
+        SETTLE(0.65, 0.45),
+        SLOW(1.00, 0.75),
+        MEDIUM(1.35, 0.85),
+        FAST(1.85, 1.00),
+        FLING(2.60, 1.20);
+
+        final double leadingMultiplier;
+        final double trailingMultiplier;
+
+        ScrollVelocityBucket(double leadingMultiplier, double trailingMultiplier) {
+            this.leadingMultiplier = leadingMultiplier;
+            this.trailingMultiplier = trailingMultiplier;
+        }
+    }
+
+    private static final class ViewportContinuityState {
+        private final long token;
+        private final Path directory;
+        private final java.util.List<Path> selectedPaths;
+        private final Path focusPath;
+        private final Path anchorPath;
+        private final Path firstVisiblePath;
+        private final int firstVisibleIndex;
+        private final double tableScrollValue;
+        private final double flowScrollValue;
+        private final double virtualGridScrollValue;
+        private final double virtualListScrollValue;
+        private final ViewMode viewMode;
+
+        private ViewportContinuityState(long token,
+                                        Path directory,
+                                        java.util.List<Path> selectedPaths,
+                                        Path focusPath,
+                                        Path anchorPath,
+                                        Path firstVisiblePath,
+                                        int firstVisibleIndex,
+                                        double tableScrollValue,
+                                        double flowScrollValue,
+                                        double virtualGridScrollValue,
+                                        double virtualListScrollValue,
+                                        ViewMode viewMode) {
+            this.token = token;
+            this.directory = directory;
+            this.selectedPaths = selectedPaths == null ? java.util.List.of() : java.util.List.copyOf(selectedPaths);
+            this.focusPath = focusPath;
+            this.anchorPath = anchorPath;
+            this.firstVisiblePath = firstVisiblePath;
+            this.firstVisibleIndex = firstVisibleIndex;
+            this.tableScrollValue = tableScrollValue;
+            this.flowScrollValue = flowScrollValue;
+            this.virtualGridScrollValue = virtualGridScrollValue;
+            this.virtualListScrollValue = virtualListScrollValue;
+            this.viewMode = viewMode;
+        }
     }
     @FXML private TreeView<Path> folderTree;
     @FXML private TableView<FileItem> fileTable;
@@ -289,6 +374,10 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     @FXML private StackPane viewHost;
     @FXML private FlowPane iconFlow;
     @FXML private StackPane detailsViewShell;
+    private FileViewHost modularFileViewHost;
+    private DetailsViewController modularDetailsViewController;
+    private final java.util.EnumMap<ViewMode, AbstractIconFlowFileViewController> modularIconViewControllers = new java.util.EnumMap<>(ViewMode.class);
+    private final java.util.Set<ScrollPane> iconScrollPagingTargets = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
     @FXML private VBox homePane;
     @FXML private HBox homePinnedRow;
     @FXML private VBox recentFoldersBox;
@@ -400,8 +489,12 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     @FXML private TextArea previewText;
     @FXML private javafx.scene.image.ImageView previewImage;
     @FXML private TextArea detailsText;
-    // Included controller from fx:include fx:id="breadcrumbBar"
-    @FXML private BreadcrumbController breadcrumbBarController;
+    @FXML private StackPane breadcrumbHost;
+    @FXML private VBox progressPaneHost;
+    private volatile BreadcrumbController breadcrumbBarController;
+    private volatile ProgressPaneController progressPaneController;
+    private final java.util.concurrent.atomic.AtomicBoolean deferredBreadcrumbLoadScheduled = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicBoolean deferredProgressPaneLoadScheduled = new java.util.concurrent.atomic.AtomicBoolean(false);
     
     // Phase 3.6.10 FIX2: Toolbar Sort menu state
     private enum SortKey { NAME, MODIFIED, TYPE, SIZE }
@@ -478,6 +571,28 @@ private volatile long hugeFolderScannedTotal = 0L;
     private ListView<List<Path>> virtualIconGridView;
     private ListView<Path> virtualIconListView;
     private volatile Path iconSelectionAnchorPath;
+    private volatile ViewportContinuityState pendingViewportContinuityState;
+    private javafx.animation.PauseTransition viewportRealizationDebounce;
+    private final java.util.concurrent.atomic.AtomicLong realizationViewportGeneration = new java.util.concurrent.atomic.AtomicLong(0L);
+    private final java.util.concurrent.atomic.AtomicLong realizationDirectoryGeneration = new java.util.concurrent.atomic.AtomicLong(0L);
+    private final java.util.concurrent.atomic.AtomicLong realizationScrollDirection = new java.util.concurrent.atomic.AtomicLong(1L);
+    private final java.util.concurrent.atomic.AtomicLong scrollTelemetryLastMotionNanos = new java.util.concurrent.atomic.AtomicLong(0L);
+    private final java.util.concurrent.atomic.AtomicLong scrollTelemetryBurstStartNanos = new java.util.concurrent.atomic.AtomicLong(0L);
+    private final java.util.concurrent.atomic.AtomicLong scrollTelemetryBurstEvents = new java.util.concurrent.atomic.AtomicLong(0L);
+    private final java.util.concurrent.atomic.AtomicLong scrollTelemetryMaxGapNanos = new java.util.concurrent.atomic.AtomicLong(0L);
+    private javafx.animation.PauseTransition viewportSettlePassDebounce;
+    private volatile double scrollVelocityPixelsPerMs = 0.0;
+    private volatile ScrollVelocityBucket scrollVelocityBucket = ScrollVelocityBucket.SETTLE;
+    private final ViewportSchedulerTelemetry viewportSchedulerTelemetry = new ViewportSchedulerTelemetry();
+    private final ViewportBandClassifier viewportBandClassifier = new ViewportBandClassifier(Math.max(1, VIEWPORT_NEAR_THRESHOLD_CELLS));
+    private final BudgetedViewportScheduler viewportScheduler = new BudgetedViewportScheduler(
+            viewportBandClassifier,
+            viewportSchedulerTelemetry,
+            Clock.systemUTC(),
+            Math.max(50L, VIEWPORT_SCROLL_STOP_QUIET_MS),
+            TimeUnit.MILLISECONDS,
+            this::onViewportScrollStopCommit
+    );
     private Rectangle iconMarqueeSelectionRect;
     private boolean iconMarqueeInteractionInstalled = false;
     private boolean iconMarqueePressArmed = false;
@@ -528,6 +643,8 @@ private volatile long hugeFolderScannedTotal = 0L;
     private final java.util.concurrent.atomic.AtomicBoolean startupThumbnailWarmupGateOpened = new java.util.concurrent.atomic.AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicBoolean startupFirstInteractionTrackingArmed = new java.util.concurrent.atomic.AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicBoolean startupFirstInteractionReadyMarked = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicBoolean deferredOperationQueueBindingsInstalled = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicBoolean deferredExplorerContextActivationScheduled = new java.util.concurrent.atomic.AtomicBoolean(false);
     private volatile boolean directoryLoading;
     private final List<Path> backHistory;
     private final List<Path> forwardHistory;
@@ -723,29 +840,8 @@ public void attach(ExplorerContext context) {
         return;
     }
     this.context = context;
-    // Phase 3.6.3: auto-show Operations when work begins; auto-hide shortly after queue drains
-    if (context.operationQueueService() != null) {
-        context.operationQueueService().activeOperationProperty().addListener((obs, oldOp, newOp) -> {
-            if (newOp != null && operationsToggle != null) {
-                Platform.runLater(() -> operationsToggle.setSelected(true));
-            }
-        });
-        context.operationQueueService().runningProperty().addListener((obs, wasRunning, isRunning) -> {
-            if (!isRunning && operationsToggle != null) {
-                // avoid flicker if another job starts immediately
-                PauseTransition pt = new PauseTransition(Duration.seconds(2));
-                pt.setOnFinished(ev -> {
-                    // hide only if nothing is queued/running
-                    boolean empty = context.operationQueueService().getQueue() == null
-                            || context.operationQueueService().getQueue().isEmpty();
-                    if (empty && !context.operationQueueService().runningProperty().get()) {
-                        operationsToggle.setSelected(false);
-                    }
-                });
-                pt.play();
-            }
-        });
-    }
+    // HOTFIX185: keep the queue/history/template graph out of attach(); these bindings are installed once startup is interactive.
+    scheduleDeferredOperationQueueBindings();
     this.themeService = context.themeService();
     this.fileMetadataService = context.fileMetadataService();
     if (this.metadataBudgetService == null) {
@@ -829,15 +925,8 @@ public void attach(ExplorerContext context) {
  */
     private void configureToolbarActions() {
     LogSupport.enter(LOG, "configureToolbarActions");
-    // New menu: bind "Folder" to createNewFolder(). Other templates can be wired later.
+    installLazyCommandBarMenuPopulation();
     if (newMenuButton != null) {
-        newMenuButton.getItems().forEach(mi -> {
-            String t = mi.getText();
-            if (t == null) return;
-            if (t.equalsIgnoreCase("Folder")) {
-                mi.setOnAction(e -> createNewFolder());
-            }
-        });
         configureStructuredCommandBarMenuButton(newMenuButton);
     }
     if (cutButton != null) {
@@ -1068,6 +1157,10 @@ public void attach(ExplorerContext context) {
     }
 
     private Node buildStructuredCommandBarSortVectorIcon() {
+        Node rasterIcon = createStructuredCommandBarRasterIcon("/icons/toolbar.sort.png", 18.0, 18.0);
+        if (rasterIcon != null) {
+            return rasterIcon;
+        }
         StackPane root = createStructuredCommandBarVectorIconRoot();
         root.getChildren().addAll(
                 createStructuredCommandBarStrokePath("M 2.5 4 H 9.5"),
@@ -1077,6 +1170,29 @@ public void attach(ExplorerContext context) {
                 createStructuredCommandBarStrokePath("M 9.5 10 L 11.5 12 L 13.5 10")
         );
         return root;
+    }
+
+    private Node createStructuredCommandBarRasterIcon(String resourcePath, double fitWidth, double fitHeight) {
+        if (resourcePath == null || resourcePath.isBlank()) {
+            return null;
+        }
+        URL resourceUrl = MainController.class.getResource(resourcePath);
+        if (resourceUrl == null) {
+            return null;
+        }
+        Image image = new Image(resourceUrl.toExternalForm(), fitWidth, fitHeight, true, true, true);
+        if (image.isError()) {
+            return null;
+        }
+        ImageView imageView = new ImageView(image);
+        imageView.setFitWidth(fitWidth);
+        imageView.setFitHeight(fitHeight);
+        imageView.setPreserveRatio(true);
+        imageView.setSmooth(true);
+        imageView.setPickOnBounds(true);
+        imageView.setMouseTransparent(true);
+        imageView.getStyleClass().add("command-bar-menu-raster-icon");
+        return imageView;
     }
 
     private Node buildStructuredCommandBarViewVectorIcon() {
@@ -1194,28 +1310,355 @@ public void attach(ExplorerContext context) {
         }
     }
 
-    private void wireSeeMoreMenuActions() {
-        if (seeMoreMenuButton == null) {
-            return;
+
+private void wireSeeMoreMenuActions() {
+    if (seeMoreMenuButton == null) {
+        return;
+    }
+    for (javafx.scene.control.MenuItem item : seeMoreMenuButton.getItems()) {
+        String label = item.getText();
+        if (label == null || item instanceof javafx.scene.control.SeparatorMenuItem) {
+            continue;
         }
-        for (javafx.scene.control.MenuItem item : seeMoreMenuButton.getItems()) {
-            String label = item.getText();
-            if (label == null || item instanceof javafx.scene.control.SeparatorMenuItem) {
-                continue;
-            }
-            switch (label) {
-                case "Undo" -> item.setOnAction(e -> setStatus("Undo: not implemented yet."));
-                case "Copy path" -> item.setOnAction(e -> copyPrimaryPathToClipboard());
-                case "Pin to Quick access" -> item.setOnAction(e -> pinCurrentLocationToQuickAccess());
-                case "Select all" -> item.setOnAction(e -> selectAll());
-                case "Select none" -> item.setOnAction(e -> clearSelection());
-                case "Invert selection" -> item.setOnAction(e -> invertSelection());
-                case "Properties" -> item.setOnAction(e -> openPropertiesForSelection());
-                default -> {
-                }
+        switch (label) {
+            case "Undo" -> item.setOnAction(e -> setStatus("Undo: not implemented yet."));
+            case "Copy path" -> item.setOnAction(e -> copyPrimaryPathToClipboard());
+            case "Pin to Quick access" -> item.setOnAction(e -> pinCurrentLocationToQuickAccess());
+            case "Select all" -> item.setOnAction(e -> selectAll());
+            case "Select none" -> item.setOnAction(e -> clearSelection());
+            case "Invert selection" -> item.setOnAction(e -> invertSelection());
+            case "Properties" -> item.setOnAction(e -> openPropertiesForSelection());
+            default -> {
             }
         }
     }
+}
+
+private void installLazyCommandBarMenuPopulation() {
+    installLazyMenuPopulation(newMenuButton, "newMenuButton materialize", this::materializeNewMenuButton);
+    installLazyMenuPopulation(sortMenuButton, "sortMenuButton materialize", this::materializeSortMenuButton);
+    installLazyMenuPopulation(viewMenuButton, "viewMenuButton materialize", this::materializeViewMenuButton);
+    installLazyMenuPopulation(seeMoreMenuButton, "seeMoreMenuButton materialize", this::materializeSeeMoreMenuButton);
+}
+
+private void installLazyMenuPopulation(javafx.scene.control.MenuButton menuButton, String traceLabel, Runnable populator) {
+    if (menuButton == null || populator == null) {
+        return;
+    }
+    menuButton.setOnShowing(e -> {
+        if (Boolean.TRUE.equals(menuButton.getProperties().get("fileexplorer.lazyMenu.materialized"))) {
+            return;
+        }
+        menuButton.getProperties().put("fileexplorer.lazyMenu.materialized", Boolean.TRUE);
+        StartupTrace.mark(traceLabel + " begin");
+        try {
+            populator.run();
+            styleCommandFlyout(menuButton);
+        } finally {
+            StartupTrace.mark(traceLabel + " end");
+        }
+    });
+}
+
+private javafx.scene.control.MenuItem createTextMenuItem(String text, Node graphic) {
+    javafx.scene.control.MenuItem item = new javafx.scene.control.MenuItem(text);
+    if (graphic != null) {
+        item.setGraphic(graphic);
+    }
+    return item;
+}
+
+private javafx.scene.control.SeparatorMenuItem createSeparatorMenuItem() {
+    return new javafx.scene.control.SeparatorMenuItem();
+}
+
+private Node createMenuGlyph(String glyph, String... styleClasses) {
+    Label label = new Label(glyph == null ? "" : glyph);
+    for (String styleClass : styleClasses) {
+        if (styleClass != null && !styleClass.isBlank()) {
+            label.getStyleClass().add(styleClass);
+        }
+    }
+    return label;
+}
+
+private ImageView createMenuImageIcon(String resourcePath, double size) {
+    if (resourcePath == null || resourcePath.isBlank()) {
+        return null;
+    }
+    URL url = getClass().getResource(resourcePath);
+    if (url == null) {
+        return null;
+    }
+    ImageView view = new ImageView(new Image(url.toExternalForm()));
+    view.setFitWidth(size);
+    view.setFitHeight(size);
+    view.setPreserveRatio(true);
+    view.setSmooth(true);
+    view.setPickOnBounds(true);
+    view.getStyleClass().add("view-menu-icon");
+    return view;
+}
+
+private HBox createViewMenuRow(Node selector, Node icon, String labelText) {
+    HBox row = new HBox(10);
+    row.setAlignment(Pos.CENTER_LEFT);
+    row.getStyleClass().add("view-menu-row");
+    if (selector != null) {
+        row.getChildren().add(selector);
+    }
+    if (icon != null) {
+        row.getChildren().add(icon);
+    } else {
+        Region placeholder = new Region();
+        placeholder.getStyleClass().add("view-menu-icon-placeholder");
+        row.getChildren().add(placeholder);
+    }
+    Label label = new Label(labelText == null ? "" : labelText);
+    label.getStyleClass().add("view-menu-text");
+    row.getChildren().add(label);
+    return row;
+}
+
+private CustomMenuItem createViewModeMenuItem(ViewMode mode, String labelText, String resourcePath, boolean selected) {
+    RadioButton radio = new RadioButton();
+    radio.setFocusTraversable(false);
+    radio.getStyleClass().add("view-menu-radio");
+    radio.setToggleGroup(viewModeToggleGroup);
+    radio.setUserData(mode.name());
+    radio.setSelected(selected);
+    CustomMenuItem item = new CustomMenuItem(createViewMenuRow(radio, createMenuImageIcon(resourcePath, 18.0), labelText), true);
+    item.setUserData(mode.name());
+    item.getProperties().put("viewRadio", radio);
+    item.setOnAction(this::onViewModeRowAction);
+    return item;
+}
+
+private CustomMenuItem createPaneToggleMenuItem(String labelText, String resourcePath, boolean selected) {
+    RadioButton radio = new RadioButton();
+    radio.setFocusTraversable(false);
+    radio.getStyleClass().add("view-menu-radio");
+    radio.setSelected(selected);
+    CustomMenuItem item = new CustomMenuItem(createViewMenuRow(radio, createMenuImageIcon(resourcePath, 18.0), labelText), false);
+    item.getProperties().put("paneRadio", radio);
+    return item;
+}
+
+private CustomMenuItem createCheckToggleMenuItem(String labelText, Node icon, boolean selected) {
+    CheckBox checkBox = new CheckBox();
+    checkBox.setFocusTraversable(false);
+    checkBox.getStyleClass().add("view-menu-checkbox");
+    checkBox.setSelected(selected);
+    CustomMenuItem item = new CustomMenuItem(createViewMenuRow(checkBox, icon, labelText), false);
+    item.getProperties().put("viewCheckBox", checkBox);
+    return item;
+}
+
+private javafx.scene.control.Menu createShowSubMenu() {
+    javafx.scene.control.Menu menu = new javafx.scene.control.Menu("Show");
+    menu.getStyleClass().add("view-menu-submenu");
+    HBox graphic = new HBox(10);
+    graphic.setAlignment(Pos.CENTER_LEFT);
+    graphic.getStyleClass().addAll("view-menu-leading", "view-menu-submenu-row");
+    CheckBox phantomCheck = new CheckBox();
+    phantomCheck.setOpacity(0.0);
+    phantomCheck.setDisable(true);
+    phantomCheck.setFocusTraversable(false);
+    phantomCheck.getStyleClass().add("view-menu-checkbox");
+    Region placeholder = new Region();
+    placeholder.getStyleClass().add("view-menu-icon-placeholder");
+    graphic.getChildren().addAll(phantomCheck, placeholder);
+    menu.setGraphic(graphic);
+
+    CustomMenuItem navigationItem = createCheckToggleMenuItem("Navigation pane", createMenuImageIcon("/icons/view.navigation.pane.png", 18.0), showNavigationPane);
+    showNavigationPaneMenuItem = (CheckBox) navigationItem.getProperties().get("viewCheckBox");
+
+    CustomMenuItem compactItem = createCheckToggleMenuItem("Compact view", createMenuGlyph("\uE7D8", "mdl2-icon", "view-menu-icon"), compactView);
+    showCompactViewMenuItem = (CheckBox) compactItem.getProperties().get("viewCheckBox");
+
+    CustomMenuItem itemCheckItem = createCheckToggleMenuItem("Item check boxes", createMenuGlyph("\uE739", "mdl2-icon", "view-menu-icon"), showItemCheckBoxes);
+    showItemCheckBoxesMenuItem = (CheckBox) itemCheckItem.getProperties().get("viewCheckBox");
+
+    CustomMenuItem extensionsItem = createCheckToggleMenuItem("File name extensions", createMenuGlyph("\uE8EC", "mdl2-icon", "view-menu-icon"), showFileNameExtensions);
+    showFileNameExtensionsMenuItem = (CheckBox) extensionsItem.getProperties().get("viewCheckBox");
+
+    CustomMenuItem hiddenItem = createCheckToggleMenuItem("Hidden items", createMenuGlyph("\uE890", "mdl2-icon", "view-menu-icon"), showHiddenItems);
+    showHiddenItemsMenuItem = (CheckBox) hiddenItem.getProperties().get("viewCheckBox");
+
+    CustomMenuItem operationHistoryItem = new CustomMenuItem(createViewMenuRow(new RadioButton(), createMenuGlyph("\uE8A7", "fluent-icon", "view-menu-icon"), "Operation History..."), true);
+    wireMenuItemContentAction(operationHistoryItem, () -> onShowOperationHistory(new ActionEvent(operationHistoryItem, operationHistoryItem)), true);
+    CustomMenuItem commandLogItem = new CustomMenuItem(createViewMenuRow(new RadioButton(), createMenuGlyph("\uE8A7", "fluent-icon", "view-menu-icon"), "Command Log..."), true);
+    wireMenuItemContentAction(commandLogItem, () -> onShowCommandLog(new ActionEvent(commandLogItem, commandLogItem)), true);
+
+    menu.getItems().setAll(
+            navigationItem,
+            compactItem,
+            itemCheckItem,
+            extensionsItem,
+            hiddenItem,
+            createSeparatorMenuItem(),
+            operationHistoryItem,
+            commandLogItem
+    );
+    return menu;
+}
+
+private void materializeNewMenuButton() {
+    if (newMenuButton == null) {
+        return;
+    }
+    javafx.scene.control.MenuItem folder = createTextMenuItem("Folder", createMenuGlyph("\uE8B7", "fluent-icon"));
+    folder.setOnAction(e -> createNewFolder());
+    javafx.scene.control.MenuItem shortcut = createTextMenuItem("Shortcut", createMenuGlyph("\uE71B", "fluent-icon"));
+    shortcut.setOnAction(e -> setStatus("Shortcut creation: not implemented yet."));
+    javafx.scene.control.MenuItem textDocument = createTextMenuItem("Text Document", createMenuGlyph("\uE8A5", "fluent-icon"));
+    textDocument.setOnAction(e -> setStatus("Text document template: not implemented yet."));
+    javafx.scene.control.MenuItem zipFolder = createTextMenuItem("Compressed (zipped) Folder", createMenuGlyph("\uF012", "fluent-icon"));
+    zipFolder.setOnAction(e -> setStatus("ZIP folder template: not implemented yet."));
+    newMenuButton.getItems().setAll(folder, shortcut, textDocument, zipFolder);
+}
+
+private void materializeSortMenuButton() {
+    if (sortMenuButton == null) {
+        return;
+    }
+    javafx.scene.control.MenuItem name = new javafx.scene.control.MenuItem("Name");
+    name.setUserData("NAME");
+    name.setOnAction(this::onSortMenuItem);
+    javafx.scene.control.MenuItem modified = new javafx.scene.control.MenuItem("Date modified");
+    modified.setUserData("MODIFIED");
+    modified.setOnAction(this::onSortMenuItem);
+    javafx.scene.control.MenuItem type = new javafx.scene.control.MenuItem("Type");
+    type.setUserData("TYPE");
+    type.setOnAction(this::onSortMenuItem);
+    javafx.scene.control.MenuItem size = new javafx.scene.control.MenuItem("Size");
+    size.setUserData("SIZE");
+    size.setOnAction(this::onSortMenuItem);
+    sortMenuButton.getItems().setAll(name, modified, type, size);
+}
+
+private void materializeViewMenuButton() {
+    if (viewMenuButton == null) {
+        return;
+    }
+    CustomMenuItem extraLargeItem = createViewModeMenuItem(ViewMode.EXTRA_LARGE_ICONS, "Extra large icons", "/icons/view.extra.large.png", false);
+    viewExtraLargeIcons = (RadioButton) extraLargeItem.getProperties().get("viewRadio");
+
+    CustomMenuItem largeItem = createViewModeMenuItem(ViewMode.LARGE_ICONS, "Large icons", "/icons/view.large.png", false);
+    viewLargeIcons = (RadioButton) largeItem.getProperties().get("viewRadio");
+
+    CustomMenuItem mediumItem = createViewModeMenuItem(ViewMode.MEDIUM_ICONS, "Medium icons", "/icons/view.medium.png", false);
+    viewMediumIcons = (RadioButton) mediumItem.getProperties().get("viewRadio");
+
+    CustomMenuItem smallItem = createViewModeMenuItem(ViewMode.SMALL_ICONS, "Small icons", "/icons/view.small.png", false);
+    viewSmallIcons = (RadioButton) smallItem.getProperties().get("viewRadio");
+
+    CustomMenuItem listItem = createViewModeMenuItem(ViewMode.LIST, "List", "/icons/view.list.png", false);
+    viewList = (RadioButton) listItem.getProperties().get("viewRadio");
+
+    CustomMenuItem detailsItem = createViewModeMenuItem(ViewMode.DETAILS, "Details", "/icons/view.details.png", true);
+    viewDetails = (RadioButton) detailsItem.getProperties().get("viewRadio");
+
+    CustomMenuItem tilesItem = createViewModeMenuItem(ViewMode.TILES, "Tiles", "/icons/view.tiles.png", false);
+    viewTiles = (RadioButton) tilesItem.getProperties().get("viewRadio");
+
+    viewContentItem = createViewModeMenuItem(ViewMode.CONTENT, "Content", "/icons/view.content.png", false);
+    viewContent = (RadioButton) viewContentItem.getProperties().get("viewRadio");
+
+    detailsPaneRowItem = createPaneToggleMenuItem("Details pane", "/icons/view.details.pane.png", detailsBox != null && detailsBox.isVisible());
+    detailsPaneMenuItem = (RadioButton) detailsPaneRowItem.getProperties().get("paneRadio");
+
+    previewPaneRowItem = createPaneToggleMenuItem("Preview pane", "/icons/view.preview.pane.png", previewBox != null && previewBox.isVisible());
+    previewPaneMenuItem = (RadioButton) previewPaneRowItem.getProperties().get("paneRadio");
+
+    viewMenuButton.getItems().setAll(
+            extraLargeItem,
+            largeItem,
+            mediumItem,
+            smallItem,
+            listItem,
+            detailsItem,
+            tilesItem,
+            viewContentItem,
+            createSeparatorMenuItem(),
+            detailsPaneRowItem,
+            previewPaneRowItem,
+            createShowSubMenu()
+    );
+    configureViewMenu();
+}
+
+private void materializeSeeMoreMenuButton() {
+    if (seeMoreMenuButton == null) {
+        return;
+    }
+    seeMoreMenuButton.getItems().setAll(
+            createTextMenuItem("Undo", createMenuImageIcon("/icons/see_more_undo.png", 16.0)),
+            createSeparatorMenuItem(),
+            createTextMenuItem("Compress to ZIP file", createMenuGlyph("\uF012", "fluent-icon", "menuitem-icon-gap")),
+            createTextMenuItem("Pin to Quick access", createMenuImageIcon("/icons/see_more_pin_to_quick_access.png", 16.0)),
+            createTextMenuItem("Copy path", createMenuGlyph("\uE8C8", "fluent-icon", "menuitem-icon-gap")),
+            createSeparatorMenuItem(),
+            createTextMenuItem("Select all", createMenuImageIcon("/icons/see_more_select_all.png", 16.0)),
+            createTextMenuItem("Select none", createMenuImageIcon("/icons/see_more_select_none.png", 16.0)),
+            createTextMenuItem("Invert selection", createMenuImageIcon("/icons/see_more_invert_selection.png", 16.0)),
+            createSeparatorMenuItem(),
+            createTextMenuItem("Properties", createMenuGlyph("\uE946", "fluent-icon", "menuitem-icon-gap")),
+            createTextMenuItem("Options:", createMenuGlyph("\uE713", "fluent-icon", "menuitem-icon-gap"))
+    );
+    wireSeeMoreMenuActions();
+}
+
+private void scheduleDeferredOperationQueueBindings() {
+    if (context == null) {
+        return;
+    }
+    if (!startupFirstInteractionReadyMarked.get()) {
+        return;
+    }
+    installDeferredOperationQueueBindings();
+}
+
+private void activateDeferredExplorerContextServices() {
+    if (context == null) {
+        return;
+    }
+    if (!deferredExplorerContextActivationScheduled.compareAndSet(false, true)) {
+        return;
+    }
+    StartupTrace.mark("ExplorerContext stageB request");
+    context.activateDeferredServicesAsync();
+    Platform.runLater(this::installDeferredOperationQueueBindings);
+}
+
+private void installDeferredOperationQueueBindings() {
+    if (context == null) {
+        return;
+    }
+    if (!deferredOperationQueueBindingsInstalled.compareAndSet(false, true)) {
+        return;
+    }
+    StartupTrace.mark("MainController operation queue bindings begin");
+    var operationQueueService = context.operationQueueService();
+    operationQueueService.activeOperationProperty().addListener((obs, oldOp, newOp) -> {
+        if (newOp != null && operationsToggle != null) {
+            Platform.runLater(() -> operationsToggle.setSelected(true));
+        }
+    });
+    operationQueueService.runningProperty().addListener((obs, wasRunning, isRunning) -> {
+        if (!isRunning && operationsToggle != null) {
+            PauseTransition pt = new PauseTransition(Duration.seconds(2));
+            pt.setOnFinished(ev -> {
+                boolean empty = operationQueueService.getQueue() == null || operationQueueService.getQueue().isEmpty();
+                if (empty && !operationQueueService.runningProperty().get()) {
+                    operationsToggle.setSelected(false);
+                }
+            });
+            pt.play();
+        }
+    });
+    StartupTrace.mark("MainController operation queue bindings end");
+}
 @Override
 /**
  * initialize.
@@ -1226,6 +1669,7 @@ public void attach(ExplorerContext context) {
 public void initialize(URL location, ResourceBundle resources) {
     LogSupport.enter(LOG, "initialize");
     this.fxmlInitialized = true;
+    initializeFileViewModules();
     // Phase 3.6.3: Operations pane visibility (managed+visible) bound to toggle
     if (operationsBox != null && operationsToggle != null) {
         operationsBox.visibleProperty().bind(operationsToggle.selectedProperty());
@@ -1264,6 +1708,7 @@ private void initializeWithContext() {
         configureViewMenu();
         configureSidePaneParity();
         configureIconActivation();
+        scheduleDeferredBootstrapIncludes();
         updateTopChromeState();
         // Phase 3.2: UI subscribes to directory load events
         localDisposables.add(eventBus.subscribe(DirectoryLoadSucceeded.class, e -> {
@@ -1318,6 +1763,7 @@ private void initializeWithContext() {
             installCtrlScrollViewShortcuts(scene);
             explorerShortcutsInstalled = true;
         }
+        scheduleDeferredBootstrapIncludes();
         scene.widthProperty().addListener((obs, oldV, newV) -> scheduleCommandBarCompaction(newV == null ? 0.0 : newV.doubleValue()));
         // Adopt startup font provided by MainApp (if present) so the first frame
         // renders at the intended size on HiDPI displays.
@@ -1534,6 +1980,8 @@ private void initializeWithContext() {
             return;
         }
         StartupTrace.mark("first interaction ready");
+        activateDeferredExplorerContextServices();
+        scheduleDeferredProgressPaneLoad();
         startupThumbnailGateDebounce.playFromStart();
     }
 
@@ -2400,8 +2848,8 @@ private void adjustUiFontSize(double deltaPx) {
             String treeStyle = "-fx-font-family: " + uiFontFamilyCss + "; -fx-font-size: " + treeFontPx + "px;";
             folderTree.setStyle(treeStyle);
             applyFolderTreeMetricsHard();
-            // Ensure row height tracks font size while preserving the requested taller Explorer-like pitch.
-            double rowH = Math.max(FOLDER_TREE_ROW_HEIGHT_PX, Math.ceil(treeFontPx + (UI_MIN_VPAD_PX * 2.0) + 12.0));
+            // Ensure row height stays compact and Windows Explorer-like while still respecting the active font size.
+            double rowH = Math.max(FOLDER_TREE_ROW_HEIGHT_PX, Math.ceil(treeFontPx + 10.0));
             folderTree.setFixedCellSize(rowH);
             // Refresh can be expensive on startup; only do it if explicitly enabled.
             if (Boolean.parseBoolean(System.getProperty("fileexplorer.ui.refreshAfterFontApply", "false"))) {
@@ -2891,10 +3339,16 @@ folderTree.setCellFactory(tv -> {
             });
         }
         if (iconScroll != null) {
-            iconScroll.viewportBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveIconViewportLayoutRefresh());
-            iconScroll.widthProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
-            iconScroll.heightProperty().addListener((obs, oldValue, newValue) -> scheduleResponsiveIconViewportLayoutRefresh());
-            iconScroll.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> scheduleResponsiveIconViewportLayoutRefresh());
+            iconScroll.addEventFilter(ScrollEvent.ANY, e -> noteViewportMotion(e.getDeltaY()));
+        }
+        if (viewHost != null) {
+            viewHost.addEventFilter(ScrollEvent.ANY, e -> noteViewportMotion(e.getDeltaY()));
+        }
+        if (iconScroll != null) {
+            iconScroll.viewportBoundsProperty().addListener((obs, oldBounds, newBounds) -> { scheduleResponsiveIconViewportLayoutRefresh(); scheduleViewportScopedRealizationRefresh(); });
+            iconScroll.widthProperty().addListener((obs, oldValue, newValue) -> { scheduleResponsiveIconViewportLayoutRefresh(); scheduleViewportScopedRealizationRefresh(); });
+            iconScroll.heightProperty().addListener((obs, oldValue, newValue) -> { scheduleResponsiveIconViewportLayoutRefresh(); scheduleViewportScopedRealizationRefresh(); });
+            iconScroll.layoutBoundsProperty().addListener((obs, oldBounds, newBounds) -> { scheduleResponsiveIconViewportLayoutRefresh(); scheduleViewportScopedRealizationRefresh(); });
         }
         if (viewHost != null) {
             ensureExplorerFileViewSelectionInteractionsInstalled();
@@ -3333,9 +3787,9 @@ colType.setCellValueFactory(param -> {
         // metadata for a small "visible-ish" window after idle / scroll settles.
         initVisibleMetadataDebounce();
         // Debounce on scroll.
-        fileTable.addEventFilter(javafx.scene.input.ScrollEvent.ANY, ev -> armVisibleMetadataRequest());
+        fileTable.addEventFilter(javafx.scene.input.ScrollEvent.ANY, ev -> { armVisibleMetadataRequest(); noteViewportMotion(ev.getDeltaY()); });
         // Debounce when items stream in (progressive load updates tableItems).
-        tableItems.addListener((javafx.collections.ListChangeListener<FileItem>) c -> armVisibleMetadataRequest());
+        tableItems.addListener((javafx.collections.ListChangeListener<FileItem>) c -> { armVisibleMetadataRequest(); scheduleViewportScopedRealizationRefresh(); });
     
         // Activate folders on double-click and Enter (Details/List views use the TableView).
         fileTable.setRowFactory(_ -> createExplorerDetailsTableRow());
@@ -7343,6 +7797,562 @@ StringBuilder sb = new StringBuilder();
     }
     return new PreviewResult(PreviewDecision.RUN, selectedPolicyOverride);
 }
+    private void initViewportRealizationDebounce() {
+        if (viewportRealizationDebounce != null) {
+            return;
+        }
+        long ms = Long.getLong("fileexplorer.realization.idleDebounceMs", 90L);
+        viewportRealizationDebounce = new javafx.animation.PauseTransition(javafx.util.Duration.millis(Math.max(30L, ms)));
+        viewportRealizationDebounce.setOnFinished(_ -> {
+            noteViewportIdle();
+            requestViewportScopedRealizationRefresh();
+        });
+    }
+
+    private void noteDirectoryRealizationScopeChanged() {
+        realizationDirectoryGeneration.incrementAndGet();
+        try {
+            AsyncIconService.getInstance().cancelAll();
+        } catch (Exception ignored) {
+        }
+        scheduleViewportScopedRealizationRefresh();
+    }
+
+    private void noteViewportMotion(double deltaY) {
+        recordScrollTelemetry(deltaY);
+        viewportScheduler.markScrollActivity();
+        if (deltaY < 0.0) {
+            realizationScrollDirection.set(1L);
+        } else if (deltaY > 0.0) {
+            realizationScrollDirection.set(-1L);
+        }
+        try {
+            AsyncIconService.getInstance().noteViewportMotion();
+        } catch (Exception ignored) {
+        }
+        try {
+            AsyncThumbnailService.getInstance().noteViewportMotion();
+        } catch (Exception ignored) {
+        }
+        scheduleViewportScopedRealizationRefresh();
+    }
+
+    private void noteViewportIdle() {
+        long burstStart = scrollTelemetryBurstStartNanos.getAndSet(0L);
+        long lastMotion = scrollTelemetryLastMotionNanos.getAndSet(0L);
+        long events = scrollTelemetryBurstEvents.getAndSet(0L);
+        long maxGapNanos = scrollTelemetryMaxGapNanos.getAndSet(0L);
+        try {
+            AsyncIconService.getInstance().noteViewportIdle();
+        } catch (Exception ignored) {
+        }
+        try {
+            AsyncThumbnailService.getInstance().noteViewportIdle();
+        } catch (Exception ignored) {
+        }
+        long settleLatencyMs = lastMotion <= 0L ? 0L : Math.max(0L, Math.round((System.nanoTime() - lastMotion) / 1_000_000.0));
+        if (!LOG_SCROLL_TELEMETRY || burstStart == 0L || lastMotion == 0L || events <= 0L) {
+            return;
+        }
+        long burstMs = Math.max(0L, Math.round((lastMotion - burstStart) / 1_000_000.0));
+        long maxGapMs = Math.max(0L, Math.round(maxGapNanos / 1_000_000.0));
+        ScrollVelocityBucket bucket = resolveScrollVelocityBucket();
+        double velocity = scrollVelocityPixelsPerMs;
+        LOG.info(() -> "[SCROLL] idle burstMs=" + burstMs
+                + " events=" + events
+                + " maxGapMs=" + maxGapMs
+                + " settleLatencyMs=" + settleLatencyMs
+                + " velocityPxPerMs=" + String.format(java.util.Locale.ROOT, "%.2f", velocity)
+                + " bucket=" + bucket
+                + " view=" + viewMode);
+    }
+
+    private void recordScrollTelemetry(double deltaY) {
+        long now = System.nanoTime();
+        long previous = scrollTelemetryLastMotionNanos.getAndSet(now);
+        if (scrollTelemetryBurstStartNanos.get() == 0L) {
+            scrollTelemetryBurstStartNanos.set(now);
+        }
+        scrollTelemetryBurstEvents.incrementAndGet();
+        if (previous <= 0L) {
+            return;
+        }
+        long gap = Math.max(0L, now - previous);
+        scrollTelemetryMaxGapNanos.accumulateAndGet(gap, Math::max);
+        updateScrollVelocityEstimate(deltaY, gap);
+        long gapMs = Math.round(gap / 1_000_000.0);
+        if (gapMs >= SCROLL_HITCH_LOG_THRESHOLD_MS) {
+            LOG.info(() -> "[SCROLL] hitch gapMs=" + gapMs
+                    + " deltaY=" + String.format(java.util.Locale.ROOT, "%.2f", deltaY)
+                    + " velocityPxPerMs=" + String.format(java.util.Locale.ROOT, "%.2f", scrollVelocityPixelsPerMs)
+                    + " bucket=" + resolveScrollVelocityBucket()
+                    + " view=" + viewMode);
+        }
+    }
+
+    private void initViewportSettlePassDebounce() {
+        if (viewportSettlePassDebounce != null) {
+            return;
+        }
+        viewportSettlePassDebounce = new javafx.animation.PauseTransition(javafx.util.Duration.millis(Math.max(60L, VIEWPORT_SETTLE_PASS_DELAY_MS)));
+        viewportSettlePassDebounce.setOnFinished(_ -> runViewportSettlePass());
+    }
+
+    private void scheduleViewportSettlePass() {
+        initViewportSettlePassDebounce();
+        if (viewportSettlePassDebounce == null) {
+            return;
+        }
+        if (javafx.application.Platform.isFxApplicationThread()) {
+            viewportSettlePassDebounce.playFromStart();
+        } else {
+            javafx.application.Platform.runLater(() -> viewportSettlePassDebounce.playFromStart());
+        }
+    }
+
+    private void runViewportSettlePass() {
+        if (!javafx.application.Platform.isFxApplicationThread()) {
+            javafx.application.Platform.runLater(this::runViewportSettlePass);
+            return;
+        }
+        scrollVelocityPixelsPerMs = 0.0;
+        scrollVelocityBucket = ScrollVelocityBucket.SETTLE;
+        if (tableItems == null || tableItems.isEmpty()) {
+            return;
+        }
+        java.util.List<Path> selectedPaths = new java.util.ArrayList<>(getSelectedItems());
+        Path focusPath = getFocusedOrSelectedPath();
+        Path settleFocus = focusPath != null && selectedPaths.contains(focusPath)
+                ? focusPath
+                : iconSelectionAnchorPath != null && selectedPaths.contains(iconSelectionAnchorPath)
+                ? iconSelectionAnchorPath
+                : (!selectedPaths.isEmpty() ? selectedPaths.get(0) : focusPath);
+        if (!selectedPaths.isEmpty() && settleFocus != null) {
+            applyExplorerPathSelection(selectedPaths, settleFocus);
+        } else if (settleFocus != null && viewMode == ViewMode.DETAILS) {
+            restoreFocusToTablePath(settleFocus);
+        }
+        requestViewportScopedRealizationRefresh();
+    }
+
+    private void updateScrollVelocityEstimate(double deltaY, long gapNanos) {
+        if (gapNanos <= 0L) {
+            return;
+        }
+        double gapMs = Math.max(0.001, gapNanos / 1_000_000.0);
+        double instantaneous = Math.abs(deltaY) / gapMs;
+        double previous = scrollVelocityPixelsPerMs;
+        double alpha = previous <= 0.0 ? 1.0 : 0.35;
+        scrollVelocityPixelsPerMs = previous <= 0.0 ? instantaneous : (previous * (1.0 - alpha)) + (instantaneous * alpha);
+        scrollVelocityBucket = classifyScrollVelocityBucket(scrollVelocityPixelsPerMs);
+    }
+
+    private ScrollVelocityBucket classifyScrollVelocityBucket(double velocityPxPerMs) {
+        if (velocityPxPerMs >= 2.20) {
+            return ScrollVelocityBucket.FLING;
+        }
+        if (velocityPxPerMs >= 1.10) {
+            return ScrollVelocityBucket.FAST;
+        }
+        if (velocityPxPerMs >= 0.45) {
+            return ScrollVelocityBucket.MEDIUM;
+        }
+        if (velocityPxPerMs >= 0.12) {
+            return ScrollVelocityBucket.SLOW;
+        }
+        return ScrollVelocityBucket.SETTLE;
+    }
+
+    private ScrollVelocityBucket resolveScrollVelocityBucket() {
+        return scrollVelocityBucket == null ? ScrollVelocityBucket.SETTLE : scrollVelocityBucket;
+    }
+
+    private int adaptivePrefetchCount(int baseCount, double multiplier, int minCount, int maxCount) {
+        int scaled = (int) Math.round(baseCount * multiplier);
+        return Math.max(minCount, Math.min(maxCount, scaled));
+    }
+
+    private void logViewportRealizationTelemetry(String mode,
+                                                 int visibleStart,
+                                                 int visibleEnd,
+                                                 int visibleCount,
+                                                 int prefetchedCount,
+                                                 ScrollVelocityBucket bucket) {
+        if (!LOG_SCROLL_TELEMETRY && !LOG_REALIZATION_TELEMETRY) {
+            return;
+        }
+        double velocity = scrollVelocityPixelsPerMs;
+        LOG.info(() -> "[REALIZATION] mode=" + mode
+                + " visibleRange=" + visibleStart + "-" + visibleEnd
+                + " visibleCount=" + visibleCount
+                + " prefetchedCount=" + prefetchedCount
+                + " velocityPxPerMs=" + String.format(java.util.Locale.ROOT, "%.2f", velocity)
+                + " bucket=" + bucket
+                + " view=" + viewMode);
+    }
+
+    private void scheduleViewportScopedRealizationRefresh() {
+        initViewportRealizationDebounce();
+        realizationViewportGeneration.incrementAndGet();
+        if (viewportRealizationDebounce == null) {
+            return;
+        }
+        if (javafx.application.Platform.isFxApplicationThread()) {
+            viewportRealizationDebounce.playFromStart();
+        } else {
+            javafx.application.Platform.runLater(() -> viewportRealizationDebounce.playFromStart());
+        }
+    }
+
+    private void requestViewportScopedRealizationRefresh() {
+        if (!javafx.application.Platform.isFxApplicationThread()) {
+            javafx.application.Platform.runLater(this::requestViewportScopedRealizationRefresh);
+            return;
+        }
+        if (tableItems == null || tableItems.isEmpty()) {
+            return;
+        }
+        final long expectedDirectoryGeneration = realizationDirectoryGeneration.get();
+        final long expectedViewportGeneration = realizationViewportGeneration.get();
+        java.util.List<ViewportWorkItem> workItems = buildViewportWorkItems(expectedDirectoryGeneration, expectedViewportGeneration);
+        if (workItems.isEmpty()) {
+            return;
+        }
+        viewportScheduler.submit(workItems);
+        ViewportSchedulerTelemetry.Snapshot snapshot = viewportScheduler.runFrame(Math.max(0L, VIEWPORT_FRAME_BUDGET_NANOS));
+        logViewportSchedulerTelemetry(snapshot, workItems.size());
+    }
+
+    private java.util.List<ViewportWorkItem> buildViewportWorkItems(long expectedDirectoryGeneration, long expectedViewportGeneration) {
+        if (viewMode == ViewMode.DETAILS) {
+            return buildDetailsViewportWorkItems(expectedDirectoryGeneration, expectedViewportGeneration);
+        }
+        if (isIconMode(viewMode)) {
+            return buildIconViewportWorkItems(expectedDirectoryGeneration, expectedViewportGeneration);
+        }
+        return java.util.Collections.emptyList();
+    }
+
+    private java.util.List<ViewportWorkItem> buildDetailsViewportWorkItems(long expectedDirectoryGeneration, long expectedViewportGeneration) {
+        java.util.List<TableRow<FileItem>> rows = collectVisibleDetailsRows();
+        if (rows.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        rows.sort(java.util.Comparator.comparingInt(TableRow::getIndex));
+        int visibleStart = Math.max(0, rows.get(0).getIndex());
+        int visibleEnd = Math.max(visibleStart, rows.get(rows.size() - 1).getIndex());
+        boolean scrollingDown = realizationScrollDirection.get() >= 0L;
+        ScrollVelocityBucket bucket = resolveScrollVelocityBucket();
+        int preBeforeBase = scrollingDown ? Math.max(4, DETAILS_PREFETCH_ROWS_BEFORE / 2) : DETAILS_PREFETCH_ROWS_BEFORE;
+        int preAfterBase = scrollingDown ? DETAILS_PREFETCH_ROWS_AFTER : Math.max(6, DETAILS_PREFETCH_ROWS_AFTER / 2);
+        double beforeMultiplier = scrollingDown ? bucket.trailingMultiplier : bucket.leadingMultiplier;
+        double afterMultiplier = scrollingDown ? bucket.leadingMultiplier : bucket.trailingMultiplier;
+        int preBefore = adaptivePrefetchCount(preBeforeBase, beforeMultiplier, 2, Math.max(preBeforeBase, DETAILS_PREFETCH_ROWS_BEFORE * 3));
+        int preAfter = adaptivePrefetchCount(preAfterBase, afterMultiplier, 4, Math.max(preAfterBase, DETAILS_PREFETCH_ROWS_AFTER * 4));
+        java.util.List<ViewportWorkItem> workItems = buildViewportBandWorkItems(
+                "details",
+                visibleStart,
+                visibleEnd,
+                preBefore,
+                preAfter,
+                1,
+                expectedDirectoryGeneration,
+                expectedViewportGeneration);
+        int visibleCount = Math.max(0, visibleEnd - visibleStart + 1);
+        int prefetchedCount = Math.max(0, workItems.size() - visibleCount);
+        logViewportRealizationTelemetry("details", visibleStart, visibleEnd, visibleCount, prefetchedCount, bucket);
+        return workItems;
+    }
+
+    private java.util.List<ViewportWorkItem> buildIconViewportWorkItems(long expectedDirectoryGeneration, long expectedViewportGeneration) {
+        java.util.List<Node> visibleTiles = collectVisibleExplorerIconTiles();
+        if (visibleTiles.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        visibleTiles.sort((left, right) -> {
+            Bounds leftBounds = left.localToScene(left.getBoundsInLocal());
+            Bounds rightBounds = right.localToScene(right.getBoundsInLocal());
+            double leftMinY = leftBounds == null ? Double.MAX_VALUE : leftBounds.getMinY();
+            double rightMinY = rightBounds == null ? Double.MAX_VALUE : rightBounds.getMinY();
+            int cmp = Double.compare(leftMinY, rightMinY);
+            if (cmp != 0) {
+                return cmp;
+            }
+            double leftMinX = leftBounds == null ? Double.MAX_VALUE : leftBounds.getMinX();
+            double rightMinX = rightBounds == null ? Double.MAX_VALUE : rightBounds.getMinX();
+            return Double.compare(leftMinX, rightMinX);
+        });
+        Path firstVisiblePath = pathForExplorerIconTile(visibleTiles.get(0));
+        Path lastVisiblePath = pathForExplorerIconTile(visibleTiles.get(visibleTiles.size() - 1));
+        int visibleStart = Math.max(0, indexOfTableItem(firstVisiblePath));
+        int visibleEnd = Math.max(visibleStart, indexOfTableItem(lastVisiblePath));
+        int itemsPerRow = Math.max(1, computeItemsPerIconRow(resolveResponsiveIconViewportWidth()));
+        boolean scrollingDown = realizationScrollDirection.get() >= 0L;
+        ScrollVelocityBucket bucket = resolveScrollVelocityBucket();
+        int preBeforeBase = itemsPerRow * (scrollingDown ? Math.max(1, ICON_PREFETCH_ROWS_BEFORE / 2) : ICON_PREFETCH_ROWS_BEFORE);
+        int preAfterBase = itemsPerRow * (scrollingDown ? ICON_PREFETCH_ROWS_AFTER : Math.max(1, ICON_PREFETCH_ROWS_AFTER / 2));
+        double beforeMultiplier = scrollingDown ? bucket.trailingMultiplier : bucket.leadingMultiplier;
+        double afterMultiplier = scrollingDown ? bucket.leadingMultiplier : bucket.trailingMultiplier;
+        int preBefore = adaptivePrefetchCount(preBeforeBase, beforeMultiplier, itemsPerRow, Math.max(preBeforeBase, itemsPerRow * ICON_PREFETCH_ROWS_BEFORE * 4));
+        int preAfter = adaptivePrefetchCount(preAfterBase, afterMultiplier, itemsPerRow, Math.max(preAfterBase, itemsPerRow * ICON_PREFETCH_ROWS_AFTER * 5));
+        java.util.List<ViewportWorkItem> workItems = buildViewportBandWorkItems(
+                "icons",
+                visibleStart,
+                visibleEnd,
+                preBefore,
+                preAfter,
+                itemsPerRow,
+                expectedDirectoryGeneration,
+                expectedViewportGeneration);
+        int visibleCount = Math.max(0, visibleEnd - visibleStart + 1);
+        int prefetchedCount = Math.max(0, workItems.size() - visibleCount);
+        logViewportRealizationTelemetry("icons", visibleStart, visibleEnd, visibleCount, prefetchedCount, bucket);
+        return workItems;
+    }
+
+    private java.util.List<ViewportWorkItem> buildViewportBandWorkItems(String mode,
+                                                                        int visibleStart,
+                                                                        int visibleEnd,
+                                                                        int preBeforeCount,
+                                                                        int preAfterCount,
+                                                                        int logicalCellStride,
+                                                                        long expectedDirectoryGeneration,
+                                                                        long expectedViewportGeneration) {
+        if (tableItems == null || tableItems.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        int farExtraCount = Math.max(logicalCellStride, VIEWPORT_FAR_WORK_LIMIT);
+        int startInclusive = Math.max(0, visibleStart - Math.max(0, preBeforeCount) - farExtraCount);
+        int endInclusive = Math.min(tableItems.size() - 1, visibleEnd + Math.max(0, preAfterCount) + farExtraCount);
+        java.util.List<ViewportWorkItem> workItems = new java.util.ArrayList<>(Math.max(0, endInclusive - startInclusive + 1));
+        for (int index = startInclusive; index <= endInclusive; index++) {
+            FileItem item = tableItems.get(index);
+            if (item == null || item.path() == null) {
+                continue;
+            }
+            Path path = item.path();
+            final int distance = viewportDistanceInLogicalCells(index, visibleStart, visibleEnd, logicalCellStride);
+            final RealizationPriorityBand band = viewportBandClassifier.classify(distance);
+            final boolean thumbCandidate = ImageSupport.isThumbCandidate(path);
+            final boolean decodePromotionEligible = isDecodePromotionEligible(band, thumbCandidate);
+            final int workIndex = index;
+            workItems.add(new ViewportWorkItem.Basic(
+                    mode + ":" + workIndex + ":" + path,
+                    distance,
+                    estimateViewportRealizeCostNanos(band),
+                    decodePromotionEligible ? estimateViewportPromotionCostNanos(band) : 0L,
+                    true,
+                    decodePromotionEligible,
+                    () -> requestViewportAsset(workIndex, band, false, expectedDirectoryGeneration, expectedViewportGeneration),
+                    () -> requestViewportAsset(workIndex, band, true, expectedDirectoryGeneration, expectedViewportGeneration)
+            ));
+        }
+        return workItems;
+    }
+
+    private int viewportDistanceInLogicalCells(int index, int visibleStart, int visibleEnd, int logicalCellStride) {
+        int stride = Math.max(1, logicalCellStride);
+        if (index < visibleStart) {
+            return (int) Math.ceil((visibleStart - index) / (double) stride);
+        }
+        if (index > visibleEnd) {
+            return (int) Math.ceil((index - visibleEnd) / (double) stride);
+        }
+        return 0;
+    }
+
+    private boolean isDecodePromotionEligible(RealizationPriorityBand band, boolean thumbCandidate) {
+        return band == RealizationPriorityBand.VISIBLE || (!thumbCandidate && band == RealizationPriorityBand.NEAR_VIEWPORT);
+    }
+
+    private long estimateViewportRealizeCostNanos(RealizationPriorityBand band) {
+        return switch (band) {
+            case VISIBLE -> VIEWPORT_VISIBLE_REALIZE_ESTIMATE_NANOS;
+            case NEAR_VIEWPORT -> VIEWPORT_NEAR_REALIZE_ESTIMATE_NANOS;
+            case FAR_OFFSCREEN -> VIEWPORT_FAR_REALIZE_ESTIMATE_NANOS;
+        };
+    }
+
+    private long estimateViewportPromotionCostNanos(RealizationPriorityBand band) {
+        return switch (band) {
+            case VISIBLE -> VIEWPORT_VISIBLE_PROMOTION_ESTIMATE_NANOS;
+            case NEAR_VIEWPORT -> VIEWPORT_NEAR_PROMOTION_ESTIMATE_NANOS;
+            case FAR_OFFSCREEN -> 0L;
+        };
+    }
+
+    private void requestViewportAsset(int index,
+                                      RealizationPriorityBand band,
+                                      boolean promoteDecode,
+                                      long expectedDirectoryGeneration,
+                                      long expectedViewportGeneration) {
+        if (tableItems == null || index < 0 || index >= tableItems.size()) {
+            return;
+        }
+        if (expectedDirectoryGeneration != realizationDirectoryGeneration.get()
+                || expectedViewportGeneration != realizationViewportGeneration.get()) {
+            return;
+        }
+        FileItem item = tableItems.get(index);
+        if (item == null || item.path() == null) {
+            return;
+        }
+        final boolean dark = themeService != null && themeService.isDarkPreferred();
+        final int px = (int) Math.round(clamp(iconSizePx, 16.0, 128.0));
+        Path path = item.path();
+        if (ImageSupport.isThumbCandidate(path)) {
+            AsyncThumbnailService.getInstance().request(
+                    path,
+                    px,
+                    thumbnailPriorityForBand(band, promoteDecode)
+            ).whenComplete((img, ex) -> {
+                // best-effort realization only
+            });
+            return;
+        }
+        String identity;
+        try {
+            identity = fileMetadataService != null ? fileMetadataService.iconIdentity(path) : null;
+        } catch (Exception ex) {
+            identity = null;
+        }
+        if (identity == null || identity.isBlank()) {
+            identity = "type:" + IconLoader.IconType.FILE.name();
+        }
+        AsyncIconService.getInstance().request(
+                identity,
+                dark,
+                px,
+                iconPriorityForBand(band, promoteDecode)
+        ).whenComplete((img, ex) -> {
+            // best-effort realization only
+        });
+    }
+
+    private AsyncIconService.RequestPriority iconPriorityForBand(RealizationPriorityBand band, boolean promoteDecode) {
+        if (!promoteDecode) {
+            return AsyncIconService.RequestPriority.BACKGROUND;
+        }
+        return switch (band) {
+            case VISIBLE -> AsyncIconService.RequestPriority.VISIBLE;
+            case NEAR_VIEWPORT -> AsyncIconService.RequestPriority.PREFETCH;
+            case FAR_OFFSCREEN -> AsyncIconService.RequestPriority.BACKGROUND;
+        };
+    }
+
+    private AsyncThumbnailService.RequestPriority thumbnailPriorityForBand(RealizationPriorityBand band, boolean promoteDecode) {
+        if (!promoteDecode || band != RealizationPriorityBand.VISIBLE) {
+            return AsyncThumbnailService.RequestPriority.BACKGROUND;
+        }
+        return AsyncThumbnailService.RequestPriority.VISIBLE;
+    }
+
+    private void onViewportScrollStopCommit(ViewportSchedulerTelemetry.Snapshot snapshot) {
+        if (LOG_REALIZATION_TELEMETRY) {
+            double latencyMs = snapshot.averageScrollStopCommitLatencyNanos() / 1_000_000.0;
+            LOG.info(() -> "[REALIZATION] scrollStopCommit commits=" + snapshot.scrollStopCommits()
+                    + " avgLatencyMs=" + String.format(java.util.Locale.ROOT, "%.2f", latencyMs)
+                    + " realizeRuns=" + snapshot.realizeRuns()
+                    + " decodePromotions=" + snapshot.decodePromotions()
+                    + " decodePromotionDrops=" + snapshot.decodePromotionDrops()
+                    + " budgetOverruns=" + snapshot.budgetOverruns()
+                    + " view=" + viewMode);
+        }
+        if (javafx.application.Platform.isFxApplicationThread()) {
+            javafx.application.Platform.runLater(this::runViewportSettlePass);
+        } else {
+            javafx.application.Platform.runLater(this::runViewportSettlePass);
+        }
+    }
+
+    private void logViewportSchedulerTelemetry(ViewportSchedulerTelemetry.Snapshot snapshot, int submittedWorkItemCount) {
+        if (!LOG_REALIZATION_TELEMETRY) {
+            return;
+        }
+        double latencyMs = snapshot.averageScrollStopCommitLatencyNanos() / 1_000_000.0;
+        LOG.info(() -> "[REALIZATION] scheduler submitted=" + submittedWorkItemCount
+                + " visibleQueue=" + viewportScheduler.visibleQueueSize()
+                + " nearQueue=" + viewportScheduler.nearViewportQueueSize()
+                + " farQueue=" + viewportScheduler.farOffscreenQueueSize()
+                + " realizeRuns=" + snapshot.realizeRuns()
+                + " decodePromotions=" + snapshot.decodePromotions()
+                + " decodePromotionDrops=" + snapshot.decodePromotionDrops()
+                + " budgetOverruns=" + snapshot.budgetOverruns()
+                + " avgScrollStopLatencyMs=" + String.format(java.util.Locale.ROOT, "%.2f", latencyMs)
+                + " view=" + viewMode);
+    }
+
+    private ViewportContinuityState captureViewportContinuityState(Path directory, long token) {
+        if (directory == null) {
+            return null;
+        }
+        java.util.List<Path> selectedPaths = new java.util.ArrayList<>(getSelectedItems());
+        Path focusPath = getFocusedOrSelectedPath();
+        Path anchorPath = iconSelectionAnchorPath != null ? iconSelectionAnchorPath : focusPath;
+        Path firstVisiblePath = null;
+        int firstVisibleIndex = -1;
+        double tableScroll = captureVerticalScrollValue(fileTable);
+        double flowScroll = iconScroll != null ? iconScroll.getVvalue() : Double.NaN;
+        double gridScroll = captureVerticalScrollValue(virtualIconGridView);
+        double listScroll = captureVerticalScrollValue(virtualIconListView);
+        if (viewMode == ViewMode.DETAILS) {
+            java.util.List<TableRow<FileItem>> rows = collectVisibleDetailsRows();
+            if (!rows.isEmpty()) {
+                rows.sort(java.util.Comparator.comparingInt(TableRow::getIndex));
+                TableRow<FileItem> first = rows.get(0);
+                if (first != null && first.getItem() != null) {
+                    firstVisiblePath = first.getItem().path();
+                    firstVisibleIndex = first.getIndex();
+                }
+            }
+        } else if (isIconMode(viewMode)) {
+            firstVisiblePath = captureFirstVisibleExplorerIconPath(null);
+            firstVisibleIndex = indexOfTableItem(firstVisiblePath);
+        }
+        return new ViewportContinuityState(token, directory, selectedPaths, focusPath, anchorPath, firstVisiblePath, firstVisibleIndex, tableScroll, flowScroll, gridScroll, listScroll, viewMode);
+    }
+
+    private void restoreViewportContinuityState(ViewportContinuityState state, long token) {
+        if (state == null || token != state.token || !java.util.Objects.equals(currentDirectory, state.directory)) {
+            return;
+        }
+        if (!state.selectedPaths.isEmpty()) {
+            Path focusPath = state.focusPath != null && state.selectedPaths.contains(state.focusPath)
+                    ? state.focusPath
+                    : state.anchorPath != null && state.selectedPaths.contains(state.anchorPath)
+                    ? state.anchorPath
+                    : state.selectedPaths.get(0);
+            applyExplorerPathSelection(state.selectedPaths, focusPath);
+            if (state.anchorPath != null && state.selectedPaths.contains(state.anchorPath)) {
+                iconSelectionAnchorPath = state.anchorPath;
+            }
+        } else if (state.focusPath != null) {
+            restoreFocusToTablePath(state.focusPath);
+        }
+        if (state.viewMode == ViewMode.DETAILS) {
+            if (state.firstVisiblePath != null) {
+                int idx = findTableIndexForPath(state.firstVisiblePath);
+                if (idx < 0) {
+                    idx = state.firstVisibleIndex;
+                }
+                if (idx >= 0 && fileTable != null) {
+                    fileTable.scrollTo(Math.max(0, idx));
+                }
+            }
+            restoreVerticalScrollValue(fileTable, state.tableScrollValue);
+        } else if (isIconMode(state.viewMode)) {
+            if (state.firstVisiblePath != null) {
+                scrollActiveIconPathIntoView(state.firstVisiblePath);
+            }
+            if (iconScroll != null && !Double.isNaN(state.flowScrollValue)) {
+                iconScroll.setVvalue(Math.max(0.0, Math.min(1.0, state.flowScrollValue)));
+            }
+            restoreVerticalScrollValue(virtualIconGridView, state.virtualGridScrollValue);
+            restoreVerticalScrollValue(virtualIconListView, state.virtualListScrollValue);
+        }
+        scheduleViewportScopedRealizationRefresh();
+    }
+
 // ---------------------------------------------------------------------
     // Hover prefetch (Explorer-style)
     // ---------------------------------------------------------------------
@@ -7594,6 +8604,94 @@ private String displayNameForTable(Path p) {
             return "Item";
         }
     }
+    private void scheduleDeferredBootstrapIncludes() {
+        if (boundScene == null) {
+            return;
+        }
+        if (contextInitialized) {
+            scheduleDeferredBreadcrumbLoad();
+        }
+    }
+
+    private void scheduleDeferredBreadcrumbLoad() {
+        if (breadcrumbBarController != null || breadcrumbHost == null) {
+            return;
+        }
+        if (!deferredBreadcrumbLoadScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        Platform.runLater(() -> {
+            try {
+                loadDeferredBreadcrumbNow();
+            } finally {
+                deferredBreadcrumbLoadScheduled.set(false);
+            }
+        });
+    }
+
+    private void loadDeferredBreadcrumbNow() {
+        if (breadcrumbBarController != null || breadcrumbHost == null) {
+            return;
+        }
+        try {
+            StartupTrace.mark("deferred breadcrumb load begin");
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/fileexplorer/ui/breadcrumb/BreadcrumbBar.fxml"));
+            Parent breadcrumbRoot = loader.load();
+            Object controllerObj = loader.getController();
+            BreadcrumbController controller = controllerObj instanceof BreadcrumbController bc ? bc : null;
+            breadcrumbHost.getChildren().setAll(breadcrumbRoot);
+            breadcrumbBarController = controller;
+            configureBreadcrumbs();
+            if (breadcrumbBarController != null && currentDirectory != null) {
+                breadcrumbBarController.setPath(currentDirectory);
+            }
+            StartupTrace.mark("deferred breadcrumb load end");
+        } catch (Exception ex) {
+            LOG.log(Level.WARNING, "Deferred breadcrumb bootstrap failed", ex);
+        }
+    }
+
+    private void scheduleDeferredProgressPaneLoad() {
+        if (progressPaneController != null || progressPaneHost == null) {
+            return;
+        }
+        if (!deferredProgressPaneLoadScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        Platform.runLater(() -> {
+            try {
+                loadDeferredProgressPaneNow();
+            } finally {
+                deferredProgressPaneLoadScheduled.set(false);
+            }
+        });
+    }
+
+    private void loadDeferredProgressPaneNow() {
+        if (progressPaneController != null || progressPaneHost == null) {
+            return;
+        }
+        try {
+            StartupTrace.mark("deferred progress pane load begin");
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/fileexplorer/ui/layout/ProgressPane.fxml"));
+            Parent progressRoot = loader.load();
+            Object controllerObj = loader.getController();
+            ProgressPaneController controller = controllerObj instanceof ProgressPaneController ppc ? ppc : null;
+            progressPaneHost.getChildren().setAll(progressRoot);
+            progressPaneController = controller;
+            if (progressPaneController != null) {
+                progressPaneController.attach(context);
+            }
+            StartupTrace.mark("deferred progress pane load end");
+        } catch (Exception ex) {
+            LOG.log(Level.WARNING, "Deferred progress-pane bootstrap failed", ex);
+        }
+    }
+
+    public ProgressPaneController getProgressPaneController() {
+        return progressPaneController;
+    }
+
 /**
  * configureBreadcrumbs.
  *
@@ -8512,6 +9610,7 @@ private void loadDirectoryIntoTableAsync(Path directory, boolean keepExistingUnt
     // If callers pass a directory without having updated currentDirectory first, the table would
     // appear empty because the loader runs against the previous directory.
     currentDirectory = directory;
+    noteDirectoryRealizationScopeChanged();
     clearExplorerMetadataTextCache();
     hideExplorerMetadataPopup();
     updateNavigationButtonsState();
@@ -8544,6 +9643,7 @@ private void loadDirectoryIntoTableAsync(Path directory, boolean keepExistingUnt
             statusLabel.setText("Loading " + fileMetadataService.displayPathForStatus(directory) + " …");
         }
     }
+    pendingViewportContinuityState = captureViewportContinuityState(directory, token);
     // When hydrating over a cached snapshot, keep selection/rows until we have real data.
     if (!keepExistingUntilFirstBatch) {
         if (fileTable != null) {
@@ -8729,11 +9829,16 @@ if (hugeMode.get()) {
                     iconRebuildDebounce.stop();
                     rebuildIconTiles();
                 }
+                ViewportContinuityState continuityState = pendingViewportContinuityState;
+                pendingViewportContinuityState = null;
+                javafx.application.Platform.runLater(() -> restoreViewportContinuityState(continuityState, token));
+                scheduleViewportScopedRealizationRefresh();
                 scheduleCurrentFolderThumbnailWarmup();
             }),
             err -> javafx.application.Platform.runLater(() -> {
                 if (token != progressiveLoadSeq.get()) return;
                 directoryLoading = false;
+                pendingViewportContinuityState = null;
                 // If we had a cached view visible, keep it; just show error.
                 setStatus("Failed to open folder: " + currentDirectory);
             })
@@ -9333,6 +10438,119 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
     // View mode (Details vs Large icons)
     // ---------------------------------------------------------------------
     
+    private void initializeFileViewModules() {
+        if (viewHost == null || modularFileViewHost != null) {
+            return;
+        }
+        modularFileViewHost = new FileViewHost(viewHost);
+        ensureDetailsFileViewLoaded();
+    }
+
+    private void ensureDetailsFileViewLoaded() {
+        if (modularFileViewHost == null || modularDetailsViewController != null) {
+            return;
+        }
+        try {
+            StartupTrace.mark("file-view details load begin");
+            modularDetailsViewController = (DetailsViewController) modularFileViewHost.ensureLoaded(
+                    "details",
+                    "/com/fileexplorer/ui/fileview/details/DetailsView.fxml");
+            StartupTrace.mark("file-view details load end");
+            detailsViewShell = modularDetailsViewController.getDetailsViewShell();
+            fileTable = modularDetailsViewController.getFileTable();
+            colName = (TableColumn<FileItem, String>) modularDetailsViewController.getColName();
+            colStatus = (TableColumn<FileItem, Node>) modularDetailsViewController.getColStatus();
+            colType = (TableColumn<FileItem, String>) modularDetailsViewController.getColType();
+            colSize = (TableColumn<FileItem, String>) modularDetailsViewController.getColSize();
+            colModified = (TableColumn<FileItem, String>) modularDetailsViewController.getColModified();
+        } catch (IOException ex) {
+            LOG.log(Level.WARNING, "Failed to load modular Details view", ex);
+        }
+    }
+
+    private AbstractIconFlowFileViewController ensureIconFileViewLoaded(ViewMode mode) {
+        if (modularFileViewHost == null || mode == null || !isIconMode(mode)) {
+            return null;
+        }
+        AbstractIconFlowFileViewController existing = modularIconViewControllers.get(mode);
+        if (existing != null) {
+            return existing;
+        }
+        String viewKey = fileViewKeyFor(mode);
+        String resource = fileViewResourceFor(mode);
+        if (viewKey == null || resource == null) {
+            return null;
+        }
+        try {
+            StartupTrace.mark("file-view " + viewKey + " load begin");
+            AbstractIconFlowFileViewController controller = (AbstractIconFlowFileViewController) modularFileViewHost.ensureLoaded(viewKey, resource);
+            StartupTrace.mark("file-view " + viewKey + " load end");
+            modularIconViewControllers.put(mode, controller);
+            return controller;
+        } catch (IOException ex) {
+            LOG.log(Level.WARNING, "Failed to load modular icon file view for " + mode, ex);
+            return null;
+        }
+    }
+
+    private void activateFileViewForMode(ViewMode mode) {
+        initializeFileViewModules();
+        if (modularFileViewHost == null || mode == null) {
+            return;
+        }
+        if (isTableMode(mode)) {
+            ensureDetailsFileViewLoaded();
+            modularFileViewHost.activate("details");
+            if (modularDetailsViewController != null) {
+                detailsViewShell = modularDetailsViewController.getDetailsViewShell();
+                fileTable = modularDetailsViewController.getFileTable();
+            }
+            return;
+        }
+        AbstractIconFlowFileViewController controller = ensureIconFileViewLoaded(mode);
+        if (controller == null) {
+            return;
+        }
+        iconScroll = controller.getIconScroll();
+        iconFlow = controller.getIconFlow();
+        modularFileViewHost.activate(fileViewKeyFor(mode));
+        installIconScrollPaging();
+        ensureVirtualIconViewsInstalled();
+        bringIconMarqueeOverlayToFront();
+    }
+
+    private String fileViewKeyFor(ViewMode mode) {
+        if (mode == null) {
+            return null;
+        }
+        return switch (mode) {
+            case EXTRA_LARGE_ICONS -> "extra-large-icons";
+            case LARGE_ICONS -> "large-icons";
+            case MEDIUM_ICONS -> "medium-icons";
+            case SMALL_ICONS -> "small-icons";
+            case LIST -> "list";
+            case DETAILS -> "details";
+            case TILES -> "tiles";
+            case CONTENT -> "content";
+        };
+    }
+
+    private String fileViewResourceFor(ViewMode mode) {
+        if (mode == null) {
+            return null;
+        }
+        return switch (mode) {
+            case EXTRA_LARGE_ICONS -> "/com/fileexplorer/ui/fileview/extralargeicons/ExtraLargeIconsView.fxml";
+            case LARGE_ICONS -> "/com/fileexplorer/ui/fileview/largeicons/LargeIconsView.fxml";
+            case MEDIUM_ICONS -> "/com/fileexplorer/ui/fileview/mediumicons/MediumIconsView.fxml";
+            case SMALL_ICONS -> "/com/fileexplorer/ui/fileview/smallicons/SmallIconsView.fxml";
+            case LIST -> "/com/fileexplorer/ui/fileview/listview/ListFileView.fxml";
+            case DETAILS -> "/com/fileexplorer/ui/fileview/details/DetailsView.fxml";
+            case TILES -> "/com/fileexplorer/ui/fileview/tiles/TilesFileView.fxml";
+            case CONTENT -> "/com/fileexplorer/ui/fileview/content/ContentFileView.fxml";
+        };
+    }
+
 /**
  * setViewMode.
  *
@@ -9349,6 +10567,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             mode = ViewMode.DETAILS;
         }
         viewMode = mode;
+        activateFileViewForMode(viewMode);
         if (isIconMode(viewMode)) {
             LogSupport.enter(LOG, "isIconMode");
             lastIconViewMode = viewMode;
@@ -10193,15 +11412,15 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
  */
     private void installIconScrollPaging() {
         LogSupport.enter(LOG, "installIconScrollPaging");
-        if (iconScrollPagingInstalled) {
-            return;
-        }
-        iconScrollPagingInstalled = true;
         if (iconScroll == null) {
             return;
         }
-        iconScroll.vvalueProperty().addListener((_, _, val) -> {
-            if (!iconScroll.isVisible() || iconFlow == null) {
+        if (!iconScrollPagingTargets.add(iconScroll)) {
+            return;
+        }
+        final ScrollPane pagingTarget = iconScroll;
+        pagingTarget.vvalueProperty().addListener((_, _, val) -> {
+            if (!pagingTarget.isVisible() || iconFlow == null) {
                 return;
             }
             // Only page when using FlowPane (virtual views have their own scrolling).
@@ -10226,13 +11445,13 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (virtualIconViewsInstalled) {
             return;
         }
-        virtualIconViewsInstalled = true;
         if (iconScroll == null) {
             return;
         }
         if (!(iconScroll.getParent() instanceof javafx.scene.layout.StackPane host)) {
             return;
         }
+        virtualIconViewsInstalled = true;
         // Virtual grid (rows of icon tiles)
         virtualIconGridView = new ListView<>();
         virtualIconGridView.getStyleClass().add("icon-virtual-grid");
@@ -11494,10 +12713,17 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         // Otherwise, lazily upgrade placeholder to a real icon via the async icon service.
         final boolean dark = themeService.isDarkPreferred();
         final String capturedIdentity = identity;
+        final long iconStamp = System.nanoTime();
+        iv.getProperties().put(REALIZATION_ICON_STAMP_KEY, iconStamp);
+        iv.getProperties().put("iconIdentity", capturedIdentity);
         AsyncIconService.getInstance()
-                .request(capturedIdentity, dark, px)
+                .request(capturedIdentity, dark, px, AsyncIconService.RequestPriority.VISIBLE)
                 .thenAccept(img -> Platform.runLater(() -> {
                     if (img == null) return;
+                    Object stamp = iv.getProperties().get(REALIZATION_ICON_STAMP_KEY);
+                    Object boundIdentity = iv.getProperties().get("iconIdentity");
+                    if (!(stamp instanceof Long) || ((Long) stamp) != iconStamp) return;
+                    if (!java.util.Objects.equals(boundIdentity, capturedIdentity)) return;
                     iv.setImage(img);
                 }));
         return iv;
@@ -11544,7 +12770,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                     case "mp4", "mkv", "mov", "avi", "wmv", "webm" -> {
                         return ""; // Video-ish glyph
                     }
-                    case "png", "jpg", "jpeg", "gif", "bmp", "webp", "tif", "tiff" -> {
+                    case "png", "jpg", "jpeg", "gif", "bmp", "webp", "avif", "heif", "heic", "tif", "tiff" -> {
                         return ""; // Picture
                     }
                     case "txt", "md", "log", "json", "xml", "csv", "yml", "yaml" -> {
@@ -13606,7 +14832,7 @@ private void enforceStartupFixedCellSizes() {
                         cellStyle = cellStyle + ";";
                     }
                     cell.setStyle(cellStyle
-                            + " -fx-padding: 4 8 4 6;"
+                            + " -fx-padding: 1 8 1 6;"
                             + " -fx-alignment: CENTER-LEFT;"
                             + " -fx-cell-size: " + FOLDER_TREE_ROW_HEIGHT_PX + "px;"
                             + " -fx-min-height: " + FOLDER_TREE_ROW_HEIGHT_PX + "px;"
@@ -13908,6 +15134,12 @@ public void dispose() {
         try {
             if (breadcrumbBarController != null) {
                 breadcrumbBarController.dispose();
+            }
+        } catch (Exception ignored) {
+        }
+        try {
+            if (progressPaneController != null) {
+                progressPaneController.dispose();
             }
         } catch (Exception ignored) {
         }

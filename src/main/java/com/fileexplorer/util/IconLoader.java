@@ -237,7 +237,7 @@ public final class IconLoader {
             case "ppt", "pptx", "pps", "ppsx", "odp" -> IconType.POWERPOINT;
 
             // Images
-            case "png", "jpg", "jpeg", "gif", "bmp", "webp", "tif", "tiff", "svg", "ico" -> IconType.IMAGE;
+            case "png", "jpg", "jpeg", "gif", "bmp", "webp", "avif", "heif", "heic", "tif", "tiff", "svg", "ico" -> IconType.IMAGE;
 
             // Text-ish documents
             case "txt", "md", "log", "rtf", "ini", "cfg", "conf", "csv", "tsv", "json", "xml", "yaml", "yml", "properties" -> IconType.TEXT;

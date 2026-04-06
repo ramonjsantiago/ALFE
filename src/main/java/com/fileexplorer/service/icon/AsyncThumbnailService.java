@@ -5,12 +5,18 @@ import co.elastic.thumbnails4j.core.Dimensions;
 import co.elastic.thumbnails4j.core.Thumbnailer;
 import co.elastic.thumbnails4j.doc.DOCThumbnailer;
 import co.elastic.thumbnails4j.docx.DOCXThumbnailer;
-import co.elastic.thumbnails4j.pdf.PDFThumbnailer;
 import co.elastic.thumbnails4j.pptx.PPTXThumbnailer;
 import co.elastic.thumbnails4j.xls.XLSThumbnailer;
 import co.elastic.thumbnails4j.xlsx.XLSXThumbnailer;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.image.Image;
+
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.rendering.ImageType;
+import org.apache.pdfbox.rendering.PDFRenderer;
 
 import javax.imageio.ImageIO;
 import java.awt.Graphics2D;
@@ -18,6 +24,9 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.RandomAccessFile;
+import java.nio.channels.ClosedByInterruptException;
+import java.nio.channels.ClosedChannelException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -44,6 +53,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.security.MessageDigest;
 
@@ -66,9 +76,17 @@ public final class AsyncThumbnailService {
     private static final int MAX_CONCURRENT =
             intProp("fileexplorer.thumb.maxConcurrent", 2, 1, 16);
 
-    /** Separate small pool for document thumbnails so long-running document work is isolated. */
+    /** Base document concurrency knob retained for compatibility with earlier hotfixes. */
     private static final int MAX_DOCUMENT_CONCURRENT =
             intProp("fileexplorer.thumb.doc.maxConcurrent", 1, 1, 4);
+
+    /** Dedicated Office-family lane so slow PDF work cannot monopolize document thumbnails. */
+    private static final int MAX_OFFICE_DOCUMENT_CONCURRENT =
+            intProp("fileexplorer.thumb.doc.office.maxConcurrent", MAX_DOCUMENT_CONCURRENT, 1, 4);
+
+    /** Dedicated PDF lane so timed-out renders stay quarantined away from Word/Excel/PPT work. */
+    private static final int MAX_PDF_DOCUMENT_CONCURRENT =
+            intProp("fileexplorer.thumb.doc.pdf.maxConcurrent", 1, 1, 4);
 
     /** Document thumbnail timeout guard. */
     private static final long DOCUMENT_TIMEOUT_MS =
@@ -85,6 +103,20 @@ public final class AsyncThumbnailService {
     /** Retry delay when start-window throttling defers work. */
     private static final long THROTTLE_RETRY_MS =
             longProp("fileexplorer.thumb.throttleRetryMs", 40L, 10L, 1000L);
+
+    /** Predictive budgeting while the viewport is actively moving. */
+    private static final long VIEWPORT_SETTLE_MS =
+            longProp("fileexplorer.thumb.viewportSettleMs", 110L, 25L, 4000L);
+
+    private static final long MOVING_BACKGROUND_EXTRA_DELAY_MS =
+            longProp("fileexplorer.thumb.movingBackgroundExtraDelayMs", 120L, 0L, 4000L);
+
+    private static final int MOVING_VISIBLE_BACKLOG_LIMIT =
+            intProp("fileexplorer.thumb.movingVisibleBacklogLimit", 24, 4, 512);
+
+    /** Delay before background ImageIO capability discovery runs after thumbnails are enabled. */
+    private static final long CAPABILITY_INIT_DELAY_MS =
+            longProp("fileexplorer.thumb.capabilityInitDelayMs", 1200L, 0L, 30000L);
 
     /** Approximate max thumbnail cache bytes (memory protection). Default 128 MiB. */
     private static final long CACHE_BYTES =
@@ -103,6 +135,113 @@ public final class AsyncThumbnailService {
             boolProp("fileexplorer.thumb.enableExcel", true);
     private static final boolean ENABLE_PPTX =
             boolProp("fileexplorer.thumb.enablePptx", true);
+
+    /** One-shot guard for missing JPEG2000/JPX decoder diagnostics. */
+    private static final AtomicBoolean LOGGED_MISSING_JPEG2000_READER = new AtomicBoolean(false);
+
+    /** One-shot guard for missing JBIG2 decoder diagnostics. */
+    private static final AtomicBoolean LOGGED_MISSING_JBIG2_READER = new AtomicBoolean(false);
+
+    /** Cached capability probe for JPEG2000/JPX ImageIO reader availability. */
+    private static volatile Boolean JPEG2000_READER_AVAILABLE;
+
+    /** Cached capability probe for JBIG2 ImageIO reader availability. */
+    private static volatile Boolean JBIG2_READER_AVAILABLE;
+
+    /** Deduplicates recurring PDF thumbnail failure diagnostics. */
+    private static final Set<String> LOGGED_PDF_FAILURE_SIGNATURES = ConcurrentHashMap.newKeySet();
+
+    /** Deduplicates recurring PDF timeout diagnostics. */
+    private static final Set<String> LOGGED_PDF_TIMEOUT_SIGNATURES = ConcurrentHashMap.newKeySet();
+
+    /** Deduplicates recurring PDF oversize diagnostics. */
+    private static final Set<String> LOGGED_PDF_OVERSIZE_SIGNATURES = ConcurrentHashMap.newKeySet();
+
+    /** Deduplicates recurring interrupt/cancellation diagnostics for PDF thumbnails. */
+    private static final Set<String> LOGGED_PDF_INTERRUPT_SIGNATURES = ConcurrentHashMap.newKeySet();
+
+    /** Deduplicates recurring large-document recovery diagnostics for PDF thumbnails. */
+    private static final Set<String> LOGGED_PDF_LARGE_DOC_SIGNATURES = ConcurrentHashMap.newKeySet();
+
+    /** Short-lived cooldown for PDFs that recently timed out during thumbnail rendering. */
+    private static final Map<String, PdfCooldownState> PDF_TIMEOUT_COOLDOWN_UNTIL_MS = new ConcurrentHashMap<>();
+
+    /** Rolling PDF render-history snapshots used for adaptive timeout and recovery planning. */
+    private static final Map<String, PdfRenderHistory> PDF_RENDER_HISTORY = new ConcurrentHashMap<>();
+
+    /** One-shot guard for startup capability summary logging. */
+    private static final AtomicBoolean LOGGED_CAPABILITY_SUMMARY = new AtomicBoolean(false);
+
+    /** One-shot guards for missing ImageIO readers discovered on demand. */
+    private static final Set<String> LOGGED_MISSING_IMAGEIO_READERS = ConcurrentHashMap.newKeySet();
+
+    /** Byte-scan ceiling for cheap PDF JPX preflight detection. */
+    private static final long PDF_JPX_SCAN_LIMIT_BYTES =
+            longProp("fileexplorer.thumb.pdf.jpxScanLimitBytes", 32L * 1024L * 1024L, 1024L, 256L * 1024L * 1024L);
+
+    /** Byte-scan ceiling for cheap PDF JBIG2 preflight detection. */
+    private static final long PDF_JBIG2_SCAN_LIMIT_BYTES =
+            longProp("fileexplorer.thumb.pdf.jbig2ScanLimitBytes", 32L * 1024L * 1024L, 1024L, 256L * 1024L * 1024L);
+
+    /** Maximum PDF size to load fully into memory for isolated thumbnail rendering. */
+    private static final long PDF_IN_MEMORY_MAX_BYTES =
+            longProp("fileexplorer.thumb.pdf.inMemoryMaxBytes", 64L * 1024L * 1024L, 1024L * 1024L, 1024L * 1024L * 1024L);
+
+    /** Cooldown after a PDF thumbnail timeout so repeated requests do not hammer the renderer. */
+    private static final long PDF_TIMEOUT_COOLDOWN_MS =
+            longProp("fileexplorer.thumb.pdf.timeoutCooldownMs", 30_000L, 1_000L, 3_600_000L);
+
+    /** Soft large-document threshold where PDF thumbnail planning becomes more conservative. */
+    private static final long PDF_LARGE_DOC_SOFT_BYTES =
+            longProp("fileexplorer.thumb.pdf.largeDocSoftBytes", 16L * 1024L * 1024L, 1024L * 1024L, PDF_IN_MEMORY_MAX_BYTES);
+
+    /** Hard fallback threshold where PDF thumbnails downgrade directly to the file-type icon. */
+    private static final long PDF_LARGE_DOC_HARD_FALLBACK_BYTES =
+            longProp("fileexplorer.thumb.pdf.largeDocHardFallbackBytes", 48L * 1024L * 1024L, 1024L * 1024L, PDF_IN_MEMORY_MAX_BYTES);
+
+    /** Page-count threshold where PDF thumbnail planning switches to large-document heuristics. */
+    private static final int PDF_LARGE_DOC_PAGE_COUNT_THRESHOLD =
+            intProp("fileexplorer.thumb.pdf.largeDocPageCountThreshold", 120, 1, 100_000);
+
+    /** Minimum adaptive budget applied to PDF thumbnail attempts. */
+    private static final long PDF_ADAPTIVE_TIMEOUT_MIN_MS =
+            longProp("fileexplorer.thumb.pdf.adaptiveTimeoutMinMs", DOCUMENT_TIMEOUT_MS, 250L, 120_000L);
+
+    /** Maximum adaptive budget applied to PDF thumbnail attempts. */
+    private static final long PDF_ADAPTIVE_TIMEOUT_MAX_MS =
+            longProp("fileexplorer.thumb.pdf.adaptiveTimeoutMaxMs", Math.max(DOCUMENT_TIMEOUT_MS, 9_000L), 250L, 120_000L);
+
+    /** Consecutive timeout streak at which large PDFs enter direct-recovery fallback mode. */
+    private static final int PDF_RECOVERY_TIMEOUT_STREAK_THRESHOLD =
+            intProp("fileexplorer.thumb.pdf.recoveryTimeoutStreakThreshold", 2, 1, 16);
+
+    /** Small grace window so worker-side PDF budget checks can return cleanly before outer timeout handling fires. */
+    private static final long PDF_TIMEOUT_JOIN_GRACE_MS =
+            longProp("fileexplorer.thumb.pdf.timeoutJoinGraceMs", 125L, 0L, 5_000L);
+
+    /** Enable low-first/high-later PDF thumbnail planning for visible work. */
+    private static final boolean ENABLE_PDF_PROGRESSIVE_UPGRADE =
+            boolProp("fileexplorer.thumb.pdf.progressiveUpgrade.enabled", true);
+
+    /** Delay before attempting an idle/settled visible-page promotion pass. */
+    private static final long PDF_PROGRESSIVE_PROMOTION_DELAY_MS =
+            longProp("fileexplorer.thumb.pdf.progressivePromotionDelayMs", 180L, 25L, 10_000L);
+
+    /** Bound the number of visible PDFs that can be queued for high-tier promotion at once. */
+    private static final int PDF_PROGRESSIVE_VISIBLE_TRACK_LIMIT =
+            intProp("fileexplorer.thumb.pdf.progressiveVisibleTrackLimit", 24, 1, 512);
+
+    /** Cap concurrently running high-tier promotions so they never starve low-tier visible renders. */
+    private static final int PDF_MAX_ACTIVE_HIGH_TIER_PROMOTIONS =
+            intProp("fileexplorer.thumb.pdf.maxActiveHighTierPromotions", 1, 1, 8);
+
+    /** Per-document high-tier fairness guard. */
+    private static final int PDF_MAX_ACTIVE_HIGH_TIER_PER_DOCUMENT =
+            intProp("fileexplorer.thumb.pdf.maxActiveHighTierPerDocument", 1, 1, 2);
+
+    /** Per-document total PDF render fairness guard. */
+    private static final int PDF_MAX_ACTIVE_RENDERS_PER_DOCUMENT =
+            intProp("fileexplorer.thumb.pdf.maxActiveRendersPerDocument", 1, 1, 4);
 
     /** Carefully reintroduced disk cache, scoped to successful document thumbnails only by default. */
     private static final boolean ENABLE_DISK_CACHE =
@@ -156,7 +295,7 @@ public final class AsyncThumbnailService {
             boolProp("fileexplorer.thumb.diskCache.clearOnManifestMismatch", true);
 
     private static final String DISK_CACHE_MANIFEST_FILE_NAME = "thumbcache-manifest.properties";
-    private static final String DISK_CACHE_COMPAT_VERSION = "phase4o10";
+    private static final String DISK_CACHE_COMPAT_VERSION = "phase4p9ck";
 
     private static final AsyncThumbnailService INSTANCE = new AsyncThumbnailService();
 
@@ -192,13 +331,90 @@ public final class AsyncThumbnailService {
         }
     }
 
-    private record ThumbKey(String path, int sizePx) {}
+    private enum PdfRenderTier {
+        LOW,
+        HIGH
+    }
+
+    private enum RenderQuality {
+        STANDARD,
+        PDF_LOW,
+        PDF_HIGH
+    }
+
+    private record ThumbKey(String path, int sizePx, long lastModifiedMs, long fileSizeBytes) {}
+
+    private record PdfRenderKey(String path,
+                                int sizePx,
+                                long lastModifiedMs,
+                                long fileSizeBytes,
+                                int pageIndex,
+                                PdfRenderTier tier,
+                                long viewportScope,
+                                long generation) {
+    }
+
+    private record PdfViewportState(int firstVisiblePage,
+                                    int lastVisiblePage,
+                                    int anchorPage,
+                                    long generation,
+                                    long lastUpdateNanos) {
+        boolean matches(long viewportGeneration) {
+            return generation == viewportGeneration;
+        }
+    }
+
+    private record PdfCooldownState(long lastModifiedMs, long fileSizeBytes, long untilMs) {
+        boolean matches(long otherLastModifiedMs, long otherFileSizeBytes) {
+            return lastModifiedMs == otherLastModifiedMs && fileSizeBytes == otherFileSizeBytes;
+        }
+    }
+
+    private record PdfRenderHistory(long lastModifiedMs,
+                                    long fileSizeBytes,
+                                    double averageRenderMs,
+                                    int successfulSamples,
+                                    int consecutiveTimeouts) {
+        boolean matches(long otherLastModifiedMs, long otherFileSizeBytes) {
+            return lastModifiedMs == otherLastModifiedMs && fileSizeBytes == otherFileSizeBytes;
+        }
+
+        PdfRenderHistory afterSuccess(long renderMs) {
+            double boundedRenderMs = Math.max(1.0d, renderMs);
+            double nextAverage = successfulSamples <= 0
+                    ? boundedRenderMs
+                    : ((averageRenderMs * 0.65d) + (boundedRenderMs * 0.35d));
+            return new PdfRenderHistory(lastModifiedMs, fileSizeBytes, nextAverage, Math.min(512, successfulSamples + 1), 0);
+        }
+
+        PdfRenderHistory afterTimeout(long timeoutBudgetMs) {
+            double boundedBudgetMs = Math.max(1.0d, timeoutBudgetMs);
+            double seedAverage = averageRenderMs <= 0.0d ? boundedBudgetMs : Math.max(averageRenderMs, boundedBudgetMs);
+            return new PdfRenderHistory(lastModifiedMs, fileSizeBytes, seedAverage, successfulSamples, Math.min(32, consecutiveTimeouts + 1));
+        }
+    }
+
+    private record PdfRenderPlan(int effectiveSizePx,
+                                 float scale,
+                                 int pageCount,
+                                 boolean largeDocument,
+                                 boolean budgetReduced,
+                                 PdfRenderTier tier) {
+    }
 
     private static final int[] SIZE_BUCKETS_PX = {16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512};
 
-    private record LoadResult(Image image, ThumbnailProvider provider) {
+    private record LoadResult(Image image, ThumbnailProvider provider, RenderQuality quality) {
         boolean hasImage() {
             return image != null;
+        }
+
+        boolean isLowQualityPdf() {
+            return quality == RenderQuality.PDF_LOW;
+        }
+
+        boolean isPromotablePdf() {
+            return quality == RenderQuality.PDF_LOW || quality == RenderQuality.PDF_HIGH;
         }
     }
 
@@ -207,12 +423,18 @@ public final class AsyncThumbnailService {
         final long fileSizeBytes;
         final Image image;
         final long approxBytes;
+        final RenderQuality quality;
 
-        CachedThumb(long lastModifiedMs, long fileSizeBytes, Image image, long approxBytes) {
+        CachedThumb(long lastModifiedMs, long fileSizeBytes, Image image, long approxBytes, RenderQuality quality) {
             this.lastModifiedMs = lastModifiedMs;
             this.fileSizeBytes = fileSizeBytes;
             this.image = image;
             this.approxBytes = approxBytes;
+            this.quality = quality == null ? RenderQuality.STANDARD : quality;
+        }
+
+        boolean isLowQualityPdf() {
+            return quality == RenderQuality.PDF_LOW;
         }
     }
 
@@ -289,6 +511,8 @@ public final class AsyncThumbnailService {
     private final ConcurrentHashMap<ThumbKey, CompletableFuture<Image>> inFlight = new ConcurrentHashMap<>();
     // Subscriber counts allow us to cancel pending (debounced) work when cells scroll away.
     private final ConcurrentHashMap<ThumbKey, AtomicInteger> subscribers = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ThumbKey, RequestPriority> pendingPriorities = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ThumbKey, Long> pendingViewportScopes = new ConcurrentHashMap<>();
     private final Set<ThumbKey> running = ConcurrentHashMap.newKeySet();
 
     private final ThumbCache cache = new ThumbCache(CACHE_BYTES);
@@ -296,10 +520,18 @@ public final class AsyncThumbnailService {
     private final AtomicBoolean diskPruneQueued = new AtomicBoolean(false);
     private final AtomicBoolean startupDiskPruneScheduled = new AtomicBoolean(false);
     private final AtomicInteger diskWritesSincePrune = new AtomicInteger(0);
+    private final ConcurrentHashMap<String, PdfViewportState> pdfViewportStates = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, PdfRenderKey> pdfPromotionRequests = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ScheduledFuture<?>> pdfPromotionPending = new ConcurrentHashMap<>();
+    private final Set<String> pdfPromotionRunning = ConcurrentHashMap.newKeySet();
+    private final AtomicInteger pdfActiveHighTierPromotions = new AtomicInteger(0);
+    private final ConcurrentHashMap<String, AtomicInteger> pdfActiveDocumentRenders = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AtomicInteger> pdfActiveDocumentHighTierRenders = new ConcurrentHashMap<>();
 
     // Priority executor for decode tasks (interaction wins).
     private final ThreadPoolExecutor decodeExecutor;
-    private final ExecutorService documentExecutor;
+    private final ExecutorService officeDocumentExecutor;
+    private final ExecutorService pdfDocumentExecutor;
 
     // Debounce to avoid excessive work during rapid scrolling / cell churn.
     private static final long DEBOUNCE_MS = 75L;
@@ -314,6 +546,8 @@ public final class AsyncThumbnailService {
     private final AtomicLong generation = new AtomicLong(0L);
     private final AtomicLong startWindowEpochMs = new AtomicLong(System.currentTimeMillis());
     private final AtomicInteger startWindowCount = new AtomicInteger(0);
+    private final AtomicLong viewportMovingUntilNanos = new AtomicLong(0L);
+    private final AtomicLong viewportScopeGeneration = new AtomicLong(1L);
 
     // ---- metrics ----
     private final LongAdder requested = new LongAdder();
@@ -356,6 +590,30 @@ public final class AsyncThumbnailService {
     private final AtomicInteger inFlightCount = new AtomicInteger(0);
 
     private final AtomicLong seq = new AtomicLong(0L);
+    private final LongAdder viewportMotionEvents = new LongAdder();
+    private final LongAdder viewportIdleTransitions = new LongAdder();
+    private final LongAdder viewportScopeAdvances = new LongAdder();
+    private final LongAdder movingBackgroundDeferrals = new LongAdder();
+    private final LongAdder queueTrimDrops = new LongAdder();
+    private final LongAdder staleGenerationDrops = new LongAdder();
+    private final LongAdder staleSubscriberDrops = new LongAdder();
+    private final LongAdder staleViewportScopeDrops = new LongAdder();
+    private final LongAdder staleCompletionDiscards = new LongAdder();
+    private final LongAdder staleFileVersionDrops = new LongAdder();
+    private final LongAdder pdfCooldownInvalidations = new LongAdder();
+    private final LongAdder pdfHistoryResets = new LongAdder();
+    private final LongAdder pdfAdaptiveBudgetPlans = new LongAdder();
+    private final LongAdder pdfAdaptiveBudgetDownshifts = new LongAdder();
+    private final LongAdder pdfLargeDocFallbacks = new LongAdder();
+    private final LongAdder pdfLowTierRendered = new LongAdder();
+    private final LongAdder pdfHighTierRendered = new LongAdder();
+    private final LongAdder pdfPromotionQueuedCount = new LongAdder();
+    private final LongAdder pdfPromotionCompleted = new LongAdder();
+    private final LongAdder pdfPromotionSkipped = new LongAdder();
+    private final LongAdder viewportPrunedPending = new LongAdder();
+    private final LongAdder viewportPrunedQueued = new LongAdder();
+    private final AtomicBoolean imageSupportInitialized = new AtomicBoolean(false);
+    private final AtomicBoolean imageSupportInitScheduled = new AtomicBoolean(false);
 
     private AsyncThumbnailService() {
         // Priority queue ensures visible/user tasks run first.
@@ -368,19 +626,21 @@ public final class AsyncThumbnailService {
         );
         this.decodeExecutor.allowCoreThreadTimeOut(true);
 
-        this.documentExecutor = java.util.concurrent.Executors.newFixedThreadPool(
-                MAX_DOCUMENT_CONCURRENT,
-                daemonThreadFactory("thumb-doc")
+        this.officeDocumentExecutor = java.util.concurrent.Executors.newFixedThreadPool(
+                MAX_OFFICE_DOCUMENT_CONCURRENT,
+                daemonThreadFactory("thumb-doc-office")
+        );
+
+        this.pdfDocumentExecutor = java.util.concurrent.Executors.newFixedThreadPool(
+                MAX_PDF_DOCUMENT_CONCURRENT,
+                daemonThreadFactory("thumb-doc-pdf")
         );
 
         this.scheduler = new ScheduledThreadPoolExecutor(1, daemonThreadFactory("thumb-debounce"));
 
-        // Ensure ImageIO sees TwelveMonkeys and JAI Image I/O SPI plugins.
-        try {
-            ImageIO.scanForPlugins();
-        } catch (Throwable ignored) {
-            // best effort
-        }
+        // HOTFIX184: keep construction cheap. Plugin discovery / capability probing is deferred
+        // until after the thumbnail gate opens or until a non-native ImageIO format actually needs it.
+        quietPdfThumbnailNoiseLoggers();
 
         startThumbLoggerIfEnabled();
     }
@@ -392,7 +652,7 @@ public final class AsyncThumbnailService {
         ses.scheduleAtFixedRate(() -> {
             double avgMs = averageDecodeMs();
             LOG.info(() -> String.format(
-                    "[Thumbs] req=%d hit=%d miss=%d coalesced=%d bucketReuse=%d throttled=%d viewportCancels=%d queued=%d inFlight=%d pending=%d rendered=%d failed=%d fallback=%d cancelled=%d docTimeouts=%d provider{fx=%d,doc=%d,imageio=%d} disk{hit=%d,miss=%d,write=%d,writeFail=%d,pruned=%d,pruneRuns=%d,startupPruneRuns=%d,corruptDeletes=%d,startupClearRuns=%d,startupClearDeletes=%d,tempPruned=%d,emptyDirsPruned=%d,touchWrite=%d,touchSkip=%d,touchFail=%d,manifestWrites=%d,manifestWriteFail=%d,manifestMismatchDetected=%d,manifestMismatchClears=%d,enabled=%s,docsOnly=%s,clearOnStartup=%s,clearOnManifestMismatch=%s,touchOnRead=%s} avgDecodeMs=%.2f cache={%s} gates={pdf=%s,word=%s,excel=%s,pptx=%s}",
+                    "[Thumbs] req=%d hit=%d miss=%d coalesced=%d bucketReuse=%d throttled=%d viewportCancels=%d viewportMotion=%d viewportIdle=%d movingBgDeferrals=%d queueTrimDrops=%d staleGenerationDrops=%d staleSubscriberDrops=%d staleFileVersionDrops=%d pdfCooldownInvalidations=%d pdfHistoryResets=%d pdfBudgetPlans=%d pdfBudgetDownshifts=%d pdfLargeDocFallbacks=%d pdfLowTierRendered=%d pdfHighTierRendered=%d pdfPromotionQueued=%d pdfPromotionCompleted=%d pdfPromotionSkipped=%d queued=%d inFlight=%d pending=%d rendered=%d failed=%d fallback=%d cancelled=%d docTimeouts=%d provider{fx=%d,doc=%d,imageio=%d} disk{hit=%d,miss=%d,write=%d,writeFail=%d,pruned=%d,pruneRuns=%d,startupPruneRuns=%d,corruptDeletes=%d,startupClearRuns=%d,startupClearDeletes=%d,tempPruned=%d,emptyDirsPruned=%d,touchWrite=%d,touchSkip=%d,touchFail=%d,manifestWrites=%d,manifestWriteFail=%d,manifestMismatchDetected=%d,manifestMismatchClears=%d,enabled=%s,docsOnly=%s,clearOnStartup=%s,clearOnManifestMismatch=%s,touchOnRead=%s} avgDecodeMs=%.2f cache={%s} gates={pdf=%s,word=%s,excel=%s,pptx=%s} docLanes{officeActive=%d,officeQueue=%d,pdfActive=%d,pdfQueue=%d}",
                     requested.sum(),
                     hit.sum(),
                     miss.sum(),
@@ -400,6 +660,23 @@ public final class AsyncThumbnailService {
                     bucketReuse.sum(),
                     throttleDeferrals.sum(),
                     viewportCancels.sum(),
+                    viewportMotionEvents.sum(),
+                    viewportIdleTransitions.sum(),
+                    movingBackgroundDeferrals.sum(),
+                    queueTrimDrops.sum(),
+                    staleGenerationDrops.sum(),
+                    staleSubscriberDrops.sum(),
+                    staleFileVersionDrops.sum(),
+                    pdfCooldownInvalidations.sum(),
+                    pdfHistoryResets.sum(),
+                    pdfAdaptiveBudgetPlans.sum(),
+                    pdfAdaptiveBudgetDownshifts.sum(),
+                    pdfLargeDocFallbacks.sum(),
+                    pdfLowTierRendered.sum(),
+                    pdfHighTierRendered.sum(),
+                    pdfPromotionQueuedCount.sum(),
+                    pdfPromotionCompleted.sum(),
+                    pdfPromotionSkipped.sum(),
                     queued.sum(),
                     inFlightCount.get(),
                     pending.size(),
@@ -440,7 +717,11 @@ public final class AsyncThumbnailService {
                     onOff(ENABLE_PDF),
                     onOff(ENABLE_WORD),
                     onOff(ENABLE_EXCEL),
-                    onOff(ENABLE_PPTX)
+                    onOff(ENABLE_PPTX),
+                    executorActiveCount(officeDocumentExecutor),
+                    executorQueueSize(officeDocumentExecutor),
+                    executorActiveCount(pdfDocumentExecutor),
+                    executorQueueSize(pdfDocumentExecutor)
             ));
         }, 2, 2, TimeUnit.SECONDS);
     }
@@ -462,6 +743,7 @@ public final class AsyncThumbnailService {
             active = -1;
         }
         return "enabled=" + enabled.get()
+                + " viewportScope=" + viewportScopeGeneration.get()
                 + " inFlight=" + inFlightCount.get()
                 + " running=" + running.size()
                 + " queue=" + q
@@ -473,6 +755,28 @@ public final class AsyncThumbnailService {
                 + " bucketReuse=" + bucketReuse.sum()
                 + " throttled=" + throttleDeferrals.sum()
                 + " viewportCancels=" + viewportCancels.sum()
+                + " viewportMotion=" + viewportMotionEvents.sum()
+                + " viewportIdle=" + viewportIdleTransitions.sum()
+                + " viewportScopeAdvances=" + viewportScopeAdvances.sum()
+                + " movingBgDeferrals=" + movingBackgroundDeferrals.sum()
+                + " queueTrimDrops=" + queueTrimDrops.sum()
+                + " staleGenerationDrops=" + staleGenerationDrops.sum()
+                + " staleSubscriberDrops=" + staleSubscriberDrops.sum()
+                + " staleViewportDrops=" + staleViewportScopeDrops.sum()
+                + " staleCompletionDiscards=" + staleCompletionDiscards.sum()
+                + " staleFileVersionDrops=" + staleFileVersionDrops.sum()
+                + " pdfCooldownInvalidations=" + pdfCooldownInvalidations.sum()
+                + " pdfHistoryResets=" + pdfHistoryResets.sum()
+                + " pdfBudgetPlans=" + pdfAdaptiveBudgetPlans.sum()
+                + " pdfBudgetDownshifts=" + pdfAdaptiveBudgetDownshifts.sum()
+                + " pdfLargeDocFallbacks=" + pdfLargeDocFallbacks.sum()
+                + " pdfLowTierRendered=" + pdfLowTierRendered.sum()
+                + " pdfHighTierRendered=" + pdfHighTierRendered.sum()
+                + " pdfPromotionQueued=" + pdfPromotionQueuedCount.sum()
+                + " pdfPromotionCompleted=" + pdfPromotionCompleted.sum()
+                + " pdfPromotionSkipped=" + pdfPromotionSkipped.sum()
+                + " viewportPrunedPending=" + viewportPrunedPending.sum()
+                + " viewportPrunedQueued=" + viewportPrunedQueued.sum()
                 + " queued=" + queued.sum()
                 + " rendered=" + rendered.sum()
                 + " failed=" + failed.sum()
@@ -508,6 +812,12 @@ public final class AsyncThumbnailService {
                 + ",word=" + onOff(ENABLE_WORD)
                 + ",excel=" + onOff(ENABLE_EXCEL)
                 + ",pptx=" + onOff(ENABLE_PPTX) + "}"
+                + " docLanes{officeActive=" + executorActiveCount(officeDocumentExecutor)
+                + ",officeQueue=" + executorQueueSize(officeDocumentExecutor)
+                + ",pdfActive=" + executorActiveCount(pdfDocumentExecutor)
+                + ",pdfQueue=" + executorQueueSize(pdfDocumentExecutor)
+                + ",pdfPromotionActive=" + pdfActiveHighTierPromotions.get()
+                + ",pdfPromotionPending=" + pdfPromotionPending.size() + "}"
                 + " cache{" + cache.debugString() + "}";
     }
 
@@ -525,6 +835,25 @@ public final class AsyncThumbnailService {
         viewportCancels.increment();
     }
 
+    public void noteViewportMotion() {
+        viewportMotionEvents.increment();
+        viewportMovingUntilNanos.set(System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(VIEWPORT_SETTLE_MS));
+        advanceViewportScope();
+    }
+
+    public void noteViewportIdle() {
+        long previous = viewportMovingUntilNanos.getAndSet(0L);
+        if (previous != 0L) {
+            viewportIdleTransitions.increment();
+        }
+        scheduleCurrentViewportPdfPromotions();
+    }
+
+    public boolean isViewportMoving() {
+        long until = viewportMovingUntilNanos.get();
+        return until != 0L && System.nanoTime() < until;
+    }
+
     /**
      * Enables/disables thumbnail decoding.
      *
@@ -534,6 +863,7 @@ public final class AsyncThumbnailService {
         if (enable && enabled.compareAndSet(false, true)) {
             enabledGate.complete(null);
             scheduleStartupDiskCacheMaintenance();
+            scheduleImageSupportInitialization();
         }
     }
 
@@ -548,6 +878,7 @@ public final class AsyncThumbnailService {
      */
     public void cancelAll() {
         generation.incrementAndGet();
+        viewportScopeGeneration.incrementAndGet();
 
         try {
             pending.forEach((k, f) -> {
@@ -558,6 +889,8 @@ public final class AsyncThumbnailService {
             });
         } finally {
             pending.clear();
+            pendingPriorities.clear();
+            pendingViewportScopes.clear();
         }
     }
 
@@ -572,6 +905,7 @@ public final class AsyncThumbnailService {
                 Runnable r = it.next();
                 if (r instanceof PrioritizedRunnable pr && pr.priority <= RequestPriority.BACKGROUND.p) {
                     it.remove();
+                    queueTrimDrops.increment();
                     onDecodeTaskDropped(pr);
                     over--;
                 }
@@ -581,12 +915,30 @@ public final class AsyncThumbnailService {
                 Runnable r = it.next();
                 if (r instanceof PrioritizedRunnable pr && pr.priority == RequestPriority.VISIBLE.p) {
                     it.remove();
+                    queueTrimDrops.increment();
                     onDecodeTaskDropped(pr);
                     over--;
                 }
             }
         } catch (Throwable ignored) {
         }
+    }
+
+    private long computeScheduleDelayMs(RequestPriority pr) {
+        if (pr == RequestPriority.USER_ACTION || pr == RequestPriority.VISIBLE) {
+            return DEBOUNCE_MS;
+        }
+        return DEBOUNCE_MS + (isViewportMoving() ? MOVING_BACKGROUND_EXTRA_DELAY_MS : 0L);
+    }
+
+    private int queuedCountAtOrAbove(int minPriority) {
+        int count = 0;
+        for (Runnable runnable : decodeExecutor.getQueue()) {
+            if (runnable instanceof PrioritizedRunnable pr && pr.priority >= minPriority) {
+                count++;
+            }
+        }
+        return count;
     }
 
     /**
@@ -645,10 +997,9 @@ public final class AsyncThumbnailService {
         final Path abs = path.toAbsolutePath();
         final String absKey = abs.toString();
         final int sizeBucketPx = sizeBucket(sizePx);
-        final ThumbKey key = new ThumbKey(absKey, sizeBucketPx);
-
         final long lastMod = safeLastModifiedMs(abs);
         final long fileSizeBytes = safeFileSizeBytes(abs);
+        final ThumbKey key = new ThumbKey(absKey, sizeBucketPx, lastMod, fileSizeBytes);
 
         CachedThumb cached = cache.get(key);
         if (cached != null && cached.image != null) {
@@ -657,6 +1008,7 @@ public final class AsyncThumbnailService {
                 if (sizeBucketPx != sizePx) {
                     bucketReuse.increment();
                 }
+                maybeTrackAndPromotePdfVisibleRequest(abs, ext, key, pr, cached.quality, lastMod, fileSizeBytes, viewportScopeFor(pr));
                 return CompletableFuture.completedFuture(cached.image);
             }
             cache.remove(key);
@@ -669,13 +1021,16 @@ public final class AsyncThumbnailService {
                 && larger.fileSizeBytes == fileSizeBytes) {
             hit.increment();
             bucketReuse.increment();
+            maybeTrackAndPromotePdfVisibleRequest(abs, ext, key, pr, larger.quality, lastMod, fileSizeBytes, viewportScopeFor(pr));
             return CompletableFuture.completedFuture(larger.image);
         }
 
         Image diskCached = readDiskCachedThumbnail(abs, ext, sizeBucketPx, lastMod, fileSizeBytes, providerFor(ext));
         if (diskCached != null) {
             hit.increment();
-            cache.put(key, new CachedThumb(lastMod, fileSizeBytes, diskCached, approxBytes(diskCached)));
+            RenderQuality diskQuality = isPdfExtension(ext) ? RenderQuality.PDF_HIGH : RenderQuality.STANDARD;
+            cache.put(key, new CachedThumb(lastMod, fileSizeBytes, diskCached, approxBytes(diskCached), diskQuality));
+            maybeTrackAndPromotePdfVisibleRequest(abs, ext, key, pr, diskQuality, lastMod, fileSizeBytes, viewportScopeFor(pr));
             return CompletableFuture.completedFuture(diskCached);
         }
 
@@ -712,24 +1067,247 @@ public final class AsyncThumbnailService {
             detached.complete(img);
         });
 
+        final long viewportScope = viewportScopeFor(pr);
+        final PdfRenderTier pdfTier = requestedPdfTierFor(ext, pr);
+        maybeTrackAndPromotePdfVisibleRequest(abs, ext, key, pr, null, lastMod, fileSizeBytes, viewportScope);
+
         // Another request already has this key queued or actively decoding.
-        if (!created[0] && (running.contains(key) || pending.containsKey(key))) {
-            return detached;
+        if (!created[0]) {
+            if (running.contains(key)) {
+                return detached;
+            }
+            if (pending.containsKey(key)) {
+                if (shouldReschedulePendingWork(key, pr, viewportScope)) {
+                    scheduleQueuedDecode(key, abs, ext, sizeBucketPx, pr, lastMod, fileSizeBytes, generation.get(), viewportScope, pdfTier);
+                }
+                return detached;
+            }
         }
 
-        // (Re)schedule the decode after a short debounce delay.
+        scheduleQueuedDecode(key, abs, ext, sizeBucketPx, pr, lastMod, fileSizeBytes, generation.get(), viewportScope, pdfTier);
+        return detached;
+    }
+
+    private PdfRenderTier requestedPdfTierFor(String ext, RequestPriority pr) {
+        if (!isPdfExtension(ext)) {
+            return null;
+        }
+        if (pr == RequestPriority.USER_ACTION) {
+            return PdfRenderTier.HIGH;
+        }
+        return PdfRenderTier.LOW;
+    }
+
+    private void maybeTrackAndPromotePdfVisibleRequest(Path abs,
+                                                       String ext,
+                                                       ThumbKey key,
+                                                       RequestPriority pr,
+                                                       RenderQuality quality,
+                                                       long lastMod,
+                                                       long fileSizeBytes,
+                                                       long viewportScope) {
+        if (!ENABLE_PDF_PROGRESSIVE_UPGRADE || abs == null || !isPdfExtension(ext) || pr != RequestPriority.VISIBLE) {
+            return;
+        }
+        String target = safePath(abs);
+        pdfViewportStates.put(target, new PdfViewportState(0, 0, 0, viewportScope, System.nanoTime()));
+        trimPdfViewportTrackingIfNeeded();
+        if (quality == RenderQuality.PDF_LOW) {
+            schedulePdfPromotion(target, abs, key.sizePx(), lastMod, fileSizeBytes, viewportScope, generation.get(), true);
+        }
+    }
+
+    private void maybeSchedulePdfPromotionAfterLowTier(Path abs,
+                                                       String ext,
+                                                       ThumbKey key,
+                                                       RequestPriority pr,
+                                                       long lastMod,
+                                                       long fileSizeBytes,
+                                                       long viewportScope) {
+        if (!ENABLE_PDF_PROGRESSIVE_UPGRADE || abs == null || !isPdfExtension(ext) || pr != RequestPriority.VISIBLE) {
+            return;
+        }
+        schedulePdfPromotion(safePath(abs), abs, key.sizePx(), lastMod, fileSizeBytes, viewportScope, generation.get(), true);
+    }
+
+    private void scheduleCurrentViewportPdfPromotions() {
+        if (!ENABLE_PDF_PROGRESSIVE_UPGRADE || isViewportMoving()) {
+            return;
+        }
+        long currentScope = viewportScopeGeneration.get();
+        pdfViewportStates.forEach((target, state) -> {
+            if (state == null || !state.matches(currentScope)) {
+                return;
+            }
+            PdfRenderKey request = pdfPromotionRequests.get(target);
+            if (request == null || request.viewportScope() != currentScope) {
+                return;
+            }
+            schedulePdfPromotion(target,
+                    Path.of(target),
+                    request.sizePx(),
+                    request.lastModifiedMs(),
+                    request.fileSizeBytes(),
+                    request.viewportScope(),
+                    request.generation(),
+                    false);
+        });
+    }
+
+    private void schedulePdfPromotion(String target,
+                                      Path abs,
+                                      int sizePx,
+                                      long lastMod,
+                                      long fileSizeBytes,
+                                      long viewportScope,
+                                      long generationAtRequest,
+                                      boolean fromLowTierRequest) {
+        if (!ENABLE_PDF_PROGRESSIVE_UPGRADE || target == null || abs == null) {
+            return;
+        }
+        PdfRenderKey renderKey = new PdfRenderKey(target, Math.max(12, Math.min(512, sizePx)), lastMod, fileSizeBytes, 0, PdfRenderTier.HIGH, viewportScope, generationAtRequest);
+        pdfPromotionRequests.put(target, renderKey);
+        trimPdfViewportTrackingIfNeeded();
+        ScheduledFuture<?> prior = pdfPromotionPending.remove(target);
+        if (prior != null) {
+            prior.cancel(false);
+        }
+        long delayMs = Math.max(25L, PDF_PROGRESSIVE_PROMOTION_DELAY_MS + ((fromLowTierRequest || isViewportMoving()) ? VIEWPORT_SETTLE_MS : 0L));
+        ScheduledFuture<?> future = scheduler.schedule(() -> runPdfPromotion(target, abs, renderKey), delayMs, TimeUnit.MILLISECONDS);
+        pdfPromotionPending.put(target, future);
+        pdfPromotionQueuedCount.increment();
+    }
+
+    private void runPdfPromotion(String target, Path abs, PdfRenderKey renderKey) {
+        ScheduledFuture<?> currentFuture = pdfPromotionPending.remove(target);
+        if (currentFuture != null && currentFuture.isCancelled()) {
+            pdfPromotionSkipped.increment();
+            return;
+        }
+        if (!ENABLE_PDF_PROGRESSIVE_UPGRADE || renderKey == null || abs == null) {
+            pdfPromotionSkipped.increment();
+            return;
+        }
+        if (generation.get() != renderKey.generation()) {
+            pdfPromotionSkipped.increment();
+            return;
+        }
+        if (isViewportMoving()) {
+            schedulePdfPromotion(target, abs, renderKey.sizePx(), renderKey.lastModifiedMs(), renderKey.fileSizeBytes(), renderKey.viewportScope(), renderKey.generation(), false);
+            return;
+        }
+        PdfViewportState state = pdfViewportStates.get(target);
+        if (state == null || !state.matches(renderKey.viewportScope())) {
+            pdfPromotionSkipped.increment();
+            return;
+        }
+        if (!isFileVersionCurrent(abs, renderKey.lastModifiedMs(), renderKey.fileSizeBytes())) {
+            pdfPromotionSkipped.increment();
+            return;
+        }
+        ThumbKey key = new ThumbKey(target, renderKey.sizePx(), renderKey.lastModifiedMs(), renderKey.fileSizeBytes());
+        CachedThumb cached = cache.get(key);
+        if (cached != null && cached.image != null && !cached.isLowQualityPdf()) {
+            pdfPromotionSkipped.increment();
+            return;
+        }
+        if (!pdfPromotionRunning.add(target)) {
+            pdfPromotionSkipped.increment();
+            return;
+        }
+        if (pdfActiveHighTierPromotions.incrementAndGet() > PDF_MAX_ACTIVE_HIGH_TIER_PROMOTIONS) {
+            pdfActiveHighTierPromotions.decrementAndGet();
+            pdfPromotionRunning.remove(target);
+            schedulePdfPromotion(target, abs, renderKey.sizePx(), renderKey.lastModifiedMs(), renderKey.fileSizeBytes(), renderKey.viewportScope(), renderKey.generation(), false);
+            return;
+        }
+        decodeExecutor.execute(new PrioritizedRunnable(RequestPriority.BACKGROUND, seq.incrementAndGet(), renderKey.viewportScope(), key, new CompletableFuture<>(), () -> {
+            try {
+                LoadResult result = loadThumbnail(abs, "pdf", renderKey.sizePx(), PdfRenderTier.HIGH);
+                if (result == null || !result.hasImage()) {
+                    pdfPromotionSkipped.increment();
+                    return;
+                }
+                if (generation.get() != renderKey.generation() || !isFileVersionCurrent(abs, renderKey.lastModifiedMs(), renderKey.fileSizeBytes())) {
+                    pdfPromotionSkipped.increment();
+                    return;
+                }
+                PdfViewportState currentState = pdfViewportStates.get(target);
+                if (currentState == null || !currentState.matches(renderKey.viewportScope())) {
+                    pdfPromotionSkipped.increment();
+                    return;
+                }
+                cache.put(key, new CachedThumb(renderKey.lastModifiedMs(), renderKey.fileSizeBytes(), result.image(), approxBytes(result.image()), result.quality()));
+                persistDiskCachedThumbnail(abs, "pdf", renderKey.sizePx(), renderKey.lastModifiedMs(), renderKey.fileSizeBytes(), result.provider(), result.image());
+                pdfHighTierRendered.increment();
+                pdfPromotionCompleted.increment();
+            } finally {
+                pdfActiveHighTierPromotions.decrementAndGet();
+                pdfPromotionRunning.remove(target);
+            }
+        }));
+    }
+
+    private void trimPdfViewportTrackingIfNeeded() {
+        int limit = Math.max(1, PDF_PROGRESSIVE_VISIBLE_TRACK_LIMIT);
+        int over = pdfViewportStates.size() - limit;
+        if (over <= 0) {
+            return;
+        }
+        ArrayList<Map.Entry<String, PdfViewportState>> entries = new ArrayList<>(pdfViewportStates.entrySet());
+        entries.sort(Comparator.comparingLong(e -> e.getValue() == null ? Long.MIN_VALUE : e.getValue().lastUpdateNanos()));
+        for (Map.Entry<String, PdfViewportState> entry : entries) {
+            if (over-- <= 0) {
+                break;
+            }
+            String target = entry.getKey();
+            if (target == null) {
+                continue;
+            }
+            pdfViewportStates.remove(target, entry.getValue());
+            pdfPromotionRequests.remove(target);
+            ScheduledFuture<?> future = pdfPromotionPending.remove(target);
+            if (future != null) {
+                future.cancel(false);
+            }
+        }
+    }
+
+
+    private boolean shouldReschedulePendingWork(ThumbKey key, RequestPriority requestedPriority, long requestedViewportScope) {
+        RequestPriority existingPriority = pendingPriorities.get(key);
+        Long existingScope = pendingViewportScopes.get(key);
+        if (existingPriority == null) {
+            return true;
+        }
+        if (requestedPriority.p > existingPriority.p) {
+            return true;
+        }
+        return !Objects.equals(existingScope, requestedViewportScope);
+    }
+
+    private void scheduleQueuedDecode(ThumbKey key,
+                                      Path abs,
+                                      String ext,
+                                      int sizePx,
+                                      RequestPriority pr,
+                                      long lastMod,
+                                      long fileSizeBytes,
+                                      long genAtSchedule,
+                                      long viewportScope,
+                                      PdfRenderTier pdfTier) {
         ScheduledFuture<?> prev = pending.get(key);
-        if (prev != null) prev.cancel(false);
-
-        final long genAtSchedule = generation.get();
+        if (prev != null) {
+            prev.cancel(false);
+        }
         final long seqNo = seq.incrementAndGet();
-
         ScheduledFuture<?> scheduled = scheduler.schedule(() ->
-                startQueuedDecode(key, abs, ext, sizeBucketPx, pr, lastMod, fileSizeBytes, genAtSchedule, seqNo),
-                DEBOUNCE_MS, TimeUnit.MILLISECONDS);
+                startQueuedDecode(key, abs, ext, sizePx, pr, lastMod, fileSizeBytes, genAtSchedule, seqNo, viewportScope, pdfTier),
+                computeScheduleDelayMs(pr), TimeUnit.MILLISECONDS);
 
         pending.put(key, scheduled);
-        return detached;
+        pendingPriorities.put(key, pr);
+        pendingViewportScopes.put(key, viewportScope);
     }
 
     private void startQueuedDecode(ThumbKey key,
@@ -740,33 +1318,60 @@ public final class AsyncThumbnailService {
                                    long lastMod,
                                    long fileSizeBytes,
                                    long genAtSchedule,
-                                   long seqNo) {
+                                   long seqNo,
+                                   long viewportScope,
+                                   PdfRenderTier pdfTier) {
         // If preempted, drop.
         if (generation.get() != genAtSchedule) {
+            staleGenerationDrops.increment();
+            completeAndCleanupPreempted(key);
+            return;
+        }
+        if (!isViewportScopeCurrent(pr, viewportScope)) {
+            staleViewportScopeDrops.increment();
             completeAndCleanupPreempted(key);
             return;
         }
 
         // If no one cares anymore, cancel pending work and clean up.
         if (subscriberCount(key) <= 0) {
+            staleSubscriberDrops.increment();
             completeAndCleanupPreempted(key);
+            return;
+        }
+
+        if (pr == RequestPriority.BACKGROUND && isViewportMoving()
+                && queuedCountAtOrAbove(RequestPriority.VISIBLE.p) >= MOVING_VISIBLE_BACKLOG_LIMIT) {
+            movingBackgroundDeferrals.increment();
+            ScheduledFuture<?> retry = scheduler.schedule(
+                    () -> startQueuedDecode(key, abs, ext, sizePx, pr, lastMod, fileSizeBytes, genAtSchedule, seq.incrementAndGet(), viewportScope, pdfTier),
+                    MOVING_BACKGROUND_EXTRA_DELAY_MS,
+                    TimeUnit.MILLISECONDS
+            );
+            pending.put(key, retry);
+            pendingPriorities.put(key, pr);
+            pendingViewportScopes.put(key, viewportScope);
             return;
         }
 
         CompletableFuture<Image> current = inFlight.get(key);
         if (current == null || current.isDone()) {
             pending.remove(key);
+            pendingPriorities.remove(key);
+            pendingViewportScopes.remove(key);
             return;
         }
 
         if (!tryAcquireStartSlot(pr)) {
             throttleDeferrals.increment();
             ScheduledFuture<?> retry = scheduler.schedule(
-                    () -> startQueuedDecode(key, abs, ext, sizePx, pr, lastMod, fileSizeBytes, genAtSchedule, seq.incrementAndGet()),
+                    () -> startQueuedDecode(key, abs, ext, sizePx, pr, lastMod, fileSizeBytes, genAtSchedule, seq.incrementAndGet(), viewportScope, pdfTier),
                     THROTTLE_RETRY_MS,
                     TimeUnit.MILLISECONDS
             );
             pending.put(key, retry);
+            pendingPriorities.put(key, pr);
+            pendingViewportScopes.put(key, viewportScope);
             return;
         }
 
@@ -779,15 +1384,22 @@ public final class AsyncThumbnailService {
         trimDecodeQueueIfNeeded();
 
         // Submit a comparable task so the executor orders by priority.
-        decodeExecutor.execute(new PrioritizedRunnable(pr, seqNo, key, current, () -> {
+        decodeExecutor.execute(new PrioritizedRunnable(pr, seqNo, viewportScope, key, current, () -> {
             LoadResult result = null;
             try {
                 // If preempted mid-flight, skip decode.
-                if (generation.get() != genAtSchedule) return;
+                if (generation.get() != genAtSchedule) {
+                    staleGenerationDrops.increment();
+                    return;
+                }
+                if (!isViewportScopeCurrent(pr, viewportScope)) {
+                    staleViewportScopeDrops.increment();
+                    return;
+                }
 
-                result = loadThumbnail(abs, ext, sizePx);
+                result = loadThumbnail(abs, ext, sizePx, pdfTier);
             } catch (Throwable ignored) {
-                result = new LoadResult(null, providerFor(ext));
+                result = new LoadResult(null, providerFor(ext), renderQualityFor(ext, pdfTier));
             } finally {
                 try {
                     long dur = System.nanoTime() - startNanos;
@@ -796,16 +1408,38 @@ public final class AsyncThumbnailService {
 
                     if (generation.get() != genAtSchedule) {
                         // stale completion: do not cache
+                        staleGenerationDrops.increment();
                         current.complete(null);
                         fallbackUsed.increment();
                         failed.increment();
                         return;
                     }
+                    if (!isViewportScopeCurrent(pr, viewportScope)) {
+                        staleViewportScopeDrops.increment();
+                        staleCompletionDiscards.increment();
+                        current.complete(null);
+                        return;
+                    }
+
+                    if (!isFileVersionCurrent(abs, lastMod, fileSizeBytes)) {
+                        staleFileVersionDrops.increment();
+                        staleCompletionDiscards.increment();
+                        current.complete(null);
+                        return;
+                    }
 
                     if (result != null && result.hasImage()) {
                         long approxBytes = approxBytes(result.image());
-                        cache.put(key, new CachedThumb(lastMod, fileSizeBytes, result.image(), approxBytes));
-                        persistDiskCachedThumbnail(abs, ext, sizePx, lastMod, fileSizeBytes, result.provider(), result.image());
+                        cache.put(key, new CachedThumb(lastMod, fileSizeBytes, result.image(), approxBytes, result.quality()));
+                        if (!result.isLowQualityPdf()) {
+                            persistDiskCachedThumbnail(abs, ext, sizePx, lastMod, fileSizeBytes, result.provider(), result.image());
+                        }
+                        if (result.quality() == RenderQuality.PDF_LOW) {
+                            pdfLowTierRendered.increment();
+                            maybeSchedulePdfPromotionAfterLowTier(abs, ext, key, pr, lastMod, fileSizeBytes, viewportScope);
+                        } else if (result.quality() == RenderQuality.PDF_HIGH) {
+                            pdfHighTierRendered.increment();
+                        }
                         rendered.increment();
                         incrementProviderCounter(result.provider());
                         current.complete(result.image());
@@ -824,9 +1458,98 @@ public final class AsyncThumbnailService {
                     inFlight.remove(key);
                     ScheduledFuture<?> pf = pending.remove(key);
                     if (pf != null) pf.cancel(false);
+                    pendingPriorities.remove(key);
+                    pendingViewportScopes.remove(key);
                 }
             }
         }));
+    }
+
+    private long viewportScopeFor(RequestPriority priority) {
+        return priority == RequestPriority.USER_ACTION ? 0L : viewportScopeGeneration.get();
+    }
+
+    private boolean isViewportScopeCurrent(RequestPriority priority, long viewportScope) {
+        return priority == RequestPriority.USER_ACTION || viewportScope == viewportScopeGeneration.get();
+    }
+
+    private void advanceViewportScope() {
+        long currentScope = viewportScopeGeneration.incrementAndGet();
+        viewportScopeAdvances.increment();
+        prunePendingViewportScopedWork(currentScope);
+        pruneQueuedViewportScopedWork(currentScope);
+        prunePdfPromotionState(currentScope);
+    }
+
+    private void prunePendingViewportScopedWork(long currentScope) {
+        pending.forEach((key, future) -> {
+            RequestPriority priority = pendingPriorities.get(key);
+            Long scope = pendingViewportScopes.get(key);
+            if (priority == null || priority == RequestPriority.USER_ACTION || scope == null || scope == currentScope) {
+                return;
+            }
+            try {
+                if (future != null) {
+                    future.cancel(false);
+                }
+            } catch (Exception ignored) {
+            }
+            pending.remove(key, future);
+            pendingPriorities.remove(key);
+            pendingViewportScopes.remove(key);
+            CompletableFuture<Image> shared = inFlight.remove(key);
+            if (shared != null && !shared.isDone()) {
+                shared.complete(null);
+            }
+            subscribers.remove(key);
+            viewportPrunedPending.increment();
+            cancelled.increment();
+        });
+    }
+
+    private void pruneQueuedViewportScopedWork(long currentScope) {
+        try {
+            java.util.Iterator<Runnable> iterator = decodeExecutor.getQueue().iterator();
+            while (iterator.hasNext()) {
+                Runnable runnable = iterator.next();
+                if (!(runnable instanceof PrioritizedRunnable task)) {
+                    continue;
+                }
+                if (task.viewportScope == 0L || task.viewportScope == currentScope) {
+                    continue;
+                }
+                iterator.remove();
+                pendingPriorities.remove(task.key);
+                pendingViewportScopes.remove(task.key);
+                CompletableFuture<Image> shared = inFlight.remove(task.key);
+                if (shared != null && !shared.isDone()) {
+                    shared.complete(null);
+                }
+                ScheduledFuture<?> future = pending.remove(task.key);
+                if (future != null) {
+                    future.cancel(false);
+                }
+                subscribers.remove(task.key);
+                running.remove(task.key);
+                viewportPrunedQueued.increment();
+                cancelled.increment();
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void prunePdfPromotionState(long currentScope) {
+        pdfViewportStates.forEach((target, state) -> {
+            if (state != null && state.generation() == currentScope) {
+                return;
+            }
+            pdfViewportStates.remove(target, state);
+            pdfPromotionRequests.remove(target);
+            ScheduledFuture<?> future = pdfPromotionPending.remove(target);
+            if (future != null) {
+                future.cancel(false);
+            }
+        });
     }
 
     private boolean tryAcquireStartSlot(RequestPriority pr) {
@@ -863,6 +1586,8 @@ public final class AsyncThumbnailService {
         cancelled.increment();
         running.remove(key);
         subscribers.remove(key);
+        pendingPriorities.remove(key);
+        pendingViewportScopes.remove(key);
     }
 
     private void incSubscriber(ThumbKey key) {
@@ -884,6 +1609,8 @@ public final class AsyncThumbnailService {
         if (!running.contains(key)) {
             ScheduledFuture<?> pf = pending.remove(key);
             if (pf != null) pf.cancel(false);
+            pendingPriorities.remove(key);
+            pendingViewportScopes.remove(key);
 
             CompletableFuture<Image> shared = inFlight.remove(key);
             if (shared != null && !shared.isDone()) {
@@ -916,6 +1643,8 @@ public final class AsyncThumbnailService {
                 } catch (Throwable ignored) {
                 }
             }
+            pendingPriorities.remove(pr.key);
+            pendingViewportScopes.remove(pr.key);
             subscribers.remove(pr.key);
         }
     }
@@ -936,26 +1665,93 @@ public final class AsyncThumbnailService {
         }
     }
 
-    private LoadResult loadThumbnail(Path path, String ext, int sizePx) {
+    private boolean isFileVersionCurrent(Path path, long lastModifiedMs, long fileSizeBytes) {
+        return safeLastModifiedMs(path) == lastModifiedMs && safeFileSizeBytes(path) == fileSizeBytes;
+    }
+
+    private ExecutorService documentExecutorFor(String ext) {
+        return isPdfExtension(ext) ? pdfDocumentExecutor : officeDocumentExecutor;
+    }
+
+    private int executorQueueSize(ExecutorService executor) {
+        if (executor instanceof ThreadPoolExecutor tpe) {
+            return tpe.getQueue().size();
+        }
+        return -1;
+    }
+
+    private int executorActiveCount(ExecutorService executor) {
+        if (executor instanceof ThreadPoolExecutor tpe) {
+            return tpe.getActiveCount();
+        }
+        return -1;
+    }
+
+    private boolean tryEnterPdfRender(String target, PdfRenderTier tier) {
+        AtomicInteger totalCounter = pdfActiveDocumentRenders.computeIfAbsent(target, ignored -> new AtomicInteger(0));
+        int totalActive = totalCounter.incrementAndGet();
+        if (totalActive > PDF_MAX_ACTIVE_RENDERS_PER_DOCUMENT) {
+            if (totalCounter.decrementAndGet() <= 0) {
+                pdfActiveDocumentRenders.remove(target, totalCounter);
+            }
+            return false;
+        }
+        if (tier == PdfRenderTier.HIGH) {
+            AtomicInteger highCounter = pdfActiveDocumentHighTierRenders.computeIfAbsent(target, ignored -> new AtomicInteger(0));
+            int highActive = highCounter.incrementAndGet();
+            if (highActive > PDF_MAX_ACTIVE_HIGH_TIER_PER_DOCUMENT) {
+                if (highCounter.decrementAndGet() <= 0) {
+                    pdfActiveDocumentHighTierRenders.remove(target, highCounter);
+                }
+                if (totalCounter.decrementAndGet() <= 0) {
+                    pdfActiveDocumentRenders.remove(target, totalCounter);
+                }
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void exitPdfRender(String target, PdfRenderTier tier) {
+        AtomicInteger totalCounter = pdfActiveDocumentRenders.get(target);
+        if (totalCounter != null && totalCounter.decrementAndGet() <= 0) {
+            pdfActiveDocumentRenders.remove(target, totalCounter);
+        }
+        if (tier == PdfRenderTier.HIGH) {
+            AtomicInteger highCounter = pdfActiveDocumentHighTierRenders.get(target);
+            if (highCounter != null && highCounter.decrementAndGet() <= 0) {
+                pdfActiveDocumentHighTierRenders.remove(target, highCounter);
+            }
+        }
+    }
+
+    private LoadResult loadThumbnail(Path path, String ext, int sizePx, PdfRenderTier pdfTier) {
         try {
             if (!Files.isRegularFile(path)) {
-                return new LoadResult(null, ThumbnailProvider.UNSUPPORTED);
+                return new LoadResult(null, ThumbnailProvider.UNSUPPORTED, RenderQuality.STANDARD);
             }
         } catch (Exception ex) {
-            return new LoadResult(null, ThumbnailProvider.UNSUPPORTED);
+            return new LoadResult(null, ThumbnailProvider.UNSUPPORTED, RenderQuality.STANDARD);
         }
 
         ThumbnailProvider provider = providerFor(ext);
         try {
             return switch (provider) {
-                case JAVAFX_NATIVE -> new LoadResult(loadJavaFxNativeThumbnail(path, sizePx), provider);
-                case THUMBNAILS4J_DOCUMENT -> new LoadResult(loadDocumentThumbnail(path, ext, sizePx), provider);
-                case IMAGEIO -> new LoadResult(loadImageIoThumbnail(path, sizePx), provider);
-                case DISABLED, UNSUPPORTED -> new LoadResult(null, provider);
+                case JAVAFX_NATIVE -> new LoadResult(loadJavaFxNativeThumbnail(path, sizePx), provider, RenderQuality.STANDARD);
+                case THUMBNAILS4J_DOCUMENT -> new LoadResult(loadDocumentThumbnail(path, ext, sizePx, pdfTier), provider, renderQualityFor(ext, pdfTier));
+                case IMAGEIO -> new LoadResult(loadImageIoThumbnail(path, sizePx), provider, RenderQuality.STANDARD);
+                case DISABLED, UNSUPPORTED -> new LoadResult(null, provider, renderQualityFor(ext, pdfTier));
             };
         } catch (Throwable ignored) {
-            return new LoadResult(null, provider);
+            return new LoadResult(null, provider, renderQualityFor(ext, pdfTier));
         }
+    }
+
+    private RenderQuality renderQualityFor(String ext, PdfRenderTier pdfTier) {
+        if (!isPdfExtension(ext)) {
+            return RenderQuality.STANDARD;
+        }
+        return pdfTier == PdfRenderTier.HIGH ? RenderQuality.PDF_HIGH : RenderQuality.PDF_LOW;
     }
 
     private Image loadJavaFxNativeThumbnail(Path path, int sizePx) {
@@ -981,28 +1777,49 @@ public final class AsyncThumbnailService {
         return SwingFXUtils.toFXImage(scaled, null);
     }
 
-    private Image loadDocumentThumbnail(Path path, String ext, int sizePx) {
+    private Image loadDocumentThumbnail(Path path, String ext, int sizePx, PdfRenderTier pdfTier) {
         Future<BufferedImage> future = null;
+        long lastMod = safeLastModifiedMs(path);
+        long fileSizeBytes = safeFileSizeBytes(path);
+        long timeoutBudgetMs = timeoutBudgetMsFor(path, ext, sizePx, lastMod, fileSizeBytes, pdfTier);
+        long waitBudgetMs = isPdfExtension(ext)
+                ? timeoutBudgetMs + Math.max(0L, PDF_TIMEOUT_JOIN_GRACE_MS)
+                : DOCUMENT_TIMEOUT_MS;
         try {
-            future = documentExecutor.submit(() -> renderDocumentThumbnail(path, ext, sizePx));
-            BufferedImage bi = future.get(DOCUMENT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            if (isPdfExtension(ext) && shouldFallbackLargePdf(path, lastMod, fileSizeBytes)) {
+                return null;
+            }
+
+            future = documentExecutorFor(ext).submit(() -> renderDocumentThumbnail(path, ext, sizePx, timeoutBudgetMs, pdfTier));
+            BufferedImage bi = future.get(waitBudgetMs, TimeUnit.MILLISECONDS);
             if (bi == null) {
                 return null;
             }
             return SwingFXUtils.toFXImage(bi, null);
         } catch (TimeoutException te) {
             documentTimeouts.increment();
+            if (isPdfExtension(ext)) {
+                recordPdfRenderTimeout(path, lastMod, fileSizeBytes, timeoutBudgetMs);
+                markPdfTimeoutCooldown(path, lastMod, fileSizeBytes);
+                logPdfTimeout(path, te, lastMod, fileSizeBytes, timeoutBudgetMs);
+            }
             if (future != null) {
                 try {
-                    future.cancel(true);
+                    future.cancel(false);
                 } catch (Throwable ignored) {
                 }
             }
             return null;
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            if (isPdfExtension(ext) && isInterruptRelatedPdfFailure(t)) {
+                recordPdfRenderTimeout(path, lastMod, fileSizeBytes, timeoutBudgetMs);
+                markPdfTimeoutCooldown(path, lastMod, fileSizeBytes);
+                logPdfInterrupt(path, t, lastMod, fileSizeBytes);
+                clearThreadInterruptFlag();
+            }
             if (future != null) {
                 try {
-                    future.cancel(true);
+                    future.cancel(false);
                 } catch (Throwable ignored2) {
                 }
             }
@@ -1010,8 +1827,12 @@ public final class AsyncThumbnailService {
         }
     }
 
-    private BufferedImage renderDocumentThumbnail(Path path, String ext, int sizePx) {
+    private BufferedImage renderDocumentThumbnail(Path path, String ext, int sizePx, long timeoutBudgetMs, PdfRenderTier pdfTier) {
         try {
+            if (isPdfExtension(ext)) {
+                return renderPdfThumbnail(path, sizePx, timeoutBudgetMs, pdfTier);
+            }
+
             Thumbnailer thumbnailer = newDocumentThumbnailer(ext);
             if (thumbnailer == null) {
                 return null;
@@ -1028,9 +1849,831 @@ public final class AsyncThumbnailService {
                 return null;
             }
             return bi;
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            if (isPdfExtension(ext)) {
+                if (isMissingJpeg2000Reader(t)) {
+                    logMissingJpeg2000Reader(path, t);
+                } else if (isMissingJbig2Reader(t)) {
+                    logMissingJbig2Reader(path, t);
+                } else if (isMalformedPdf(t)) {
+                    logMalformedPdf(path, t);
+                }
+            }
             return null;
         }
+    }
+
+    private BufferedImage renderPdfThumbnail(Path path, int sizePx, long timeoutBudgetMs, PdfRenderTier pdfTier) {
+        if (path == null || sizePx <= 0) {
+            return null;
+        }
+        long lastMod = safeLastModifiedMs(path);
+        long fileSizeBytes = safeFileSizeBytes(path);
+        if (isPdfInTimeoutCooldown(path, lastMod, fileSizeBytes)) {
+            return null;
+        }
+        if (shouldFallbackLargePdf(path, lastMod, fileSizeBytes)) {
+            return null;
+        }
+        if (!hasJpeg2000Reader() && pdfLikelyContainsJpx(path)) {
+            logMissingJpeg2000Reader(path, null);
+            return null;
+        }
+        if (!hasJbig2Reader() && pdfLikelyContainsJbig2(path)) {
+            logMissingJbig2Reader(path, null);
+            return null;
+        }
+        long renderStartNanos = System.nanoTime();
+        String target = safePath(path);
+        if (!tryEnterPdfRender(target, pdfTier == null ? PdfRenderTier.LOW : pdfTier)) {
+            return null;
+        }
+        try {
+            byte[] pdfBytes = readPdfBytesForThumbnail(path, lastMod, fileSizeBytes);
+        if (pdfBytes == null) {
+            return null;
+        }
+        if (shouldAbortPdfForBudget(path, lastMod, fileSizeBytes, timeoutBudgetMs, renderStartNanos)) {
+            return null;
+        }
+        try (PDDocument document = Loader.loadPDF(pdfBytes)) {
+            if (document.getNumberOfPages() <= 0) {
+                logMalformedPdf(path, new IllegalStateException("PDF has no pages"));
+                return null;
+            }
+            PdfRenderPlan plan = buildPdfRenderPlan(path, document, sizePx, lastMod, fileSizeBytes, pdfTier);
+            if (shouldAbortPdfForBudget(path, lastMod, fileSizeBytes, timeoutBudgetMs, renderStartNanos)) {
+                return null;
+            }
+            PDFRenderer renderer = new PDFRenderer(document);
+            BufferedImage rendered = renderer.renderImage(0, plan.scale(), ImageType.RGB);
+            if (rendered == null) {
+                return null;
+            }
+            if (shouldAbortPdfForBudget(path, lastMod, fileSizeBytes, timeoutBudgetMs, renderStartNanos)) {
+                return null;
+            }
+            recordPdfRenderSuccess(path, lastMod, fileSizeBytes, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - renderStartNanos));
+            return scaleToFitSquare(rendered, sizePx);
+        } catch (Throwable t) {
+            if (isInterruptRelatedPdfFailure(t)) {
+                recordPdfRenderTimeout(path, lastMod, fileSizeBytes, timeoutBudgetMs);
+                markPdfTimeoutCooldown(path, lastMod, fileSizeBytes);
+                logPdfInterrupt(path, t, lastMod, fileSizeBytes);
+                clearThreadInterruptFlag();
+                return null;
+            }
+            if (isMissingJpeg2000Reader(t)) {
+                logMissingJpeg2000Reader(path, t);
+                return null;
+            }
+            if (isMissingJbig2Reader(t)) {
+                logMissingJbig2Reader(path, t);
+                return null;
+            }
+            if (isMalformedPdf(t)) {
+                logMalformedPdf(path, t);
+                return null;
+            }
+            LOG.log(Level.FINE, t, () -> "[Thumbs] PDF thumbnail render failed for " + safePath(path));
+            return null;
+        }
+        } finally {
+            exitPdfRender(target, pdfTier == null ? PdfRenderTier.LOW : pdfTier);
+        }
+    }
+
+
+    private PdfRenderPlan buildPdfRenderPlan(Path path, PDDocument document, int requestedSizePx, long lastMod, long fileSizeBytes, PdfRenderTier pdfTier) {
+        int safeRequestedSizePx = Math.max(12, requestedSizePx);
+        int pageCount = Math.max(0, document == null ? 0 : document.getNumberOfPages());
+        float firstPageWidthPts = 612.0f;
+        float firstPageHeightPts = 792.0f;
+        if (document != null && pageCount > 0) {
+            try {
+                PDPage page = document.getPage(0);
+                if (page != null) {
+                    PDRectangle cropBox = page.getCropBox();
+                    if (cropBox != null) {
+                        firstPageWidthPts = Math.max(1.0f, cropBox.getWidth());
+                        firstPageHeightPts = Math.max(1.0f, cropBox.getHeight());
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        PdfRenderHistory history = currentPdfRenderHistory(path, lastMod, fileSizeBytes);
+        double averageRenderMs = history == null ? 0.0d : history.averageRenderMs();
+        int consecutiveTimeouts = history == null ? 0 : history.consecutiveTimeouts();
+        PdfRenderTier effectiveTier = pdfTier == null ? PdfRenderTier.LOW : pdfTier;
+        int effectiveSizePx = computeAdaptivePdfTargetSizePx(
+                safeRequestedSizePx,
+                fileSizeBytes,
+                pageCount,
+                firstPageWidthPts,
+                firstPageHeightPts,
+                averageRenderMs,
+                consecutiveTimeouts
+        );
+        float baseScale = computePdfRenderScale(document, effectiveSizePx);
+        float scaleCap = computeAdaptivePdfScaleCap(
+                fileSizeBytes,
+                pageCount,
+                firstPageWidthPts,
+                firstPageHeightPts,
+                averageRenderMs,
+                consecutiveTimeouts
+        );
+        if (effectiveTier == PdfRenderTier.LOW) {
+            effectiveSizePx = Math.min(effectiveSizePx, Math.min(safeRequestedSizePx, 96));
+            scaleCap = Math.min(scaleCap, isViewportMoving() ? 0.85f : 0.95f);
+        } else {
+            scaleCap = Math.max(scaleCap, 1.05f);
+        }
+        float finalScale = clampFloat(Math.min(baseScale, scaleCap), effectiveTier == PdfRenderTier.LOW ? 0.55f : 0.75f, 2.0f);
+        boolean budgetReduced = effectiveSizePx < safeRequestedSizePx || finalScale + 0.0001f < baseScale;
+        pdfAdaptiveBudgetPlans.increment();
+        if (budgetReduced) {
+            pdfAdaptiveBudgetDownshifts.increment();
+        }
+        boolean largeDocument = fileSizeBytes >= PDF_LARGE_DOC_SOFT_BYTES || pageCount >= PDF_LARGE_DOC_PAGE_COUNT_THRESHOLD;
+        return new PdfRenderPlan(effectiveSizePx, finalScale, pageCount, largeDocument, budgetReduced, effectiveTier);
+    }
+
+    private long timeoutBudgetMsFor(Path path, String ext, int sizePx, long lastMod, long fileSizeBytes, PdfRenderTier pdfTier) {
+        if (!isPdfExtension(ext)) {
+            return DOCUMENT_TIMEOUT_MS;
+        }
+        PdfRenderHistory history = currentPdfRenderHistory(path, lastMod, fileSizeBytes);
+        double averageRenderMs = history == null ? 0.0d : history.averageRenderMs();
+        long budget = computeAdaptivePdfTimeoutMs(fileSizeBytes, sizePx, averageRenderMs, pdfTier);
+        return clampLong(
+                budget,
+                Math.min(PDF_ADAPTIVE_TIMEOUT_MIN_MS, PDF_ADAPTIVE_TIMEOUT_MAX_MS),
+                Math.max(PDF_ADAPTIVE_TIMEOUT_MIN_MS, PDF_ADAPTIVE_TIMEOUT_MAX_MS)
+        );
+    }
+
+    private long computeAdaptivePdfTimeoutMs(long fileSizeBytes, int sizePx, double averageRenderMs, PdfRenderTier pdfTier) {
+        long budget = DOCUMENT_TIMEOUT_MS;
+        if (fileSizeBytes >= (8L * 1024L * 1024L)) {
+            budget += 500L;
+        }
+        if (fileSizeBytes >= PDF_LARGE_DOC_SOFT_BYTES) {
+            budget += 750L;
+        }
+        if (fileSizeBytes >= (PDF_LARGE_DOC_HARD_FALLBACK_BYTES / 2L)) {
+            budget += 750L;
+        }
+        if (sizePx >= 128) {
+            budget += 250L;
+        }
+        if (sizePx >= 256) {
+            budget += 500L;
+        }
+        if (averageRenderMs > 0.0d) {
+            budget = Math.max(budget, Math.round(averageRenderMs * 1.6d));
+        }
+        if (pdfTier == PdfRenderTier.LOW) {
+            budget = Math.max(PDF_ADAPTIVE_TIMEOUT_MIN_MS, Math.min(budget, DOCUMENT_TIMEOUT_MS + 500L));
+        } else if (pdfTier == PdfRenderTier.HIGH) {
+            budget += 500L;
+        }
+        return budget;
+    }
+
+    private int computeAdaptivePdfTargetSizePx(int requestedSizePx,
+                                               long fileSizeBytes,
+                                               int pageCount,
+                                               float firstPageWidthPts,
+                                               float firstPageHeightPts,
+                                               double averageRenderMs,
+                                               int consecutiveTimeouts) {
+        int effectiveSizePx = Math.max(12, requestedSizePx);
+        boolean largeDocument = fileSizeBytes >= PDF_LARGE_DOC_SOFT_BYTES || pageCount >= PDF_LARGE_DOC_PAGE_COUNT_THRESHOLD;
+        boolean hugeFirstPage = Math.max(firstPageWidthPts, firstPageHeightPts) >= 1_400.0f
+                || (firstPageWidthPts * firstPageHeightPts) >= 900_000.0f;
+        if (largeDocument) {
+            effectiveSizePx = Math.min(effectiveSizePx, 128);
+        }
+        if (hugeFirstPage) {
+            effectiveSizePx = Math.min(effectiveSizePx, 128);
+        }
+        if (pageCount >= (PDF_LARGE_DOC_PAGE_COUNT_THRESHOLD * 2)) {
+            effectiveSizePx = Math.min(effectiveSizePx, 96);
+        }
+        if (averageRenderMs >= (DOCUMENT_TIMEOUT_MS * 0.75d)) {
+            effectiveSizePx = Math.min(effectiveSizePx, 96);
+        }
+        if (consecutiveTimeouts >= PDF_RECOVERY_TIMEOUT_STREAK_THRESHOLD) {
+            effectiveSizePx = Math.min(effectiveSizePx, 96);
+        }
+        return effectiveSizePx;
+    }
+
+    private float computeAdaptivePdfScaleCap(long fileSizeBytes,
+                                             int pageCount,
+                                             float firstPageWidthPts,
+                                             float firstPageHeightPts,
+                                             double averageRenderMs,
+                                             int consecutiveTimeouts) {
+        float cap = 2.0f;
+        boolean largeDocument = fileSizeBytes >= PDF_LARGE_DOC_SOFT_BYTES || pageCount >= PDF_LARGE_DOC_PAGE_COUNT_THRESHOLD;
+        boolean hugeFirstPage = Math.max(firstPageWidthPts, firstPageHeightPts) >= 1_400.0f
+                || (firstPageWidthPts * firstPageHeightPts) >= 900_000.0f;
+        if (largeDocument) {
+            cap = Math.min(cap, 1.0f);
+        }
+        if (hugeFirstPage) {
+            cap = Math.min(cap, 0.90f);
+        }
+        if (averageRenderMs >= (DOCUMENT_TIMEOUT_MS * 0.75d)) {
+            cap = Math.min(cap, 0.90f);
+        }
+        if (consecutiveTimeouts >= PDF_RECOVERY_TIMEOUT_STREAK_THRESHOLD) {
+            cap = Math.min(cap, 0.85f);
+        }
+        return cap;
+    }
+
+    private boolean shouldAbortPdfForBudget(Path path,
+                                            long lastMod,
+                                            long fileSizeBytes,
+                                            long timeoutBudgetMs,
+                                            long renderStartNanos) {
+        if (timeoutBudgetMs <= 0L) {
+            return false;
+        }
+        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - renderStartNanos);
+        if (elapsedMs < timeoutBudgetMs) {
+            return false;
+        }
+        documentTimeouts.increment();
+        recordPdfRenderTimeout(path, lastMod, fileSizeBytes, timeoutBudgetMs);
+        markPdfTimeoutCooldown(path, lastMod, fileSizeBytes);
+        logPdfTimeout(path, null, lastMod, fileSizeBytes, timeoutBudgetMs);
+        return true;
+    }
+
+    private boolean shouldFallbackLargePdf(Path path, long lastMod, long fileSizeBytes) {
+        if (path == null || fileSizeBytes <= 0L) {
+            return false;
+        }
+        PdfRenderHistory history = currentPdfRenderHistory(path, lastMod, fileSizeBytes);
+        if (fileSizeBytes >= PDF_LARGE_DOC_HARD_FALLBACK_BYTES) {
+            pdfLargeDocFallbacks.increment();
+            logPdfLargeDocumentFallback(path, lastMod, fileSizeBytes, history, "size-threshold");
+            return true;
+        }
+        if (history != null
+                && history.consecutiveTimeouts() >= PDF_RECOVERY_TIMEOUT_STREAK_THRESHOLD
+                && fileSizeBytes >= PDF_LARGE_DOC_SOFT_BYTES) {
+            pdfLargeDocFallbacks.increment();
+            logPdfLargeDocumentFallback(path, lastMod, fileSizeBytes, history, "timeout-recovery");
+            return true;
+        }
+        return false;
+    }
+
+    private PdfRenderHistory currentPdfRenderHistory(Path path, long lastMod, long fileSizeBytes) {
+        String target = safePath(path);
+        PdfRenderHistory history = PDF_RENDER_HISTORY.get(target);
+        if (history == null) {
+            return null;
+        }
+        if (history.matches(lastMod, fileSizeBytes)) {
+            return history;
+        }
+        if (PDF_RENDER_HISTORY.remove(target, history)) {
+            pdfHistoryResets.increment();
+        }
+        return null;
+    }
+
+    private void recordPdfRenderSuccess(Path path, long lastMod, long fileSizeBytes, long renderMs) {
+        String target = safePath(path);
+        PDF_RENDER_HISTORY.compute(target, (ignored, existing) -> {
+            PdfRenderHistory base = existing;
+            if (base != null && !base.matches(lastMod, fileSizeBytes)) {
+                pdfHistoryResets.increment();
+                base = null;
+            }
+            if (base == null) {
+                return new PdfRenderHistory(lastMod, fileSizeBytes, Math.max(1.0d, renderMs), 1, 0);
+            }
+            return base.afterSuccess(renderMs);
+        });
+    }
+
+    private void recordPdfRenderTimeout(Path path, long lastMod, long fileSizeBytes, long timeoutBudgetMs) {
+        String target = safePath(path);
+        PDF_RENDER_HISTORY.compute(target, (ignored, existing) -> {
+            PdfRenderHistory base = existing;
+            if (base != null && !base.matches(lastMod, fileSizeBytes)) {
+                pdfHistoryResets.increment();
+                base = null;
+            }
+            if (base == null) {
+                return new PdfRenderHistory(lastMod, fileSizeBytes, Math.max(1.0d, timeoutBudgetMs), 0, 1);
+            }
+            return base.afterTimeout(timeoutBudgetMs);
+        });
+    }
+
+    private byte[] readPdfBytesForThumbnail(Path path, long lastMod, long fileSizeBytes) {
+        if (path == null) {
+            return null;
+        }
+        try {
+            long size = Files.size(path);
+            if (size <= 0L) {
+                logMalformedPdf(path, new IllegalStateException("PDF is empty"));
+                return null;
+            }
+            if (size > PDF_IN_MEMORY_MAX_BYTES) {
+                logPdfOversize(path, size, lastMod, fileSizeBytes);
+                return null;
+            }
+            return Files.readAllBytes(path);
+        } catch (Throwable t) {
+            if (isMalformedPdf(t)) {
+                logMalformedPdf(path, t);
+            } else {
+                LOG.log(Level.FINE, t, () -> "[Thumbs] Failed to stage PDF bytes for thumbnail rendering: " + safePath(path));
+            }
+            return null;
+        }
+    }
+
+    private boolean isPdfInTimeoutCooldown(Path path, long lastMod, long fileSizeBytes) {
+        String target = safePath(path);
+        PdfCooldownState state = PDF_TIMEOUT_COOLDOWN_UNTIL_MS.get(target);
+        if (state == null) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        if (state.untilMs() <= now) {
+            PDF_TIMEOUT_COOLDOWN_UNTIL_MS.remove(target, state);
+            return false;
+        }
+        if (!state.matches(lastMod, fileSizeBytes)) {
+            PDF_TIMEOUT_COOLDOWN_UNTIL_MS.remove(target, state);
+            pdfCooldownInvalidations.increment();
+            return false;
+        }
+        return true;
+    }
+
+    private void markPdfTimeoutCooldown(Path path, long lastMod, long fileSizeBytes) {
+        PDF_TIMEOUT_COOLDOWN_UNTIL_MS.put(safePath(path), new PdfCooldownState(lastMod, fileSizeBytes, System.currentTimeMillis() + PDF_TIMEOUT_COOLDOWN_MS));
+    }
+
+    private void clearThreadInterruptFlag() {
+        if (Thread.currentThread().isInterrupted()) {
+            Thread.interrupted();
+        }
+    }
+
+    private void quietPdfThumbnailNoiseLoggers() {
+        Logger.getLogger("org.apache.pdfbox.cos.COSObject").setLevel(Level.OFF);
+        Logger.getLogger("org.apache.pdfbox.contentstream.PDFStreamEngine").setLevel(Level.OFF);
+        Logger.getLogger("org.apache.pdfbox.rendering.PageDrawer").setLevel(Level.OFF);
+        Logger.getLogger("org.apache.pdfbox.pdfparser.COSParser").setLevel(Level.OFF);
+    }
+
+    private void scheduleImageSupportInitialization() {
+        if (imageSupportInitialized.get()) {
+            return;
+        }
+        if (!imageSupportInitScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        long delayMs = Math.max(0L, CAPABILITY_INIT_DELAY_MS);
+        scheduler.schedule(() -> {
+            try {
+                ensureImageSupportInitializedNow();
+            } finally {
+                imageSupportInitScheduled.set(false);
+            }
+        }, delayMs, TimeUnit.MILLISECONDS);
+    }
+
+    private void ensureImageSupportInitializedNow() {
+        if (imageSupportInitialized.get()) {
+            return;
+        }
+        synchronized (this) {
+            if (imageSupportInitialized.get()) {
+                return;
+            }
+            ImageSupport.scanForPlugins();
+            ImageSupport.primePreferredThumbnailReaderCapabilities();
+            primeJpeg2000ReaderAvailability();
+            logThumbnailCapabilitySummaryOnce();
+            imageSupportInitialized.set(true);
+        }
+    }
+
+    private void ensureImageSupportInitializedForExtension(String normalizedExt) {
+        if (normalizedExt == null || normalizedExt.isBlank()) {
+            return;
+        }
+        if (!ImageSupport.isImageIoManagedExtension(normalizedExt)) {
+            return;
+        }
+        ensureImageSupportInitializedNow();
+    }
+
+    private float computePdfRenderScale(PDDocument document, int sizePx) {
+        if (document == null || sizePx <= 0) {
+            return 1.0f;
+        }
+        try {
+            PDPage page = document.getPage(0);
+            if (page == null) {
+                return 1.0f;
+            }
+            PDRectangle cropBox = page.getCropBox();
+            if (cropBox == null) {
+                return 1.0f;
+            }
+            float width = Math.max(1.0f, cropBox.getWidth());
+            float height = Math.max(1.0f, cropBox.getHeight());
+            float targetScale = Math.max(sizePx / width, sizePx / height) * 1.25f;
+            return Math.max(0.75f, Math.min(2.0f, targetScale));
+        } catch (Throwable ignored) {
+            return 1.0f;
+        }
+    }
+
+    private void primeJpeg2000ReaderAvailability() {
+        hasJpeg2000Reader();
+        hasJbig2Reader();
+    }
+
+    private void logThumbnailCapabilitySummaryOnce() {
+        if (!LOGGED_CAPABILITY_SUMMARY.compareAndSet(false, true)) {
+            return;
+        }
+        if (!LOG.isLoggable(Level.INFO)) {
+            return;
+        }
+        Map<String, Boolean> capabilities = ImageSupport.preferredThumbnailReaderSupportSnapshot();
+        boolean jpeg2000 = hasJpeg2000Reader();
+        boolean jbig2 = hasJbig2Reader();
+        LOG.info(() -> "[Thumbs] ImageIO capabilities: " + summarizeCapabilities(capabilities)
+                + ", jpeg2000=" + jpeg2000
+                + ", jbig2=" + jbig2
+                + " | AVIF/HEIF requires NightMonkeys native access and native libraries on java.library.path.");
+    }
+
+    private String summarizeCapabilities(Map<String, Boolean> capabilities) {
+        if (capabilities == null || capabilities.isEmpty()) {
+            return "<none>";
+        }
+        StringBuilder sb = new StringBuilder(96);
+        boolean first = true;
+        for (Map.Entry<String, Boolean> entry : capabilities.entrySet()) {
+            if (!first) {
+                sb.append(',').append(' ');
+            }
+            first = false;
+            sb.append(entry.getKey()).append('=').append(Boolean.TRUE.equals(entry.getValue()));
+        }
+        return sb.toString();
+    }
+
+    private boolean hasJpeg2000Reader() {
+        Boolean cached = JPEG2000_READER_AVAILABLE;
+        if (cached != null) {
+            return cached;
+        }
+        synchronized (AsyncThumbnailService.class) {
+            cached = JPEG2000_READER_AVAILABLE;
+            if (cached != null) {
+                return cached;
+            }
+            boolean available = hasImageReaderByFormat("JPEG2000")
+                    || hasImageReaderByFormat("jpeg2000")
+                    || hasImageReaderByFormat("JP2")
+                    || hasImageReaderBySuffix("jp2")
+                    || hasImageReaderBySuffix("j2k")
+                    || hasImageReaderByMimeType("image/jp2")
+                    || hasImageReaderByMimeType("image/jpeg2000");
+            JPEG2000_READER_AVAILABLE = available;
+            return available;
+        }
+    }
+
+    private boolean hasJbig2Reader() {
+        Boolean cached = JBIG2_READER_AVAILABLE;
+        if (cached != null) {
+            return cached;
+        }
+        synchronized (AsyncThumbnailService.class) {
+            cached = JBIG2_READER_AVAILABLE;
+            if (cached != null) {
+                return cached;
+            }
+            boolean available = hasImageReaderByFormat("JBIG2")
+                    || hasImageReaderByFormat("jbig2")
+                    || hasImageReaderBySuffix("jb2")
+                    || hasImageReaderBySuffix("jbig2")
+                    || hasImageReaderByMimeType("image/x-jbig2");
+            JBIG2_READER_AVAILABLE = available;
+            return available;
+        }
+    }
+
+    private boolean hasImageReaderByFormat(String formatName) {
+        try {
+            return ImageIO.getImageReadersByFormatName(formatName).hasNext();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private boolean hasImageReaderBySuffix(String suffix) {
+        try {
+            return ImageIO.getImageReadersBySuffix(suffix).hasNext();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private boolean hasImageReaderByMimeType(String mimeType) {
+        try {
+            return ImageIO.getImageReadersByMIMEType(mimeType).hasNext();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private boolean isPdfExtension(String ext) {
+        return ext != null && "pdf".equalsIgnoreCase(ext);
+    }
+
+    private boolean pdfLikelyContainsJpx(Path path) {
+        if (path == null) {
+            return false;
+        }
+        try {
+            long size = Files.size(path);
+            if (size <= 0L) {
+                return false;
+            }
+            long scanLimit = Math.min(size, PDF_JPX_SCAN_LIMIT_BYTES);
+            byte[] data = new byte[8192];
+            int carry = 0;
+            long remaining = scanLimit;
+            try (RandomAccessFile raf = new RandomAccessFile(path.toFile(), "r")) {
+                while (remaining > 0L) {
+                    int toRead = (int) Math.min(data.length - carry, remaining);
+                    int read = raf.read(data, carry, toRead);
+                    if (read <= 0) {
+                        break;
+                    }
+                    int total = carry + read;
+                    if (containsAsciiToken(data, total, "/JPXDecode")
+                            || containsAsciiToken(data, total, "/JPX ")
+                            || containsAsciiToken(data, total, "/JPX\n")
+                            || containsAsciiToken(data, total, "/JPX\r")) {
+                        return true;
+                    }
+                    carry = Math.min(15, total);
+                    if (carry > 0) {
+                        System.arraycopy(data, total - carry, data, 0, carry);
+                    }
+                    remaining -= read;
+                }
+            }
+        } catch (Throwable ignored) {
+            // best effort preflight only
+        }
+        return false;
+    }
+
+    private boolean pdfLikelyContainsJbig2(Path path) {
+        if (path == null) {
+            return false;
+        }
+        try {
+            long size = Files.size(path);
+            if (size <= 0L) {
+                return false;
+            }
+            long scanLimit = Math.min(size, PDF_JBIG2_SCAN_LIMIT_BYTES);
+            byte[] data = new byte[8192];
+            int carry = 0;
+            long remaining = scanLimit;
+            try (RandomAccessFile raf = new RandomAccessFile(path.toFile(), "r")) {
+                while (remaining > 0L) {
+                    int toRead = (int) Math.min(data.length - carry, remaining);
+                    int read = raf.read(data, carry, toRead);
+                    if (read <= 0) {
+                        break;
+                    }
+                    int total = carry + read;
+                    if (containsAsciiToken(data, total, "/JBIG2Decode")
+                            || containsAsciiToken(data, total, "/JBIG2 ")
+                            || containsAsciiToken(data, total, "/JBIG2\n")
+                            || containsAsciiToken(data, total, "/JBIG2\r")) {
+                        return true;
+                    }
+                    carry = Math.min(15, total);
+                    if (carry > 0) {
+                        System.arraycopy(data, total - carry, data, 0, carry);
+                    }
+                    remaining -= read;
+                }
+            }
+        } catch (Throwable ignored) {
+            // best effort preflight only
+        }
+        return false;
+    }
+
+    private boolean containsAsciiToken(byte[] data, int length, String token) {
+        if (data == null || token == null || token.isEmpty() || length <= 0) {
+            return false;
+        }
+        byte[] needle = token.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        int max = length - needle.length;
+        for (int i = 0; i <= max; i++) {
+            boolean match = true;
+            for (int j = 0; j < needle.length; j++) {
+                if (data[i + j] != needle[j]) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isInterruptRelatedPdfFailure(Throwable t) {
+        Throwable cursor = t;
+        while (cursor != null) {
+            if (cursor instanceof ClosedByInterruptException
+                    || cursor instanceof ClosedChannelException
+                    || cursor instanceof InterruptedException) {
+                return true;
+            }
+            String message = cursor.getMessage();
+            if (message != null && (message.contains("ClosedByInterruptException")
+                    || message.contains("ClosedChannelException")
+                    || message.contains("interrupted"))) {
+                return true;
+            }
+            cursor = cursor.getCause();
+        }
+        return false;
+    }
+
+    private boolean isMissingJpeg2000Reader(Throwable t) {
+        Throwable cursor = t;
+        while (cursor != null) {
+            String className = cursor.getClass().getName();
+            String message = cursor.getMessage();
+            if ("org.apache.pdfbox.filter.MissingImageReaderException".equals(className)
+                    || (message != null && message.contains("Cannot read JPEG2000 image"))
+                    || (message != null && message.contains("JAI Image I/O Tools are not installed"))) {
+                JPEG2000_READER_AVAILABLE = Boolean.FALSE;
+                return true;
+            }
+            cursor = cursor.getCause();
+        }
+        return false;
+    }
+
+    private boolean isMissingJbig2Reader(Throwable t) {
+        Throwable cursor = t;
+        while (cursor != null) {
+            String className = cursor.getClass().getName();
+            String message = cursor.getMessage();
+            if ("org.apache.pdfbox.filter.MissingImageReaderException".equals(className)
+                    || (message != null && message.contains("Cannot read JBIG2 image"))
+                    || (message != null && message.contains("jbig2-imageio is not installed"))) {
+                JBIG2_READER_AVAILABLE = Boolean.FALSE;
+                return true;
+            }
+            cursor = cursor.getCause();
+        }
+        return false;
+    }
+
+    private boolean isMalformedPdf(Throwable t) {
+        Throwable cursor = t;
+        while (cursor != null) {
+            String message = cursor.getMessage();
+            if (message != null && (
+                    message.contains("End-of-File")
+                            || message.contains("expected line at offset")
+                            || message.contains("Missing root object")
+                            || message.contains("Header doesn't contain versioninfo")
+                            || message.contains("PDF header signature not found")
+                            || message.contains("Trailer not found")
+                            || message.contains("Cannot parse malformed PDF"))) {
+                return true;
+            }
+            cursor = cursor.getCause();
+        }
+        return false;
+    }
+
+    private void logPdfTimeout(Path path, Throwable t, long lastMod, long fileSizeBytes, long timeoutBudgetMs) {
+        String signature = pdfLogSignature("timeout", path, lastMod, fileSizeBytes);
+        if (!LOGGED_PDF_TIMEOUT_SIGNATURES.add(signature)) {
+            return;
+        }
+        String cause = t == null ? "Timeout" : t.getClass().getSimpleName();
+        LOG.warning(() -> "[Thumbs] PDF thumbnail exceeded the adaptive " + timeoutBudgetMs
+                + " ms budget; falling back to the file-type icon and suppressing reattempts for "
+                + PDF_TIMEOUT_COOLDOWN_MS + " ms: " + safePath(path) + " | cause=" + cause);
+    }
+
+    private void logPdfLargeDocumentFallback(Path path,
+                                             long lastMod,
+                                             long fileSizeBytes,
+                                             PdfRenderHistory history,
+                                             String reason) {
+        String signature = pdfLogSignature("large-doc-" + reason, path, lastMod, fileSizeBytes);
+        if (!LOGGED_PDF_LARGE_DOC_SIGNATURES.add(signature)) {
+            return;
+        }
+        int timeoutStreak = history == null ? 0 : history.consecutiveTimeouts();
+        double averageRenderMs = history == null ? 0.0d : history.averageRenderMs();
+        LOG.warning(() -> "[Thumbs] Skipping PDF thumbnail and falling back to the file-type icon because the document is in large-document recovery mode: "
+                + safePath(path)
+                + " | reason=" + reason
+                + " | sizeBytes=" + fileSizeBytes
+                + " | timeoutStreak=" + timeoutStreak
+                + " | avgRenderMs=" + Math.round(averageRenderMs));
+    }
+
+    private void logPdfOversize(Path path, long sizeBytes, long lastMod, long fileSizeBytes) {
+        String signature = pdfLogSignature("oversize", path, lastMod, fileSizeBytes);
+        if (!LOGGED_PDF_OVERSIZE_SIGNATURES.add(signature)) {
+            return;
+        }
+        LOG.warning(() -> "[Thumbs] Skipping PDF thumbnail because the file is larger than the in-memory render ceiling (size="
+                + sizeBytes + " bytes, limit=" + PDF_IN_MEMORY_MAX_BYTES + " bytes): " + safePath(path));
+    }
+
+    private void logPdfInterrupt(Path path, Throwable t, long lastMod, long fileSizeBytes) {
+        String signature = pdfLogSignature("interrupt", path, lastMod, fileSizeBytes);
+        if (!LOGGED_PDF_INTERRUPT_SIGNATURES.add(signature)) {
+            return;
+        }
+        String cause = t == null ? "<unknown>" : t.getClass().getSimpleName();
+        LOG.warning(() -> "[Thumbs] PDF thumbnail render was interrupted or its channel closed mid-render; falling back to the file-type icon and collapsing library noise: "
+                + safePath(path) + " | cause=" + cause);
+    }
+
+    private void logMissingJpeg2000Reader(Path path, Throwable t) {
+        if (!LOGGED_MISSING_JPEG2000_READER.compareAndSet(false, true)) {
+            return;
+        }
+        String target = safePath(path);
+        if (t == null) {
+            LOG.warning(() -> "[Thumbs] Skipping PDF thumbnail for JPX/JPEG2000-backed PDF because no JPEG2000 ImageIO reader is available: " + target);
+        } else {
+            LOG.warning(() -> "[Thumbs] Skipping PDF thumbnail for JPX/JPEG2000-backed PDF because no JPEG2000 ImageIO reader is available: " + target + " | cause=" + t.getClass().getSimpleName());
+        }
+    }
+
+    private void logMissingJbig2Reader(Path path, Throwable t) {
+        if (!LOGGED_MISSING_JBIG2_READER.compareAndSet(false, true)) {
+            return;
+        }
+        String target = safePath(path);
+        if (t == null) {
+            LOG.warning(() -> "[Thumbs] Skipping PDF thumbnail for JBIG2-backed PDF because no JBIG2 ImageIO reader is available: " + target);
+        } else {
+            LOG.warning(() -> "[Thumbs] Skipping PDF thumbnail for JBIG2-backed PDF because no JBIG2 ImageIO reader is available: " + target + " | cause=" + t.getClass().getSimpleName());
+        }
+    }
+
+    private void logMalformedPdf(Path path, Throwable t) {
+        long lastMod = safeLastModifiedMs(path);
+        long fileSizeBytes = safeFileSizeBytes(path);
+        String signature = pdfLogSignature("malformed", path, lastMod, fileSizeBytes);
+        if (!LOGGED_PDF_FAILURE_SIGNATURES.add(signature)) {
+            return;
+        }
+        String message = t == null ? "<unknown>" : String.valueOf(t.getMessage());
+        LOG.warning(() -> "[Thumbs] Skipping malformed PDF thumbnail and falling back to the file-type icon: " + safePath(path) + " | cause=" + message);
+    }
+
+    private String safePath(Path path) {
+        return path == null ? "<unknown>" : path.toAbsolutePath().normalize().toString();
+    }
+
+    private String pdfLogSignature(String category, Path path, long lastMod, long fileSizeBytes) {
+        return category + "|" + safePath(path) + "|" + lastMod + "|" + fileSizeBytes;
     }
 
     private Thumbnailer newDocumentThumbnailer(String ext) {
@@ -1047,7 +2690,6 @@ public final class AsyncThumbnailService {
         return switch (normalized) {
             case "doc" -> new DOCThumbnailer();
             case "docx" -> new DOCXThumbnailer();
-            case "pdf" -> new PDFThumbnailer();
             case "pptx" -> new PPTXThumbnailer();
             case "xls" -> new XLSThumbnailer();
             case "xlsx" -> new XLSXThumbnailer();
@@ -1068,8 +2710,13 @@ public final class AsyncThumbnailService {
                     ? ThumbnailProvider.THUMBNAILS4J_DOCUMENT
                     : ThumbnailProvider.DISABLED;
         }
-        if (ImageSupport.isThumbCandidateExtension(normalized)) {
-            return ThumbnailProvider.IMAGEIO;
+        if (ImageSupport.isImageIoManagedExtension(normalized)) {
+            ensureImageSupportInitializedForExtension(normalized);
+            if (ImageSupport.hasImageReaderForExtension(normalized)) {
+                return ThumbnailProvider.IMAGEIO;
+            }
+            logMissingImageReaderOnce(normalized);
+            return ThumbnailProvider.UNSUPPORTED;
         }
         return ThumbnailProvider.UNSUPPORTED;
     }
@@ -1082,6 +2729,25 @@ public final class AsyncThumbnailService {
             case "pptx" -> ENABLE_PPTX;
             default -> false;
         };
+    }
+
+    private void logMissingImageReaderOnce(String normalizedExt) {
+        if (normalizedExt == null || normalizedExt.isBlank()) {
+            return;
+        }
+        String ext = normalizedExt.toLowerCase(Locale.ROOT);
+        if (!LOGGED_MISSING_IMAGEIO_READERS.add(ext)) {
+            return;
+        }
+        String guidance = switch (ext) {
+            case "avif", "heif", "heic" ->
+                    "NightMonkeys HEIF/AVIF support requires Java 22+ native access plus the platform native libraries on java.library.path.";
+            case "webp" ->
+                    "Make sure the TwelveMonkeys imageio-webp plugin is resolved on the runtime classpath.";
+            default ->
+                    "Make sure the matching ImageIO plugin is resolved on the runtime classpath.";
+        };
+        LOG.warning(() -> "[Thumbs] No ImageIO reader is registered for ." + ext + " thumbnails. " + guidance);
     }
 
     private void incrementProviderCounter(ThumbnailProvider provider) {
@@ -1171,6 +2837,12 @@ public final class AsyncThumbnailService {
                 onOff(ENABLE_PPTX),
                 onOff(DISK_CACHE_DOCUMENTS_ONLY),
                 Long.toString(DOCUMENT_TIMEOUT_MS),
+                Long.toString(PDF_LARGE_DOC_SOFT_BYTES),
+                Long.toString(PDF_LARGE_DOC_HARD_FALLBACK_BYTES),
+                Integer.toString(PDF_LARGE_DOC_PAGE_COUNT_THRESHOLD),
+                Long.toString(PDF_ADAPTIVE_TIMEOUT_MIN_MS),
+                Long.toString(PDF_ADAPTIVE_TIMEOUT_MAX_MS),
+                Integer.toString(PDF_RECOVERY_TIMEOUT_STREAK_THRESHOLD),
                 String.join(",", THUMBNAILS4J_EXTENSIONS.stream().sorted().toList())
         ));
     }
@@ -1217,6 +2889,14 @@ public final class AsyncThumbnailService {
             props.setProperty("enableExcel", Boolean.toString(ENABLE_EXCEL));
             props.setProperty("enablePptx", Boolean.toString(ENABLE_PPTX));
             props.setProperty("documentTimeoutMs", Long.toString(DOCUMENT_TIMEOUT_MS));
+            props.setProperty("pdfInMemoryMaxBytes", Long.toString(PDF_IN_MEMORY_MAX_BYTES));
+            props.setProperty("pdfTimeoutCooldownMs", Long.toString(PDF_TIMEOUT_COOLDOWN_MS));
+            props.setProperty("pdfLargeDocSoftBytes", Long.toString(PDF_LARGE_DOC_SOFT_BYTES));
+            props.setProperty("pdfLargeDocHardFallbackBytes", Long.toString(PDF_LARGE_DOC_HARD_FALLBACK_BYTES));
+            props.setProperty("pdfLargeDocPageCountThreshold", Integer.toString(PDF_LARGE_DOC_PAGE_COUNT_THRESHOLD));
+            props.setProperty("pdfAdaptiveTimeoutMinMs", Long.toString(PDF_ADAPTIVE_TIMEOUT_MIN_MS));
+            props.setProperty("pdfAdaptiveTimeoutMaxMs", Long.toString(PDF_ADAPTIVE_TIMEOUT_MAX_MS));
+            props.setProperty("pdfRecoveryTimeoutStreakThreshold", Integer.toString(PDF_RECOVERY_TIMEOUT_STREAK_THRESHOLD));
             props.setProperty("maxAgeDays", Integer.toString(DISK_CACHE_MAX_AGE_DAYS));
             props.setProperty("maxBytes", Long.toString(DISK_CACHE_MAX_BYTES));
             props.setProperty("generatedAtMs", Long.toString(System.currentTimeMillis()));
@@ -1639,6 +3319,11 @@ public final class AsyncThumbnailService {
         sb.append(" manifestExists=").append(manifest != null && Files.exists(manifest));
         sb.append(" maxBytes=").append(DISK_CACHE_MAX_BYTES);
         sb.append(" maxAgeDays=").append(DISK_CACHE_MAX_AGE_DAYS);
+        sb.append(" pdfLargeDocSoftBytes=").append(PDF_LARGE_DOC_SOFT_BYTES);
+        sb.append(" pdfLargeDocHardFallbackBytes=").append(PDF_LARGE_DOC_HARD_FALLBACK_BYTES);
+        sb.append(" pdfLargeDocPageCountThreshold=").append(PDF_LARGE_DOC_PAGE_COUNT_THRESHOLD);
+        sb.append(" pdfAdaptiveTimeoutMinMs=").append(PDF_ADAPTIVE_TIMEOUT_MIN_MS);
+        sb.append(" pdfAdaptiveTimeoutMaxMs=").append(PDF_ADAPTIVE_TIMEOUT_MAX_MS);
         if (dir != null && Files.isDirectory(dir)) {
             long payloadFileCount = 0L;
             long tempFileCount = 0L;
@@ -1741,7 +3426,8 @@ public final class AsyncThumbnailService {
 
     public void shutdownNow() {
         decodeExecutor.shutdownNow();
-        documentExecutor.shutdownNow();
+        officeDocumentExecutor.shutdownNow();
+        pdfDocumentExecutor.shutdownNow();
         scheduler.shutdownNow();
     }
 
@@ -1758,13 +3444,15 @@ public final class AsyncThumbnailService {
     private static final class PrioritizedRunnable implements Runnable, Comparable<PrioritizedRunnable> {
         final int priority;
         final long seqNo;
+        final long viewportScope;
         final ThumbKey key;
         final CompletableFuture<Image> future;
         final Runnable delegate;
 
-        PrioritizedRunnable(RequestPriority pr, long seqNo, ThumbKey key, CompletableFuture<Image> future, Runnable delegate) {
+        PrioritizedRunnable(RequestPriority pr, long seqNo, long viewportScope, ThumbKey key, CompletableFuture<Image> future, Runnable delegate) {
             this.priority = (pr == null) ? RequestPriority.BACKGROUND.p : pr.p;
             this.seqNo = seqNo;
+            this.viewportScope = viewportScope;
             this.key = key;
             this.future = future;
             this.delegate = delegate;
@@ -1800,6 +3488,14 @@ public final class AsyncThumbnailService {
         } catch (NumberFormatException e) {
             return def;
         }
+    }
+
+    private static long clampLong(long value, long min, long max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static float clampFloat(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private static boolean boolProp(String key, boolean def) {

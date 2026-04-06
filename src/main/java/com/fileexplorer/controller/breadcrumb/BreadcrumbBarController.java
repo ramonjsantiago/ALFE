@@ -247,7 +247,7 @@ public class BreadcrumbBarController implements Lifecycle {
             Stage stage = new Stage();
             MainApp.configureExplorerStage(stage, folder, "breadcrumb.controller.new-window");
         } catch (IOException ex) {
-            ex.printStackTrace();
+            LOG.log(java.util.logging.Level.WARNING, "Failed to open breadcrumb new window for " + folder, ex);
         }
     }
 

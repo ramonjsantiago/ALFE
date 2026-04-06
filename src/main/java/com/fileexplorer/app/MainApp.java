@@ -38,12 +38,14 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.geometry.Pos;
 import javafx.geometry.Insets;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.control.Alert;
+import javafx.scene.control.Label;
 import javafx.scene.control.ButtonType;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.paint.Color;
@@ -77,6 +79,7 @@ import java.time.Instant;
 public final class MainApp extends Application {
 
     private static final Logger LOG = Logger.getLogger("com.fileexplorer.resources");
+    private static final Logger APP_LOG = Logger.getLogger(MainApp.class.getName());
     
 
     private Stage primaryStage;
@@ -226,9 +229,9 @@ private static final Set<String> LOGGED_RESOURCES = ConcurrentHashMap.newKeySet(
             sb.append("java.util.logging.config.file=")
               .append(System.getProperty("java.util.logging.config.file")).append(ln);
 
-            System.err.print(sb.toString());
+            APP_LOG.info(sb::toString);
         } catch (Exception ex) {
-            System.err.println("JVM diagnostics failed: " + ex);
+            APP_LOG.log(Level.SEVERE, "JVM diagnostics failed", ex);
         }
     }
 
@@ -641,22 +644,12 @@ if (!deferCss) {
         StartupTrace.mark("controller resolve begin");
         MainController controller = loader.getController();
         StartupTrace.mark("controller resolve end");
-        ProgressPaneController progressPaneController = null;
         if (controller != null) {
             mainControllerRef.set(controller);
             // Phase 3.4.4: Attach shared ExplorerContext before any scene-dependent work.
             StartupTrace.mark("controller.attach enter");
             controller.attach(context);
             StartupTrace.mark("controller.attach exit");
-
-            // Phase 3.6.2: attach included controllers (e.g., ProgressPane)
-            StartupTrace.mark("progressPane controller resolve begin");
-            Object ppcObj = loader.getNamespace().get("progressPaneController");
-            progressPaneController = ppcObj instanceof ProgressPaneController ppc ? ppc : null;
-            StartupTrace.mark("progressPane controller resolve end");
-            if (progressPaneController != null) {
-                progressPaneController.attach(context);
-            }
 
             // Keep scene wiring minimal for fast first paint.
             StartupTrace.mark("controller.setScene");
@@ -724,13 +717,15 @@ if (!deferCss) {
             });
         }
 
-        // Phase 4M: run heavy startup maintenance off the FX thread, and let the idle queue enforce a maximum deferral.
-        final ProgressPaneController progressPaneControllerForStartup = progressPaneController;
-        workQueue.runIdle(() -> runDeferredHeavyStartupTasksAsync(stage, context, controller, progressPaneControllerForStartup));
+        // HOTFIX185: keep stage-B service activation off the stage-show/FXML critical path.
+        workQueue.runIdle(() -> context.activateDeferredServicesAsync());
+
+        // Phase 4M / HOTFIX184: run heavy startup maintenance off the FX thread, and let the idle queue enforce a maximum deferral.
+        workQueue.runIdle(() -> runDeferredHeavyStartupTasksAsync(stage, context, controller));
     } catch (Exception ex) {
         markBootstrapState(stage, BootstrapState.FAILED);
         // Keep the loading scene visible and surface the error.
-        ex.printStackTrace();
+        APP_LOG.log(Level.SEVERE, "Failed to load UI", ex);
         try {
             javafx.scene.Node n = shellScene.lookup("#shellStatus");
             if (n instanceof javafx.scene.text.Text t) {
@@ -848,8 +843,15 @@ if (!deferCss) {
 
 
     private static void attachStartupShellStylesheets(Scene scene, boolean darkActual) {
-        addStylesheet(scene, darkActual ? "/com/fileexplorer/ui/css/explorer-dark-win.css" : "/com/fileexplorer/ui/css/explorer-light-win.css");
-        addStylesheet(scene, "/com/fileexplorer/ui/css/window-chrome-parity.css");
+        if (scene == null) {
+            return;
+        }
+        // HOTFIX184: keep the pre-show shell almost entirely inline-styled so stage.show()
+        // does not pay for full theme CSS parsing and conversion before the first visible frame.
+        if (Boolean.getBoolean("fileexplorer.startup.shellFullCss")) {
+            addStylesheet(scene, darkActual ? "/com/fileexplorer/ui/css/explorer-dark-win.css" : "/com/fileexplorer/ui/css/explorer-light-win.css");
+            addStylesheet(scene, "/com/fileexplorer/ui/css/window-chrome-parity.css");
+        }
     }
 
     private static void attachMainUiCriticalStylesheets(Scene scene, boolean darkActual) {
@@ -878,8 +880,7 @@ if (!deferCss) {
     private static void runDeferredHeavyStartupTasksAsync(
             Stage stage,
             ExplorerContext context,
-            MainController controller,
-            ProgressPaneController progressPaneController
+            MainController controller
     ) {
         CompletableFuture.runAsync(() -> {
             StartupTrace.mark("deferred heavy startup background begin");
@@ -888,29 +889,27 @@ if (!deferCss) {
             Integer recoveredOps = null;
 
             try {
-                if (progressPaneController != null) {
+                try {
+                    StartupSelfCheckService.SelfCheckResult result = new StartupSelfCheckService().run(context);
+                    if (result != null && result.hadIssues()) {
+                        selfCheckReport = result.report();
+                    }
+                } catch (Exception ignored) {
+                }
+
+                if (!isSafeMode()) {
                     try {
-                        StartupSelfCheckService.SelfCheckResult result = new StartupSelfCheckService().run(context);
-                        if (result != null && result.hadIssues()) {
-                            selfCheckReport = result.report();
+                        int recovered = context.operationQueueService().restoreSavedQueue();
+                        if (recovered > 0) {
+                            recoveredOps = recovered;
                         }
                     } catch (Exception ignored) {
                     }
+                }
 
-                    if (!isSafeMode()) {
-                        try {
-                            int recovered = context.operationQueueService().restoreSavedQueue();
-                            if (recovered > 0) {
-                                recoveredOps = recovered;
-                            }
-                        } catch (Exception ignored) {
-                        }
-                    }
-
-                    try {
-                        context.operationQueueService().scanForOrphanTempFiles();
-                    } catch (Exception ignored) {
-                    }
+                try {
+                    context.operationQueueService().scanForOrphanTempFiles();
+                } catch (Exception ignored) {
                 }
             } finally {
                 final String selfCheckReportFinal = selfCheckReport;
@@ -923,9 +922,7 @@ if (!deferCss) {
                         if (recoveredOpsFinal != null) {
                             showRecoveredOpsDialog(context, recoveredOpsFinal.intValue());
                         }
-                        if (progressPaneController != null) {
-                            showJournalRecoveryDialog(context);
-                        }
+                        showJournalRecoveryDialog(context);
                         if (controller != null && Boolean.getBoolean("fileexplorer.safeMode")) {
                             controller.enterSafeMode();
                         }
@@ -1438,170 +1435,84 @@ loadFontsFromResources(List.of(
      * IMPORTANT: This intentionally avoids JavaFX Controls/Skins and avoids attaching the main
      * stylesheet stack. We only use shapes/text to minimize additional initialization work.
      */
-    private static Parent buildShellRoot() {
-        BorderPane root = new BorderPane();
-        root.setPadding(new Insets(10));
-        root.setStyle("-fx-background-color: linear-gradient(to bottom, #242424, #181818);");
+    
+private static Parent buildShellRoot() {
+    StackPane root = new StackPane();
+    root.setPadding(new Insets(14));
+    root.setStyle("-fx-background-color: #181818;");
 
-        VBox shell = new VBox(8);
-        shell.setFillWidth(true);
-        root.setCenter(shell);
+    VBox shell = new VBox(12);
+    shell.setAlignment(Pos.TOP_LEFT);
+    shell.setMaxWidth(760);
+    shell.setFillWidth(true);
 
-        HBox titleStrip = new HBox(8);
-        titleStrip.setAlignment(Pos.CENTER_LEFT);
-        titleStrip.setPadding(new Insets(2, 4, 0, 4));
+    HBox titleRow = new HBox(8);
+    titleRow.setAlignment(Pos.CENTER_LEFT);
 
-        StackPane appBadge = new StackPane();
-        Rectangle appBadgeBg = new Rectangle(18, 18);
-        appBadgeBg.setArcWidth(5);
-        appBadgeBg.setArcHeight(5);
-        appBadgeBg.setFill(Color.web("#e7b64b"));
-        Text appBadgeGlyph = new Text("⌂");
-        appBadgeGlyph.setFill(Color.web("#1d1d1d"));
-        appBadgeGlyph.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
-        appBadge.getChildren().addAll(appBadgeBg, appBadgeGlyph);
+    Region badge = buildShellSkeletonBlock(18, 18,
+            "-fx-background-color: #e7b64b; -fx-background-radius: 5;");
 
-        Text title = new Text("FileExplorer");
-        title.setFill(Color.web("#e4e4e4"));
-        title.setStyle("-fx-font-size: 13px;");
+    Label title = new Label("FileExplorer");
+    title.setStyle("-fx-text-fill: #e4e4e4; -fx-font-size: 13px;");
 
-        Region titleSpacer = new Region();
-        HBox.setHgrow(titleSpacer, javafx.scene.layout.Priority.ALWAYS);
+    Region spacer = new Region();
+    HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        HBox captions = new HBox(0);
-        captions.setAlignment(Pos.CENTER_RIGHT);
-        captions.getChildren().addAll(
-                buildShellCaptionButton(42, 28, "#2a2a2a", "—", "#d5d5d5"),
-                buildShellCaptionButton(42, 28, "#2a2a2a", "▢", "#d5d5d5"),
-                buildShellCaptionButton(48, 28, "#c42b1c", "×", "#191919")
-        );
+    HBox captions = new HBox(4,
+            buildShellSkeletonBlock(36, 24, "-fx-background-color: #262626; -fx-background-radius: 6; -fx-border-color: #363636; -fx-border-radius: 6;"),
+            buildShellSkeletonBlock(36, 24, "-fx-background-color: #262626; -fx-background-radius: 6; -fx-border-color: #363636; -fx-border-radius: 6;"),
+            buildShellSkeletonBlock(42, 24, "-fx-background-color: #c42b1c; -fx-background-radius: 6;")
+    );
+    captions.setAlignment(Pos.CENTER_RIGHT);
 
-        titleStrip.getChildren().addAll(appBadge, title, titleSpacer, captions);
+    titleRow.getChildren().addAll(badge, title, spacer, captions);
 
-        VBox topChrome = new VBox(0);
-        topChrome.setStyle("-fx-background-color: linear-gradient(to bottom, #2b2b2b, #1b1b1b);"
-                + "-fx-background-radius: 12; -fx-border-radius: 12;"
-                + "-fx-border-color: #3a3a3a; -fx-border-width: 1;");
+    VBox chromeShell = new VBox(8);
+    chromeShell.setPadding(new Insets(10));
+    chromeShell.setStyle("-fx-background-color: linear-gradient(to bottom, #272727, #1e1e1e);"
+            + "-fx-background-radius: 12; -fx-border-radius: 12;"
+            + "-fx-border-color: #343434; -fx-border-width: 1;");
 
-        BorderPane addressRow = new BorderPane();
-        addressRow.setMinHeight(52);
-        addressRow.setPrefHeight(52);
-        addressRow.setPadding(new Insets(8, 10, 2, 10));
+    chromeShell.getChildren().addAll(
+            buildShellSkeletonBlock(520, 38,
+                    "-fx-background-color: #1a1a1a; -fx-background-radius: 10; -fx-border-color: #353535; -fx-border-radius: 10;"),
+            buildShellSkeletonBlock(360, 30,
+                    "-fx-background-color: #202020; -fx-background-radius: 8; -fx-border-color: #303030; -fx-border-radius: 8;")
+    );
 
-        HBox nav = new HBox(6);
-        nav.setAlignment(Pos.CENTER_LEFT);
-        nav.getChildren().addAll(
-                buildShellGlyphButton("←"),
-                buildShellGlyphButton("→"),
-                buildShellGlyphButton("↑"),
-                buildShellGlyphButton("↻")
-        );
+    HBox contentRow = new HBox(8);
+    contentRow.getChildren().addAll(
+            buildShellSkeletonBlock(220, 420,
+                    "-fx-background-color: #151515; -fx-background-radius: 12; -fx-border-color: #2d2d2d; -fx-border-radius: 12;"),
+            buildShellSkeletonBlock(0, 420,
+                    "-fx-background-color: linear-gradient(to bottom, #1a1a1a, #151515); -fx-background-radius: 12; -fx-border-color: #2d2d2d; -fx-border-radius: 12;")
+    );
+    HBox.setHgrow(contentRow.getChildren().get(1), Priority.ALWAYS);
 
-        HBox pathHost = new HBox(6);
-        pathHost.setAlignment(Pos.CENTER_LEFT);
-        pathHost.getChildren().addAll(
-                buildShellPill(76, 32, "#242424", "#3b3b3b", "Home", "#d9d9d9"),
-                buildShellChevron(),
-                buildShellPill(92, 32, "#242424", "#3b3b3b", "Documents", "#d9d9d9")
-        );
+    Label status = new Label("Loading file explorer UI…");
+    status.setId("shellStatus");
+    status.setStyle("-fx-text-fill: #d5d5d5; -fx-font-size: 12px;");
 
-        StackPane searchHost = new StackPane();
-        Rectangle searchBg = new Rectangle(250, 36);
-        searchBg.setArcWidth(18);
-        searchBg.setArcHeight(18);
-        searchBg.setFill(Color.web("#111111"));
-        searchBg.setStroke(Color.web("#3a3a3a"));
-        Text searchText = new Text("Search");
-        searchText.setFill(Color.web("#8a8a8a"));
-        searchText.setStyle("-fx-font-size: 12px;");
-        StackPane.setAlignment(searchText, Pos.CENTER_LEFT);
-        searchHost.setPadding(new Insets(0, 0, 0, 14));
-        searchHost.getChildren().addAll(searchBg, searchText);
+    shell.getChildren().addAll(titleRow, chromeShell, contentRow, status);
+    root.getChildren().add(shell);
+    StackPane.setAlignment(shell, Pos.TOP_LEFT);
+    return root;
+}
 
-        addressRow.setLeft(nav);
-        addressRow.setCenter(pathHost);
-        addressRow.setRight(searchHost);
-
-        Rectangle chromeDivider = new Rectangle();
-        chromeDivider.setHeight(1);
-        chromeDivider.setFill(Color.web("#343434"));
-        chromeDivider.widthProperty().bind(topChrome.widthProperty().subtract(2));
-
-        HBox commandRow = new HBox(8);
-        commandRow.setAlignment(Pos.CENTER_LEFT);
-        commandRow.setPadding(new Insets(6, 10, 8, 10));
-        commandRow.getChildren().addAll(
-                buildShellPill(74, 34, "#2a2a2a", "#404040", "New", "#ebebeb"),
-                buildShellCommandDivider(),
-                buildShellPill(62, 34, "#202020", "#2d2d2d", "Cut", "#d6d6d6"),
-                buildShellPill(66, 34, "#202020", "#2d2d2d", "Copy", "#d6d6d6"),
-                buildShellPill(68, 34, "#202020", "#2d2d2d", "Paste", "#d6d6d6"),
-                buildShellCommandDivider(),
-                buildShellPill(68, 34, "#202020", "#2d2d2d", "View", "#d6d6d6")
-        );
-
-        topChrome.getChildren().addAll(addressRow, chromeDivider, commandRow);
-
-        BorderPane contentSurface = new BorderPane();
-        contentSurface.setStyle("-fx-background-color: linear-gradient(to bottom, #1c1c1c, #171717);"
-                + "-fx-background-radius: 12; -fx-border-radius: 12;"
-                + "-fx-border-color: #333333; -fx-border-width: 1;");
-        contentSurface.setPadding(new Insets(1));
-
-        HBox content = new HBox(8);
-        content.setPadding(new Insets(0));
-
-        Rectangle leftPane = new Rectangle(272, 520);
-        leftPane.setArcWidth(12);
-        leftPane.setArcHeight(12);
-        leftPane.setFill(Color.web("#161616"));
-        leftPane.setStroke(Color.web("#2d2d2d"));
-
-        VBox rightPane = new VBox(8);
-        rightPane.setPadding(new Insets(0));
-        Rectangle headerPane = new Rectangle(780, 34);
-        headerPane.setArcWidth(10);
-        headerPane.setArcHeight(10);
-        headerPane.setFill(Color.web("#202020"));
-        headerPane.setStroke(Color.web("#313131"));
-        Rectangle bodyPane = new Rectangle(780, 476);
-        bodyPane.setArcWidth(12);
-        bodyPane.setArcHeight(12);
-        bodyPane.setFill(Color.web("#151515"));
-        bodyPane.setStroke(Color.web("#2d2d2d"));
-        rightPane.getChildren().addAll(headerPane, bodyPane);
-        HBox.setHgrow(rightPane, javafx.scene.layout.Priority.ALWAYS);
-
-        content.getChildren().addAll(leftPane, rightPane);
-        contentSurface.setCenter(content);
-
-        BorderPane statusBar = new BorderPane();
-        statusBar.setMinHeight(52);
-        statusBar.setPrefHeight(52);
-        statusBar.setPadding(new Insets(6, 12, 6, 12));
-        statusBar.setStyle("-fx-background-color: linear-gradient(to bottom, #1c1c1c, #171717);"
-                + "-fx-background-radius: 10; -fx-border-radius: 10;"
-                + "-fx-border-color: #323232; -fx-border-width: 1;");
-
-        Text status = new Text("Loading file explorer UI…");
-        status.setId("shellStatus");
-        status.setFill(Color.web("#d5d5d5"));
-        status.setStyle("-fx-font-size: 12px;");
-        statusBar.setLeft(status);
-
-        HBox statusRight = new HBox(6);
-        statusRight.setAlignment(Pos.CENTER_RIGHT);
-        statusRight.getChildren().addAll(
-                buildShellPill(66, 30, "#202020", "#303030", "Details", "#d6d6d6"),
-                buildShellPill(56, 30, "#202020", "#303030", "Large", "#d6d6d6")
-        );
-        statusBar.setRight(statusRight);
-
-        shell.getChildren().addAll(titleStrip, topChrome, contentSurface, statusBar);
-        return root;
+private static Region buildShellSkeletonBlock(double prefWidth, double prefHeight, String style) {
+    Region region = new Region();
+    region.setMinHeight(prefHeight);
+    region.setPrefHeight(prefHeight);
+    if (prefWidth > 0) {
+        region.setMinWidth(prefWidth);
+        region.setPrefWidth(prefWidth);
     }
+    region.setMaxWidth(prefWidth > 0 ? prefWidth : Double.MAX_VALUE);
+    region.setStyle(style);
+    return region;
+}
 
-    private static StackPane buildShellGlyphButton(String glyph) {
+private static StackPane buildShellGlyphButton(String glyph) {
         StackPane button = new StackPane();
         Rectangle bg = new Rectangle(34, 34);
         bg.setArcWidth(8);
@@ -1960,7 +1871,7 @@ loadFontsFromResources(List.of(
             }
 
             if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".gif")
-                    || lower.endsWith(".bmp") || lower.endsWith(".webp") || lower.endsWith(".svg")) {
+                    || lower.endsWith(".bmp") || lower.endsWith(".webp") || lower.endsWith(".avif") || lower.endsWith(".heif") || lower.endsWith(".heic") || lower.endsWith(".svg")) {
                 logImageDeclared("CSS.url", cleaned, resolvedExternal);
             }
         }

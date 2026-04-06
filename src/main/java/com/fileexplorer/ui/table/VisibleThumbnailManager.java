@@ -42,6 +42,7 @@ public final class VisibleThumbnailManager {
         Path path;
         int size;
         String identity;
+        long bindingStamp;
         java.util.function.Consumer<javafx.scene.image.Image> apply;
         CompletableFuture<javafx.scene.image.Image> future;
     }
@@ -81,7 +82,10 @@ public final class VisibleThumbnailManager {
     public void register(TableCell<FileItem, ?> cell, Path path, int sizePx, String identity,
                          java.util.function.Consumer<javafx.scene.image.Image> apply) {
         if (cell == null || path == null || apply == null) return;
-        if (!ImageSupport.isThumbCandidate(path)) return;
+        if (!ImageSupport.isThumbCandidate(path)) {
+            unregister(cell);
+            return;
+        }
 
         Registration r = regs.computeIfAbsent(cell, _ -> new Registration());
         // Cancel old work if binding changed.
@@ -92,11 +96,25 @@ public final class VisibleThumbnailManager {
         r.path = path;
         r.size = sizePx;
         r.identity = identity;
+        r.bindingStamp++;
         r.apply = apply;
 
         // Debounce: user may still be scrolling.
         idleDebounce.stop();
         idleDebounce.playFromStart();
+    }
+
+
+    public void unregister(TableCell<FileItem, ?> cell) {
+        if (cell == null) {
+            return;
+        }
+        Registration r = regs.remove(cell);
+        if (r != null && r.future != null) {
+            AsyncThumbnailService.getInstance().noteViewportCancellation();
+            r.future.cancel(false);
+            r.future = null;
+        }
     }
 
     /** Best-effort cancel all pending thumbnail work (e.g., when directory changes). */
@@ -143,6 +161,7 @@ public final class VisibleThumbnailManager {
             final Path p = r.path;
             final int size = r.size;
             final String id = r.identity;
+            final long stamp = r.bindingStamp;
 
             r.future = AsyncThumbnailService.getInstance().request(p, size, AsyncThumbnailService.RequestPriority.VISIBLE);
             final CompletableFuture<javafx.scene.image.Image> fut = r.future;
@@ -154,6 +173,9 @@ public final class VisibleThumbnailManager {
                 if (cur.future != fut) {
                     return;
                 }
+                if (cur.bindingStamp != stamp) {
+                    return;
+                }
                 if (fut.isCancelled() || ex != null || img == null) {
                     cur.future = null;
                 }
@@ -163,8 +185,10 @@ public final class VisibleThumbnailManager {
                 // Ensure still bound to same file.
                 Registration cur = regs.get(cell);
                 if (cur == null) return;
+                if (cur.bindingStamp != stamp) return;
                 if (!Objects.equals(cur.path, p)) return;
                 if (!Objects.equals(cur.identity, id)) return;
+                if (!Objects.equals(currentPathForCell(cell), p)) return;
                 if (img == null) return;
                 cur.apply.accept(img);
             }));
@@ -181,6 +205,13 @@ public final class VisibleThumbnailManager {
             r.future.cancel(false);
             r.future = null;
         }
+    }
+
+    private static Path currentPathForCell(TableCell<FileItem, ?> cell) {
+        if (cell == null) return null;
+        TableRow<FileItem> row = cell.getTableRow();
+        FileItem item = row == null ? null : row.getItem();
+        return item == null ? null : item.path();
     }
 
     private static boolean isCellVisible(TableCell<FileItem, ?> cell) {

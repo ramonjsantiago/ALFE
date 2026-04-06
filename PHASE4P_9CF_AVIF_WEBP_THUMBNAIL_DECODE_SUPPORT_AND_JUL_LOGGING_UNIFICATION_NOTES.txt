@@ -1,0 +1,15 @@
+HOTFIX178 / Phase 4P.9CF — AVIF/WebP Thumbnail Decode Support and JUL Logging Unification
+
+Summary
+- Added TwelveMonkeys WebP ImageIO support and NightMonkeys HEIF/AVIF runtime support.
+- Added ImageIO reader capability probing and request-time gating for .webp/.avif/.heif/.heic thumbnail work.
+- Unified remaining runtime console output onto java.util.logging and routed SLF4J libraries into JUL.
+
+Runtime note
+- NightMonkeys HEIF/AVIF support still depends on platform native libraries being discoverable by java.library.path (or the platform loader path).
+- The Maven javafx:run path now enables native access with --enable-native-access=ALL-UNNAMED. IDE / custom launcher runs must supply equivalent native-access settings if AVIF/HEIF thumbnail support is desired.
+
+Primary implementation points
+- ImageSupport now owns ImageIO SPI scanning, preferred reader capability probes, and per-extension reader availability checks.
+- AsyncThumbnailService now logs a one-shot capability summary, only routes ImageIO thumbnails when a reader is actually registered, and emits a one-shot warning when .webp/.avif/.heif/.heic support is requested without a matching runtime decoder.
+- StartupTrace, MainApp diagnostics, breadcrumb new-window fallbacks, and RegressionCheckMain no longer write directly to stdout/stderr/printStackTrace during runtime operation.

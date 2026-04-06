@@ -69,6 +69,8 @@ public final class TableViewSupport {
                 private Path lastPath = null;
 
                 private java.util.concurrent.CompletableFuture<javafx.scene.image.Image> pendingThumb = null;
+                private java.util.concurrent.CompletableFuture<javafx.scene.image.Image> pendingIcon = null;
+                private long bindingStamp = 0L;
 
                 {
                     box.setAlignment(Pos.CENTER_LEFT);
@@ -93,10 +95,16 @@ public final class TableViewSupport {
                         pendingThumb.cancel(false);
                         pendingThumb = null;
                     }
+                    if (pendingIcon != null) {
+                        pendingIcon.cancel(false);
+                        pendingIcon = null;
+                    }
+                    bindingStamp++;
 
                     if (empty || item == null) {
                         lastIdentity = null;
                         lastPath = null;
+                        thumbMgr.unregister(this);
                         setText(null);
                         setGraphic(null);
                         return;
@@ -126,20 +134,30 @@ public final class TableViewSupport {
                     lastIdentity = identity;
                     lastPath = p;
 
-                    AsyncIconService.getInstance()
-                            .request(identity, dark, iconPx)
-                            .thenAccept(img -> Platform.runLater(() -> {
-                                // Ignore stale completions (cell reused).
-                                if (!Objects.equals(lastIdentity, identity)) return;
-                                if (!Objects.equals(lastPath, p)) return;
-                                if (img == null) return;
-                                iconView.setImage(img);
-                            }));
+                    final long capturedStamp = bindingStamp;
+                    pendingIcon = AsyncIconService.getInstance()
+                            .request(identity, dark, iconPx);
+                    pendingIcon.thenAccept(img -> Platform.runLater(() -> {
+                        // Ignore stale completions (cell reused).
+                        if (capturedStamp != bindingStamp) return;
+                        if (!Objects.equals(lastIdentity, identity)) return;
+                        if (!Objects.equals(lastPath, p)) return;
+                        if (getTableRow() == null || getTableRow().getItem() != fi) return;
+                        if (img == null) return;
+                        iconView.setImage(img);
+                    }));
 
                     // If this is a supported thumbnail candidate, lazily replace the placeholder with a generated thumbnail.
                     if (!isFolder && p != null && ImageSupport.isThumbCandidate(p)) {
                         // Register with the viewport-aware manager; it will request only after scroll-idle.
-                        thumbMgr.register(this, p, iconPx, identity, iconView::setImage);
+                        thumbMgr.register(this, p, iconPx, identity, img -> {
+                            if (capturedStamp != bindingStamp) return;
+                            if (!Objects.equals(lastPath, p)) return;
+                            if (getTableRow() == null || getTableRow().getItem() != fi) return;
+                            iconView.setImage(img);
+                        });
+                    } else {
+                        thumbMgr.unregister(this);
                     }
                 }
 

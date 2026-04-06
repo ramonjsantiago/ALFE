@@ -104,7 +104,9 @@
                                                    prefHeight="40.0"
                                                    maxHeight="40.0"
                                                    HBox.hgrow="ALWAYS">
-                                            <fx:include source="../breadcrumb/BreadcrumbBar.fxml" fx:id="breadcrumbBar"/>
+                                            <children>
+                                                <Label text="Loading address bar…" styleClass="address-placeholder-label"/>
+                                            </children>
                                         </StackPane>
                                         <StackPane fx:id="searchShell"
                                                    styleClass="search-shell, explorer-search-shell"
@@ -138,50 +140,11 @@
                         <ToolBar fx:id="commandBar" styleClass="fluent-toolbar, command-bar, explorer-command-row">
                             <items>
 
-                                <MenuButton fx:id="newMenuButton" text="New" focusTraversable="false" styleClass="command-primary-button">
+                                                                <MenuButton fx:id="newMenuButton" text="New" focusTraversable="false" styleClass="command-primary-button">
                                     <tooltip><Tooltip text="Create new item"/></tooltip>
                                     <graphic>
                                         <Label text="&#xE710;" styleClass="fluent-icon"/>
                                     </graphic>
-
-                                    <items>
-                                        <MenuItem text="Folder">
-                                            <graphic><Label text="&#xE8B7;" styleClass="fluent-icon"/></graphic>
-                                        </MenuItem>
-                                        <MenuItem text="Shortcut">
-                                            <graphic><Label text="&#xE71B;" styleClass="fluent-icon"/></graphic>
-                                        </MenuItem>
-                                        <MenuItem text="Microsoft Access Database">
-                                            <graphic><Label text="&#xE8A5;" styleClass="fluent-icon"/></graphic>
-                                        </MenuItem>
-                                        <MenuItem text="Bitmap Image">
-                                            <graphic><Label text="&#xEB9F;" styleClass="fluent-icon"/></graphic>
-                                        </MenuItem>
-                                        <MenuItem text="Microsoft Word Document">
-                                            <graphic><Label text="&#xE8A5;" styleClass="fluent-icon"/></graphic>
-                                        </MenuItem>
-                                        <MenuItem text="Microsoft Access Database">
-                                            <graphic><Label text="&#xE8A5;" styleClass="fluent-icon"/></graphic>
-                                        </MenuItem>
-                                        <MenuItem text="Microsoft PowerPoint Presentation">
-                                            <graphic><Label text="&#xE8A5;" styleClass="fluent-icon"/></graphic>
-                                        </MenuItem>
-                                        <MenuItem text="Microsoft Publisher Document">
-                                            <graphic><Label text="&#xE8A5;" styleClass="fluent-icon"/></graphic>
-                                        </MenuItem>
-                                        <MenuItem text="Rich Text Format">
-                                            <graphic><Label text="&#xE8D2;" styleClass="fluent-icon"/></graphic>
-                                        </MenuItem>
-                                        <MenuItem text="Text Document">
-                                            <graphic><Label text="&#xE8A5;" styleClass="fluent-icon"/></graphic>
-                                        </MenuItem>
-                                        <MenuItem text="Microsoft Excel Worksheet">
-                                            <graphic><Label text="&#xE8A5;" styleClass="fluent-icon"/></graphic>
-                                        </MenuItem>
-                                        <MenuItem text="Compressed (zipped) Folder">
-                                            <graphic><Label text="&#xF012;" styleClass="fluent-icon"/></graphic>
-                                        </MenuItem>
-                                    </items>
                                 </MenuButton>
 
                                 <Separator orientation="VERTICAL" styleClass="command-separator"/>
@@ -231,372 +194,27 @@
 
                                 <Separator orientation="VERTICAL" styleClass="command-separator"/>
 <!-- Sort menu -->
-                        <MenuButton fx:id="sortMenuButton" text="Sort" focusTraversable="false">
+                                                <MenuButton fx:id="sortMenuButton" text="Sort" focusTraversable="false">
                             <tooltip><Tooltip text="Sort"/></tooltip>
                             <graphic>
-    <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true">
-        <image>
-            <Image url="@/icons/toolbar.sort.png"/>
-        </image>
-    </ImageView>
-</graphic>
-                            <items>
-                                <MenuItem text="Name" userData="NAME" onAction="#onSortMenuItem"/>
-                                <MenuItem text="Date modified" userData="MODIFIED" onAction="#onSortMenuItem"/>
-                                <MenuItem text="Type" userData="TYPE" onAction="#onSortMenuItem"/>
-                                <MenuItem text="Size" userData="SIZE" onAction="#onSortMenuItem"/>
-                            </items>
+                                <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true">
+                                    <image>
+                                        <Image url="@/icons/toolbar.sort.png"/>
+                                    </image>
+                                </ImageView>
+                            </graphic>
                         </MenuButton>
 
                         <!-- View menu -->
-                        <MenuButton fx:id="viewMenuButton" text="View" focusTraversable="false">
+                                                <MenuButton fx:id="viewMenuButton" text="View" focusTraversable="false">
                             <tooltip><Tooltip text="View"/></tooltip>
                             <graphic><Label text="&#xE8A7;" styleClass="fluent-icon"/></graphic>
-                            <fx:define>
-                                <ToggleGroup fx:id="viewModeToggleGroup"/>
-                            </fx:define>
-                            <items>
-                                <CustomMenuItem fx:id="viewExtraLargeIconsItem" hideOnClick="true" userData="EXTRA_LARGE_ICONS" onAction="#onViewModeRowAction">
-                                            <content>
-                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                            <RadioButton fx:id="viewExtraLargeIcons" toggleGroup="$viewModeToggleGroup"
-                                                         userData="EXTRA_LARGE_ICONS" onAction="#onViewModeRadio"
-                                                         focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
-                                                <image>
-                                                    <Image url="@/icons/view.extra.large.png"/>
-                                                </image>
-                                            </ImageView>
-                                            <Label text="Extra large icons" styleClass="view-menu-text"/>
-                                        </HBox>
-                                    </content>
-                                </CustomMenuItem>
-
-                                <CustomMenuItem fx:id="viewLargeIconsItem" hideOnClick="true" userData="LARGE_ICONS" onAction="#onViewModeRowAction">
-                                            <content>
-                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                            <RadioButton fx:id="viewLargeIcons" toggleGroup="$viewModeToggleGroup"
-                                                         userData="LARGE_ICONS" onAction="#onViewModeRadio"
-                                                         focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
-                                                <image>
-                                                    <Image url="@/icons/view.large.png"/>
-                                                </image>
-                                            </ImageView>
-                                            
-                                            <Label text="Large icons" styleClass="view-menu-text"/>
-                                        </HBox>
-                                    </content>
-                                </CustomMenuItem>
-
-                                <CustomMenuItem fx:id="viewMediumIconsItem" hideOnClick="true" userData="MEDIUM_ICONS" onAction="#onViewModeRowAction">
-                                    <content>
-                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                            <RadioButton fx:id="viewMediumIcons" toggleGroup="$viewModeToggleGroup"
-                                                         userData="MEDIUM_ICONS" onAction="#onViewModeRadio"
-                                                         focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
-                                                <image>
-                                                    <Image url="@/icons/view.medium.png"/>
-                                                </image>
-                                            </ImageView>
-                                            
-                                            <Label text="Medium icons" styleClass="view-menu-text"/>
-                                        </HBox>
-                                    </content>
-                                </CustomMenuItem>
-
-                                <CustomMenuItem fx:id="viewSmallIconsItem" hideOnClick="true" userData="SMALL_ICONS" onAction="#onViewModeRowAction">
-                                    <content>
-                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                            <RadioButton fx:id="viewSmallIcons" toggleGroup="$viewModeToggleGroup"
-                                                         userData="SMALL_ICONS" onAction="#onViewModeRadio"
-                                                         focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
-                                                <image>
-                                                    <Image url="@/icons/view.small.png"/>
-                                                </image>
-                                            </ImageView>
-                                            <Label text="Small icons" styleClass="view-menu-text"/>
-                                        </HBox>
-                                    </content>
-                                </CustomMenuItem>
-
-                                <CustomMenuItem fx:id="viewListItem" hideOnClick="true" userData="LIST" onAction="#onViewModeRowAction">
-                                    <content>
-                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                            <RadioButton fx:id="viewList" toggleGroup="$viewModeToggleGroup"
-                                                         userData="LIST" onAction="#onViewModeRadio"
-                                                         focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
-                                                <image>
-                                                    <Image url="@/icons/view.list.png"/>
-                                                </image>
-                                            </ImageView>
-                                            <Label text="List" styleClass="view-menu-text"/>
-                                        </HBox>
-                                    </content>
-                                </CustomMenuItem>
-
-                                <CustomMenuItem fx:id="viewDetailsItem" hideOnClick="true" userData="DETAILS" onAction="#onViewModeRowAction">
-                                    <content>
-                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                            <RadioButton fx:id="viewDetails" toggleGroup="$viewModeToggleGroup" selected="true"
-                                                         userData="DETAILS" onAction="#onViewModeRadio"
-                                                         focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
-                                                <image>
-                                                    <Image url="@/icons/view.details.png"/>
-                                                </image>
-                                            </ImageView>
-                                            <Label text="Details" styleClass="view-menu-text"/>
-                                        </HBox>
-                                    </content>
-                                </CustomMenuItem>
-
-                                <CustomMenuItem fx:id="viewTilesItem" hideOnClick="true" userData="TILES" onAction="#onViewModeRowAction">
-                                    <content>
-                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                            <RadioButton fx:id="viewTiles" toggleGroup="$viewModeToggleGroup"
-                                                         userData="TILES" onAction="#onViewModeRadio"
-                                                         focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
-                                                <image>
-                                                    <Image url="@/icons/view.tiles.png"/>
-                                                </image>
-                                            </ImageView>
-                                            <Label text="Tiles" styleClass="view-menu-text"/>
-                                        </HBox>
-                                    </content>
-                                </CustomMenuItem>
-
-                                <CustomMenuItem fx:id="viewContentItem" hideOnClick="true" userData="CONTENT" onAction="#onViewModeRowAction">
-                                    <content>
-                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                            <RadioButton fx:id="viewContent" toggleGroup="$viewModeToggleGroup"
-                                                         userData="CONTENT" onAction="#onViewModeRadio"
-                                                         focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
-                                                <image>
-                                                    <Image url="@/icons/view.content.png"/>
-                                                </image>
-                                            </ImageView>
-                                            <Label text="Content" styleClass="view-menu-text"/>
-                                        </HBox>
-                                    </content>
-                                </CustomMenuItem>
-                                        <SeparatorMenuItem/>
-
-                                        <!-- Sort submenu (native Menu skin already reserves a left "check" column; do NOT add an extra graphic indentation) -->
-<SeparatorMenuItem/>
-
-                                <CustomMenuItem fx:id="detailsPaneRowItem" hideOnClick="false">
-                                    <content>
-                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                            <RadioButton fx:id="detailsPaneMenuItem"
-                                                         onAction="#onDetailsPaneRadioToggle"
-                                                         focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
-                                                <image>
-                                                    <Image url="@/icons/view.details.pane.png"/>
-                                                </image>
-                                            </ImageView>
-                                            <Label text="Details pane" styleClass="view-menu-text"/>
-                                        </HBox>
-                                    </content>
-                                </CustomMenuItem>
-
-                                <CustomMenuItem fx:id="previewPaneRowItem" hideOnClick="false">
-                                    <content>
-                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                            <RadioButton fx:id="previewPaneMenuItem"
-                                                         onAction="#onPreviewPaneRadioToggle"
-                                                         focusTraversable="false" styleClass="view-menu-radio"/>
-                                            <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
-                                                <image>
-                                                    <Image url="@/icons/view.preview.pane.png"/>
-                                                </image>
-                                            </ImageView>
-                                            <Label text="Preview pane" styleClass="view-menu-text"/>
-                                        </HBox>
-                                    </content>
-                                </CustomMenuItem>
-
-                                <SeparatorMenuItem/>
-
-                                <Menu fx:id="viewShowMenu" text="Show" styleClass="view-menu-submenu">
-                                    <graphic>
-                                        <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-leading view-menu-submenu-row">
-                                            <CheckBox opacity="0.0" disable="true" focusTraversable="false" styleClass="view-menu-checkbox"/>
-                                            <Region styleClass="view-menu-icon-placeholder"/>
-                                        </HBox>
-                                    </graphic>
-                                    <items>
-                                        <CustomMenuItem hideOnClick="false">
-                                            <content>
-                                                <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                                    <CheckBox fx:id="showNavigationPaneMenuItem" selected="true"
-                                                              onAction="#onShowNavigationPaneToggle"
-                                                              focusTraversable="false" styleClass="view-menu-checkbox"/>
-                                                    <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
-                                                        <image>
-                                                            <Image url="@/icons/view.navigation.pane.png"/>
-                                                        </image>
-                                                    </ImageView>
-                                                    <Label text="Navigation pane" styleClass="view-menu-text"/>
-                                                </HBox>
-                                            </content>
-                                        </CustomMenuItem>
-
-                                        <CustomMenuItem hideOnClick="false">
-                                            <content>
-                                                <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                                    <CheckBox fx:id="showCompactViewMenuItem"
-                                                              onAction="#onCompactViewToggle"
-                                                              focusTraversable="false" styleClass="view-menu-checkbox"/>
-                                                    <Label text="&#xE7D8;" styleClass="mdl2-icon view-menu-icon"/>
-                                                    <Label text="Compact view" styleClass="view-menu-text"/>
-                                                </HBox>
-                                            </content>
-                                        </CustomMenuItem>
-
-                                        <CustomMenuItem hideOnClick="false">
-                                            <content>
-                                                <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                                    <CheckBox fx:id="showItemCheckBoxesMenuItem"
-                                                              onAction="#onItemCheckBoxesToggle"
-                                                              focusTraversable="false" styleClass="view-menu-checkbox"/>
-                                                    <Label text="&#xE739;" styleClass="mdl2-icon view-menu-icon"/>
-                                                    <Label text="Item check boxes" styleClass="view-menu-text"/>
-                                                </HBox>
-                                            </content>
-                                        </CustomMenuItem>
-
-                                        <CustomMenuItem hideOnClick="false">
-                                            <content>
-                                                <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                                    <CheckBox fx:id="showFileNameExtensionsMenuItem" selected="true"
-                                                              onAction="#onFileNameExtensionsToggle"
-                                                              focusTraversable="false" styleClass="view-menu-checkbox"/>
-                                                    <Label text="&#xE8EC;" styleClass="mdl2-icon view-menu-icon"/>
-                                                    <Label text="File name extensions" styleClass="view-menu-text"/>
-                                                </HBox>
-                                            </content>
-                                        </CustomMenuItem>
-
-                                        <CustomMenuItem hideOnClick="false">
-                                            <content>
-                                                <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                                    <CheckBox fx:id="showHiddenItemsMenuItem"
-                                                              onAction="#onHiddenItemsToggle"
-                                                              focusTraversable="false" styleClass="view-menu-checkbox"/>
-                                                    <Label text="&#xE890;" styleClass="mdl2-icon view-menu-icon"/>
-                                                    <Label text="Hidden items" styleClass="view-menu-text"/>
-                                                </HBox>
-                                            </content>
-                                        </CustomMenuItem>
-                                    
-
-                                        <SeparatorMenuItem/>
-
-                                        <!-- Indented to align text with checkbox+icon rows above -->
-                                        <CustomMenuItem hideOnClick="true" onAction="#onShowOperationHistory">
-                                            <content>
-                                                <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                                    <RadioButton opacity="0.0" disable="true" focusTraversable="false" styleClass="view-menu-radio"/>
-                                                    <Label text="&#xE8A7;" opacity="0.0" styleClass="fluent-icon view-menu-icon"/>
-                                                    <Label text="Operation History..." styleClass="view-menu-text"/>
-                                                </HBox>
-                                            </content>
-                                        </CustomMenuItem>
-
-                                        <CustomMenuItem hideOnClick="true" onAction="#onShowCommandLog">
-                                            <content>
-                                                <HBox alignment="CENTER_LEFT" spacing="10" styleClass="view-menu-row">
-                                                    <RadioButton opacity="0.0" disable="true" focusTraversable="false" styleClass="view-menu-radio"/>
-                                                    <Label text="&#xE8A7;" opacity="0.0" styleClass="fluent-icon view-menu-icon"/>
-                                                    <Label text="Command Log..." styleClass="view-menu-text"/>
-                                                </HBox>
-                                            </content>
-                                        </CustomMenuItem>
-
-                                    </items>
-                                </Menu>
-</items>
                         </MenuButton>
 
-                                                <MenuButton fx:id="seeMoreMenuButton" focusTraversable="false" styleClass="commandbar-icon-button, command-trailing-overflow">
-                            <tooltip><Tooltip text="See more"/></tooltip>
-                            <graphic><Label text="&#xE712;" styleClass="fluent-icon"/></graphic>
-                            <items>
-                                <MenuItem text="Undo" styleClass="see-more-menuitem">
-                                    <graphic>
-                                        <ImageView fitWidth="16.0" fitHeight="16.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
-                                            <image>
-                                                <Image url="@/icons/see_more_undo.png"/>
-                                            </image>
-                                        </ImageView>
-                                    </graphic>
-                                </MenuItem>
-
-                                <SeparatorMenuItem/>
-
-                                <MenuItem text="Compress to ZIP file" styleClass="see-more-menuitem">
-                                    <graphic><Label text="&#xF012;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
-                                </MenuItem>
-                                <MenuItem text="Pin to Quick access" styleClass="see-more-menuitem">
-                                    <graphic>
-                                        <ImageView fitWidth="16.0" fitHeight="16.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
-                                            <image>
-                                                <Image url="@/icons/see_more_pin_to_quick_access.png"/>
-                                            </image>
-                                        </ImageView>
-                                    </graphic>
-                                </MenuItem>
-                                <MenuItem text="Copy path" styleClass="see-more-menuitem">
-                                    <graphic><Label text="&#xE8C8;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
-                                </MenuItem>
-
-                                <SeparatorMenuItem/>
-
-                                <MenuItem text="Select all" styleClass="see-more-menuitem">
-                                    <graphic>
-                                        <ImageView fitWidth="16.0" fitHeight="16.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
-                                            <image>
-                                                <Image url="@/icons/see_more_select_all.png"/>
-                                            </image>
-                                        </ImageView>
-                                    </graphic>
-                                </MenuItem>
-                                <MenuItem text="Select none" styleClass="see-more-menuitem">
-                                    <graphic>
-                                        <ImageView fitWidth="16.0" fitHeight="16.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
-                                            <image>
-                                                <Image url="@/icons/see_more_select_none.png"/>
-                                            </image>
-                                        </ImageView>
-                                    </graphic>
-                                </MenuItem>
-                                <MenuItem text="Invert selection" styleClass="see-more-menuitem">
-                                    <graphic>
-                                        <ImageView fitWidth="16.0" fitHeight="16.0" preserveRatio="true" smooth="true" pickOnBounds="true" styleClass="view-menu-icon">
-                                            <image>
-                                                <Image url="@/icons/see_more_invert_selection.png"/>
-                                            </image>
-                                        </ImageView>
-                                    </graphic>
-                                </MenuItem>
-
-                                <SeparatorMenuItem/>
-
-                                <MenuItem text="Properties" styleClass="see-more-menuitem">
-                                    <graphic><Label text="&#xE946;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
-                                </MenuItem>
-                                <MenuItem text="Options:" styleClass="see-more-menuitem">
-                                    <graphic><Label text="&#xE713;" styleClass="fluent-icon menuitem-icon-gap"/></graphic>
-                                </MenuItem>
-                            </items>
-                        </MenuButton>
+                                                                                                <MenuButton fx:id="seeMoreMenuButton" focusTraversable="false" styleClass="commandbar-icon-button, command-trailing-overflow">
+                                                    <tooltip><Tooltip text="See more"/></tooltip>
+                                                    <graphic><Label text="&#xE712;" styleClass="fluent-icon"/></graphic>
+                                                </MenuButton>
 
                         <Region HBox.hgrow="ALWAYS"/>
 
@@ -661,8 +279,8 @@
                 <!-- Wrapped so the pane can match Explorer's dedicated left-surface background, padding, and separator. -->
                 <StackPane fx:id="navigationPaneShell" minWidth="60.0" styleClass="navigation-pane-shell">
                     <children>
-                        <!-- Taller rows (+12px from the original 36px target) for clearly visible separation between navigation items. -->
-                        <TreeView fx:id="folderTree" styleClass="tree-view-fixed explorer-tree explorer-navigation-pane" minWidth="54.0" prefWidth="320.0" fixedCellSize="42.0">
+                        <!-- Compact Windows File Explorer-like navigation row pitch. -->
+                        <TreeView fx:id="folderTree" styleClass="tree-view-fixed explorer-tree explorer-navigation-pane" minWidth="54.0" prefWidth="320.0" fixedCellSize="24.0">
                             <contextMenu>
                                 <ContextMenu styleClass="explorer-tree-menu">
                                     <items>
@@ -685,49 +303,7 @@
                                 <!-- Left: main views (table / icons) -->
                                 <StackPane fx:id="viewHost">
 
-                            <!-- Details (table) view -->
-                            <StackPane fx:id="detailsViewShell" styleClass="details-view-shell">
-                                <children>
-                                    <TableView fx:id="fileTable"
-                                               styleClass="explorer-details-table"
-                                               prefWidth="Infinity"
-                                               prefHeight="Infinity"
-                                               maxWidth="Infinity"
-                                               maxHeight="Infinity">
-                                        <columns>
-                                            <TableColumn fx:id="colName" prefWidth="336" text="Name"/>
-                                            <TableColumn fx:id="colStatus" prefWidth="42" text="Status"/>
-                                            <TableColumn fx:id="colType" prefWidth="176" text="Type"/>
-                                            <TableColumn fx:id="colSize" prefWidth="108" text="Size"/>
-                                            <TableColumn fx:id="colModified" prefWidth="184" text="Date modified"/>
-                                        </columns>
-                                        <placeholder>
-                                            <Label text="This folder is empty" styleClass="details-empty-placeholder"/>
-                                        </placeholder>
-                                    </TableView>
-                                </children>
-                            </StackPane>
-
-                            <!-- Large icons view -->
-                            <ScrollPane fx:id="iconScroll" prefWidth="Infinity" prefHeight="Infinity" maxWidth="Infinity" maxHeight="Infinity"
-                                        fitToWidth="true"
-                                        hbarPolicy="NEVER"
-                                        vbarPolicy="AS_NEEDED"
-                                        visible="false"
-                                        managed="false">
-                                <content>
-                                    <FlowPane fx:id="iconFlow"
-                                              styleClass="icon-flow"
-                                              hgap="16"
-                                              vgap="16"
-                                              alignment="TOP_LEFT"
-                                              prefWrapLength="600">
-                                        <padding>
-                                            <Insets top="10" right="10" bottom="10" left="10"/>
-                                        </padding>
-                                    </FlowPane>
-                                </content>
-                            </ScrollPane>
+                            <!-- HOTFIX186: individual file viewers are now lazily loaded into this host from dedicated FXML modules. -->
 
                             <VBox fx:id="homePane" visible="false" managed="false" spacing="18" alignment="TOP_LEFT" styleClass="explorer-home-pane">
                                 <padding>
@@ -819,7 +395,7 @@
                                             </VBox>
                                         </children>
                                     </HBox>
-                                    <fx:include source="ProgressPane.fxml" fx:id="progressPane"/>
+                                    <VBox fx:id="progressPaneHost" spacing="0" minHeight="0.0" prefHeight="0.0"/>
                                 </children>
                             </VBox>
 

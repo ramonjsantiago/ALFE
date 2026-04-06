@@ -1,0 +1,8 @@
+Phase 4P.9CD / HOTFIX176 integrates a viewport scheduler that classifies work into visible, near-viewport, and far-offscreen bands and executes it within a configurable frame budget.
+
+Highlights:
+- MainController now builds banded viewport work items for Details and icon views.
+- Visible work is realized first, then decode promotion is attempted within budget headroom.
+- Scroll-stop settle work is emitted once per burst via the HOTFIX176 scheduler callback.
+- AsyncIconService and AsyncThumbnailService can now reschedule pending work when a newer request arrives with a higher priority or newer viewport scope.
+- Added scheduler telemetry and unit tests for the new viewport policy package.

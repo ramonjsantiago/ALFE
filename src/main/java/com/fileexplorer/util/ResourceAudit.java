@@ -310,7 +310,7 @@ public final class ResourceAudit {
 
         String lower = resolvedUrl.toLowerCase();
         if (!(lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".gif")
-                || lower.endsWith(".bmp") || lower.endsWith(".webp") || lower.endsWith(".svg"))) {
+                || lower.endsWith(".bmp") || lower.endsWith(".webp") || lower.endsWith(".avif") || lower.endsWith(".heif") || lower.endsWith(".heic") || lower.endsWith(".svg"))) {
             return;
         }
 
@@ -394,7 +394,7 @@ public final class ResourceAudit {
                 LOG.info("FONT resolved source=" + source + " requestedPath=" + requestedPath + " resolvedUrl=" + resolvedUrl);
             }
         } else if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".gif")
-                || lower.endsWith(".bmp") || lower.endsWith(".webp") || lower.endsWith(".svg")) {
+                || lower.endsWith(".bmp") || lower.endsWith(".webp") || lower.endsWith(".avif") || lower.endsWith(".heif") || lower.endsWith(".heic") || lower.endsWith(".svg")) {
             logImageLoaded(source, requestedPath, resolvedUrl);
         }
     }
@@ -414,7 +414,7 @@ public final class ResourceAudit {
         return lower.endsWith(".css")
                 || lower.endsWith(".ttf") || lower.endsWith(".otf") || lower.endsWith(".ttc") || lower.endsWith(".woff") || lower.endsWith(".woff2")
                 || lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".gif")
-                || lower.endsWith(".bmp") || lower.endsWith(".webp") || lower.endsWith(".svg");
+                || lower.endsWith(".bmp") || lower.endsWith(".webp") || lower.endsWith(".avif") || lower.endsWith(".heif") || lower.endsWith(".heic") || lower.endsWith(".svg");
     }
 
 /**

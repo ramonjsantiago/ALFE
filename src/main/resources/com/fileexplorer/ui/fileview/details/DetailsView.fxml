@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.layout.StackPane?>
+
+<StackPane xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.fileexplorer.ui.fileview.details.DetailsViewController" fx:id="detailsViewShell" styleClass="details-view-shell">
+    <children>
+        <TableView fx:id="fileTable" styleClass="explorer-details-table" prefWidth="Infinity" prefHeight="Infinity" maxWidth="Infinity" maxHeight="Infinity">
+            <columns>
+                <TableColumn fx:id="colName" prefWidth="336" text="Name"/>
+                <TableColumn fx:id="colStatus" prefWidth="42" text="Status"/>
+                <TableColumn fx:id="colType" prefWidth="176" text="Type"/>
+                <TableColumn fx:id="colSize" prefWidth="108" text="Size"/>
+                <TableColumn fx:id="colModified" prefWidth="184" text="Date modified"/>
+            </columns>
+            <placeholder>
+                <Label text="This folder is empty" styleClass="details-empty-placeholder"/>
+            </placeholder>
+        </TableView>
+    </children>
+</StackPane>

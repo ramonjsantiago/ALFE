@@ -5,6 +5,8 @@ import com.fileexplorer.service.template.TemplateRecurringScheduleService;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Phase 6.5.0: Headless regression checks.
@@ -25,6 +27,8 @@ import java.time.Instant;
  */
 public final class RegressionCheckMain {
 
+    private static final Logger LOG = Logger.getLogger(RegressionCheckMain.class.getName());
+
     private RegressionCheckMain() {}
 
     public static void main(String[] args) {
@@ -43,11 +47,10 @@ public final class RegressionCheckMain {
             // 3) Lightweight crash snapshot path sanity (no IO required)
             CrashPathChecks.assertCrashPathStable();
 
-            System.out.println("OK: Regression checks passed at " + Instant.now());
+            LOG.info(() -> "OK: Regression checks passed at " + Instant.now());
             System.exit(0);
         } catch (Throwable t) {
-            System.err.println("FAILED: Regression checks failed: " + t);
-            t.printStackTrace(System.err);
+            LOG.log(Level.SEVERE, "FAILED: Regression checks failed", t);
             System.exit(2);
         } finally {
             if (originalHome != null) System.setProperty("user.home", originalHome);
@@ -76,6 +79,7 @@ public final class RegressionCheckMain {
             throw new AssertionError("Expected minutes=60, got " + schedule.minutes());
         }
     }
+
     static final class CrashPathChecks {
         private CrashPathChecks() {}
 

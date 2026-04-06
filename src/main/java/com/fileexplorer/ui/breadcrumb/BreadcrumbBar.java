@@ -211,7 +211,7 @@ public class BreadcrumbBar {
             Stage stage = new Stage();
             MainApp.configureExplorerStage(stage, target, "ui.breadcrumb.new-window");
         } catch (IOException ex) {
-            ex.printStackTrace();
+            LOG.log(java.util.logging.Level.WARNING, "Failed to open breadcrumb UI new window for " + target, ex);
         }
     }
 

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.layout.FlowPane?>
+
+<ScrollPane xmlns="http://javafx.com/javafx/25" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.fileexplorer.ui.fileview.tiles.TilesFileViewController" fx:id="iconScroll" prefWidth="Infinity" prefHeight="Infinity" maxWidth="Infinity" maxHeight="Infinity" fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED" visible="false" managed="false">
+    <content>
+        <FlowPane fx:id="iconFlow" styleClass="icon-flow, explorer-icon-flow-tiles" hgap="16" vgap="16" alignment="TOP_LEFT" prefWrapLength="600">
+            <padding>
+                <Insets top="10" right="10" bottom="10" left="10"/>
+            </padding>
+        </FlowPane>
+    </content>
+</ScrollPane>

@@ -14,3 +14,16 @@ com.fileexplorer.ui.service.IconCacheService
 com.fileexplorer.ui.service.ThemeService
 com.fileexplorer.ui.service.TreeBuildService
 com.fileexplorer.util.ResourceAudit
+com.fileexplorer.util.StartupTrace
+com.fileexplorer.app.MainApp
+com.fileexplorer.service.icon.AsyncThumbnailService
+com.fileexplorer.tools.RegressionCheckMain
+com.fileexplorer.controller.breadcrumb.BreadcrumbBarController
+com.fileexplorer.ui.breadcrumb.BreadcrumbBar
+
+co.elastic.thumbnails4j.pdf.PDFThumbnailer
+org.apache.pdfbox
+org.apache.pdfbox.cos.COSObject
+org.apache.pdfbox.contentstream.PDFStreamEngine
+org.apache.pdfbox.rendering.PageDrawer
+org.apache.pdfbox.pdfparser.COSParser

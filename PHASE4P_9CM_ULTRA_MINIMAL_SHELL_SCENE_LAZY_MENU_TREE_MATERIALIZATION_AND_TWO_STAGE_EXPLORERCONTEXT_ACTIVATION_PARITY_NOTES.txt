@@ -1,0 +1,13 @@
+HOTFIX185 / Phase 4P.9CM — Ultra-Minimal Shell Scene, Lazy Menu Tree Materialization, and Two-Stage ExplorerContext Activation Parity
+
+Summary
+- Replaced the pre-show shell with a much smaller inline-styled skeleton so stage.show() realizes fewer nodes.
+- Removed eager New / Sort / View / See more menu trees from MainLayout.fxml and materialize them on first open.
+- Converted ExplorerContext heavy services to stage-B lazy activation with background warmup after startup is already interactive.
+- Deferred operation-queue bindings until first-interaction readiness so attach() no longer forces the heavy queue/history/template graph.
+
+Primary code surfaces
+- src/main/java/com/fileexplorer/app/MainApp.java
+- src/main/java/com/fileexplorer/app/ExplorerContext.java
+- src/main/java/com/fileexplorer/controller/MainController.java
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml

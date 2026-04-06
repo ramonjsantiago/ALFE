@@ -15,8 +15,10 @@
         <maven.compiler.release>25</maven.compiler.release>
         <javafx.version>25</javafx.version>
         <thumbnails4j.version>1.2.0</thumbnails4j.version>
-        <slf4j.version>1.7.25</slf4j.version>
+        <slf4j.version>1.7.36</slf4j.version>
+        <nightmonkeys.version>1.1.0</nightmonkeys.version>
         <jai.imageio.version>1.4.0</jai.imageio.version>
+        <pdfbox.jbig2.version>3.0.4</pdfbox.jbig2.version>
         <app.xms>512m</app.xms>
         <app.xmx>4g</app.xmx>
         <fileexplorer.log.enter>false</fileexplorer.log.enter>
@@ -102,6 +104,11 @@
             <artifactId>imageio-jpeg</artifactId>
             <version>3.12.0</version>
         </dependency>
+        <dependency>
+            <groupId>com.twelvemonkeys.imageio</groupId>
+            <artifactId>imageio-webp</artifactId>
+            <version>3.12.0</version>
+        </dependency>
 
         <!-- Image4J (ICO/CUR decoding support) - Maven Central -->
         <dependency>
@@ -116,6 +123,27 @@
             <artifactId>jai-imageio-core</artifactId>
             <version>${jai.imageio.version}</version>
         </dependency>
+        <!-- JPEG2000/JPX decoder required by PDFBox for PDFs containing JPX streams. -->
+        <dependency>
+            <groupId>com.github.jai-imageio</groupId>
+            <artifactId>jai-imageio-jpeg2000</artifactId>
+            <version>${jai.imageio.version}</version>
+        </dependency>
+
+        <!-- JBIG2 decoder required by PDFBox for PDFs containing JBIG2 streams. -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>jbig2-imageio</artifactId>
+            <version>${pdfbox.jbig2.version}</version>
+        </dependency>
+
+        <!-- NightMonkeys: HEIF/AVIF ImageIO plugin (requires native access + native libraries at runtime). -->
+        <dependency>
+            <groupId>com.github.gotson.nightmonkeys</groupId>
+            <artifactId>imageio-heif</artifactId>
+            <version>${nightmonkeys.version}</version>
+            <scope>runtime</scope>
+        </dependency>
 
         <!-- thumbnails4j: document thumbnails for doc/docx/pdf/pptx/xls/xlsx -->
         <dependency>
@@ -123,10 +151,10 @@
             <artifactId>thumbnails4j-all</artifactId>
             <version>${thumbnails4j.version}</version>
         </dependency>
-        <!-- Prevent noisy missing-binder warnings from thumbnails4j's SLF4J API usage. -->
+        <!-- Route SLF4J-emitting libraries into JUL so the project uses one logging pipeline. -->
         <dependency>
             <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-nop</artifactId>
+            <artifactId>slf4j-jdk14</artifactId>
             <version>${slf4j.version}</version>
             <scope>runtime</scope>
         </dependency>
@@ -149,6 +177,7 @@
                         <!-- Use a relative path to avoid JVM arg tokenization issues when the project path contains spaces. -->
                         <option>-Djava.util.logging.config.file=./config/logging.properties</option>
                         <option>-XX:+StartAttachListener</option>
+                        <option>--enable-native-access=ALL-UNNAMED</option>
                         <!-- FileExplorer runtime toggles (pass-through from mvn -D... into the launched JVM) -->
                         <option>-Dfileexplorer.log.enter=${fileexplorer.log.enter}</option>
                         <option>-Dfileexplorer.resourceAudit=${fileexplorer.resourceAudit}</option>

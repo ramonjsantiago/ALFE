@@ -1,0 +1,26 @@
+HOTFIX181 / Phase 4P.9CI — PDF Worker Quarantine, Retry-After-Change Invalidation, and Document-Lane Fairness Parity
+
+Scope
+- quarantine slow/timed-out PDF thumbnail work away from Word/Excel/PowerPoint thumbnail traffic
+- invalidate PDF timeout suppression immediately when the underlying file changes
+- prevent stale thumbnail completions from an old file version from repainting or being cached after replacement/edit
+
+Implementation summary
+1. AsyncThumbnailService
+   - split document thumbnail execution into `officeDocumentExecutor` and `pdfDocumentExecutor`
+   - routed `pdf` through the dedicated PDF lane and Office-family formats through the Office lane
+   - changed `ThumbKey` to include `(path, sizePx, lastModifiedMs, fileSizeBytes)`
+   - added a final `isFileVersionCurrent(...)` gate before cache write / future completion
+   - changed PDF timeout cooldown tracking from `Map<String, Long>` to file-identity-aware `PdfCooldownState`
+   - updated PDF diagnostic dedupe signatures to include file identity
+   - surfaced new telemetry for stale-version drops, cooldown invalidations, and per-lane queue/active counts
+
+2. Tests
+   - added `AsyncThumbnailServiceHotfix181Test`
+   - verifies cooldown invalidation when a PDF changes
+   - verifies PDF and Office-family thumbnails route to separate executor lanes
+
+Expected outcome
+- a bad PDF can still time out and fall back quietly, but it should no longer monopolize the Office-document thumbnail path
+- editing/replacing the PDF should allow immediate retry rather than waiting for the old path-based cooldown to expire
+- late completions for stale file versions should be dropped instead of repainting stale thumbnails
