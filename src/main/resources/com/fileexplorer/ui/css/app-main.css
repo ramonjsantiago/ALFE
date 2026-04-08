@@ -75,7 +75,7 @@
 /* Dark theme root */
 .theme-dark {
     -fx-background-color: #202020;
-    -fx-text-fill: #191919;
+    -fx-text-fill: #FFFFFF;
 }
 
 /* Text color for common controls */
@@ -96,7 +96,7 @@
 .theme-dark .text-area,
 .theme-dark .tree-view,
 .theme-dark .table-view {
-    -fx-text-fill: #191919;
+    -fx-text-fill: #FFFFFF;
 }
 
 /************************************************************
@@ -228,7 +228,7 @@
 .theme-dark .fluent-toolbar .toggle-button,
 .theme-dark .fluent-toolbar .menu-button {
     -fx-background-color: transparent;
-    -fx-text-fill: #191919;
+    -fx-text-fill: #FFFFFF;
 }
 
 .theme-dark .fluent-command-button:hover,
@@ -244,7 +244,7 @@
 .theme-dark .fluent-toolbar .toggle-button:armed,
 .theme-dark .fluent-toolbar .toggle-button:selected {
     -fx-background-color: rgba(126, 167, 245, 0.22);
-    -fx-text-fill: #191919;
+    -fx-text-fill: #FFFFFF;
 }
 
 
@@ -311,7 +311,7 @@
 /* Dark */
 .theme-dark .breadcrumb-button {
     -fx-background-color: transparent;
-    -fx-text-fill: #191919;
+    -fx-text-fill: #FFFFFF;
 }
 
 .theme-dark .breadcrumb-button:hover {
@@ -354,13 +354,13 @@
 .theme-light .tree-cell:filled:selected,
 .theme-light .tree-cell:filled:selected:focused {
     -fx-background-color: #0078d4;
-    -fx-text-fill: #191919;
+    -fx-text-fill: #FFFFFF;
 }
 
 .theme-dark .tree-cell:filled:selected,
 .theme-dark .tree-cell:filled:selected:focused {
     -fx-background-color: #0078d4;
-    -fx-text-fill: #191919;
+    -fx-text-fill: #FFFFFF;
 }
 
 /************************************************************
@@ -402,13 +402,13 @@
 .theme-light .table-row-cell:filled:selected,
 .theme-light .table-row-cell:filled:selected:focused {
     -fx-background-color: #0078d4;
-    -fx-text-fill: #191919;
+    -fx-text-fill: #FFFFFF;
 }
 
 .theme-dark .table-row-cell:filled:selected,
 .theme-dark .table-row-cell:filled:selected:focused {
     -fx-background-color: #0078d4;
-    -fx-text-fill: #191919;
+    -fx-text-fill: #FFFFFF;
 }
 
 /* Column header background – NO gradient */
@@ -496,7 +496,7 @@
 
 .theme-dark .text-area {
     -fx-control-inner-background: #1c1c1c;
-    -fx-text-fill: #191919;
+    -fx-text-fill: #FFFFFF;
 }
 
 /************************************************************
@@ -570,7 +570,7 @@
 .theme-dark .text-field {
     -fx-background-color: #1f1f1f;
     -fx-border-color: #3a3a3a;
-    -fx-text-fill: #191919;
+    -fx-text-fill: #FFFFFF;
 }
 
 .text-field:focused {
@@ -716,4 +716,42 @@
     -fx-font-size: 13px;
     -fx-font-weight: normal;
     -fx-line-spacing: 2px;
+}
+
+/************************************************************
+ * HOTFIX193 — Search session lifecycle + result surface parity
+ ************************************************************/
+.search-results-state-surface {
+    -fx-background-color: rgba(32, 32, 32, 0.92);
+    -fx-background-radius: 18;
+    -fx-border-color: rgba(97, 97, 97, 0.9);
+    -fx-border-width: 1;
+    -fx-border-radius: 18;
+    -fx-padding: 20 26 20 26;
+    -fx-max-width: 640;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.28), 18, 0.18, 0, 4);
+}
+
+.search-results-state-title {
+    -fx-text-fill: #F3F2F1;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 22px;
+    -fx-font-weight: 700;
+}
+
+.search-results-state-subtitle {
+    -fx-text-fill: #C8C6C4;
+    -fx-font-family: "Segoe UI Variable Text";
+    -fx-font-size: 13px;
+    -fx-line-spacing: 2px;
+    -fx-alignment: center;
+    -fx-text-alignment: center;
+}
+
+.explorer-search-shell.search-searching {
+    -fx-border-color: rgba(96, 165, 250, 0.78);
+}
+
+.explorer-search-shell.search-no-results {
+    -fx-border-color: rgba(251, 191, 36, 0.82);
 }

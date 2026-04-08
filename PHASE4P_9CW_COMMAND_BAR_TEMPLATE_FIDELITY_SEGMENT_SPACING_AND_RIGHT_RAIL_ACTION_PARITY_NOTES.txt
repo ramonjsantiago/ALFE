@@ -1,0 +1,27 @@
+HOTFIX195 / Phase 4P.9CW — Command Bar Template Fidelity, Segment Spacing, and Right-Rail Action Parity
+
+Summary
+- Promoted the main command-bar file operations to labeled Explorer-style commands.
+- Tightened the structured menu metrics for New / Sort / View so they align more closely with Windows Explorer.
+- Grouped the Preview / Operations / Details controls into a right-side action rail with restrained separator geometry.
+
+Implementation
+- MainController now configures the main file-operation buttons as icon+text command-bar controls instead of icon-only controls.
+- Added explicit right-rail toggle setup so Preview / Operations / Details share the same layout contract.
+- MainLayout now inserts a dedicated right-rail separator and a grouped HBox for the trailing action controls.
+- address-command-parity.css now defines the HOTFIX195 row-height, padding, icon/text-gap, chevron-gap, and right-rail separator metrics.
+
+Expected visual result
+- Cut / Copy / Paste / Rename / Share / Delete read like Windows File Explorer commands instead of toolbar glyph buttons.
+- New / Sort / View sit on the same vertical rhythm as the surrounding labeled commands.
+- Preview / Operations / Details read as a trailing action area instead of floating independent controls.
+
+HOTFIX195 final corrective pass:
+- lifted the structured MenuButton content, text, icon, and chevron further upward so New / Sort / View align with adjacent toolbar commands under the JavaFX MenuButton skin.
+
+- Corrective pass: raised structured New / Sort / View command-bar menu content an additional 2 px for closer vertical baseline parity.
+
+HOTFIX195 crash follow-up:
+- Added safe executor dispatch wrappers for IO and hover-prefetch tasks so late FX-thread debounce callbacks cannot submit into a terminated executor during controller teardown.
+- Stopped visible-metadata, search, metadata-flush, and table-refresh debounces in dispose() before shutting down background services.
+- Guarded the fill-all metadata path against starting after disposal/shutdown.

@@ -1,0 +1,31 @@
+HOTFIX77 / Phase 4O.5 — In-memory thumbnail reuse and viewport-aware cancellation
+
+Summary
+- strengthens the in-memory thumbnail pipeline without reintroducing the persistent-cache risk from HOTFIX74
+- reuses thumbnails more aggressively across nearby view sizes and coalesces duplicate requests for the same file/size bucket
+- cancels table-view thumbnail interest promptly when cells scroll offscreen and prioritizes on-screen / user-action thumbnail work
+
+What changed
+- updated AsyncThumbnailService to bucket requested thumbnail sizes into reusable in-memory size classes
+- cache and invalidation now consider:
+  - absolute path
+  - size bucket
+  - last modified time
+  - file size
+- added stronger request coalescing so repeated requests for the same file/size bucket share one pending or running decode instead of re-queuing duplicate work
+- added nearest-larger in-memory reuse so smaller views can reuse an already-rendered larger thumbnail instead of decoding again
+- added a start-window throttle for non-user-action thumbnail work to smooth out fast-scroll bursts
+- added new diagnostics counters for:
+  - coalesced requests
+  - size-bucket reuse
+  - throttle deferrals
+  - viewport-triggered cancellations
+- updated VisibleThumbnailManager so non-visible table cells cancel their thumbnail interest immediately on scroll and clear cancelled/null futures for retry on the next visible pump
+- raised thumbnail priorities at the call sites that benefit most:
+  - preview pane requests now use USER_ACTION priority
+  - visible tile/list icon nodes now use VISIBLE priority
+
+Result
+- repeat thumbnail work should drop in common view-switching and resize scenarios because nearby sizes reuse the same in-memory buckets
+- fast table scrolling should waste less work because offscreen cell requests are cancelled earlier
+- the pipeline remains fail-open: when generation fails, the normal file-type icon remains visible

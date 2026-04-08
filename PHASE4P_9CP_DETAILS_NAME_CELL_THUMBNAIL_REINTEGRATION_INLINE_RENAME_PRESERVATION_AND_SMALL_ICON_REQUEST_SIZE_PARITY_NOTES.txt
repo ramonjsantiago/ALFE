@@ -1,0 +1,10 @@
+HOTFIX188 / Phase 4P.9CP — Details Name-Cell Thumbnail Reintegration, Inline-Rename Preservation, and Small-Icon Request-Size Parity
+
+Summary
+- The modular Details name cell had preserved inline rename but bypassed the thumbnail-aware pipeline.
+- This hotfix restores viewport-aware thumbnail registration in the custom Details name cell while retaining rename behavior and small request sizing.
+
+Implementation notes
+- MainController.ExplorerNameTableCell now requests the extension-specific fallback icon asynchronously at Details-cell sizes.
+- The same cell now registers supported thumbnail candidates with the shared VisibleThumbnailManager for the table.
+- TableViewSupport now exposes the shared table VisibleThumbnailManager so custom Details cells can reuse the same viewport-aware cancellation/debounce pipeline.

@@ -1,0 +1,7 @@
+Phase 4L.8 — Details Header Compact Preset Drop-down
+
+Included:
+- Right-edge primary-click header menu now opens a compact preset-only drop-down.
+- The compact drop-down contains only the aligned preset rows: 0-9, A-Z, a-z.
+- Right-click/context-menu behavior continues to open the full Details header menu.
+- Preset rows preserve checkbox, icon, and label alignment.

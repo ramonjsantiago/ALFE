@@ -7,7 +7,7 @@ import com.fileexplorer.util.ImageSupport;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.ListChangeListener;
-import javafx.scene.Node;
+import javafx.geometry.Bounds;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
@@ -15,6 +15,9 @@ import javafx.scene.input.ScrollEvent;
 import javafx.util.Duration;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.WeakHashMap;
@@ -28,6 +31,11 @@ import java.util.concurrent.CompletableFuture;
  * <p>Solution: when a cell binds to an image candidate, we register it, but only
  * start the decode after a short scroll-idle debounce. Pending work for cells that
  * scroll out of view is cancelled best-effort.</p>
+ *
+ * <p>HOTFIX189 extends the visible pump so thumbnail requests are issued in actual viewport order
+ * (top-to-bottom, then left-to-right) instead of the arbitrary iteration order of the internal
+ * registration map. This keeps visible PDF thumbnail work biased toward the first realized rows and
+ * suppresses late commits into cells that have already slipped out of view.</p>
  */
 public final class VisibleThumbnailManager {
 
@@ -45,6 +53,13 @@ public final class VisibleThumbnailManager {
         long bindingStamp;
         java.util.function.Consumer<javafx.scene.image.Image> apply;
         CompletableFuture<javafx.scene.image.Image> future;
+    }
+
+    private record VisibleCellRegistration(TableCell<FileItem, ?> cell,
+                                           Registration registration,
+                                           double minY,
+                                           double minX,
+                                           int rowIndex) {
     }
 
     public VisibleThumbnailManager(TableView<FileItem> table, ExplorerContext ctx) {
@@ -139,24 +154,20 @@ public final class VisibleThumbnailManager {
             return;
         }
 
-        // Start requests for visible registered cells.
-        for (Map.Entry<TableCell<FileItem, ?>, Registration> e : regs.entrySet()) {
-            TableCell<FileItem, ?> cell = e.getKey();
-            Registration r = e.getValue();
-            if (cell == null || r == null || r.path == null || r.apply == null) continue;
+        List<VisibleCellRegistration> visible = collectVisibleRegistrationsInViewportOrder();
 
-            if (!isCellVisible(cell)) {
-                // Cancel non-visible to avoid wasted decode.
-                if (r.future != null) {
-                    AsyncThumbnailService.getInstance().noteViewportCancellation();
-                    r.future.cancel(false);
-                    r.future = null;
-                }
+        // Start requests for visible registered cells in top-to-bottom/left-to-right viewport order.
+        for (VisibleCellRegistration entry : visible) {
+            TableCell<FileItem, ?> cell = entry.cell();
+            Registration r = entry.registration();
+            if (cell == null || r == null || r.path == null || r.apply == null) {
                 continue;
             }
 
             // Already requested.
-            if (r.future != null) continue;
+            if (r.future != null) {
+                continue;
+            }
 
             final Path p = r.path;
             final int size = r.size;
@@ -176,23 +187,71 @@ public final class VisibleThumbnailManager {
                 if (cur.bindingStamp != stamp) {
                     return;
                 }
-                if (fut.isCancelled() || ex != null || img == null) {
+                if (fut.isCancelled() || ex != null || img == null || !isCellVisible(cell)) {
                     cur.future = null;
                 }
             }));
             fut.thenAccept(img -> Platform.runLater(() -> {
-                if (fut.isCancelled()) return;
-                // Ensure still bound to same file.
+                if (fut.isCancelled()) {
+                    return;
+                }
+                // Ensure still bound to same file and still actually visible before committing.
                 Registration cur = regs.get(cell);
-                if (cur == null) return;
-                if (cur.bindingStamp != stamp) return;
-                if (!Objects.equals(cur.path, p)) return;
-                if (!Objects.equals(cur.identity, id)) return;
-                if (!Objects.equals(currentPathForCell(cell), p)) return;
-                if (img == null) return;
+                if (cur == null) {
+                    return;
+                }
+                if (cur.bindingStamp != stamp) {
+                    return;
+                }
+                if (!Objects.equals(cur.path, p)) {
+                    return;
+                }
+                if (!Objects.equals(cur.identity, id)) {
+                    return;
+                }
+                if (!Objects.equals(currentPathForCell(cell), p)) {
+                    return;
+                }
+                if (!isCellVisible(cell)) {
+                    cur.future = null;
+                    return;
+                }
+                if (img == null) {
+                    return;
+                }
                 cur.apply.accept(img);
             }));
         }
+    }
+
+    private List<VisibleCellRegistration> collectVisibleRegistrationsInViewportOrder() {
+        List<VisibleCellRegistration> visible = new ArrayList<>(regs.size());
+        for (Map.Entry<TableCell<FileItem, ?>, Registration> entry : regs.entrySet()) {
+            TableCell<FileItem, ?> cell = entry.getKey();
+            Registration registration = entry.getValue();
+            if (cell == null || registration == null || registration.path == null || registration.apply == null) {
+                continue;
+            }
+            if (!isCellVisible(cell)) {
+                if (registration.future != null) {
+                    AsyncThumbnailService.getInstance().noteViewportCancellation();
+                    registration.future.cancel(false);
+                    registration.future = null;
+                }
+                continue;
+            }
+            Bounds bounds = safeSceneBounds(cell);
+            double minY = bounds == null ? Double.MAX_VALUE : bounds.getMinY();
+            double minX = bounds == null ? Double.MAX_VALUE : bounds.getMinX();
+            TableRow<FileItem> row = cell.getTableRow();
+            int rowIndex = row == null ? Integer.MAX_VALUE : row.getIndex();
+            visible.add(new VisibleCellRegistration(cell, registration, minY, minX, rowIndex));
+        }
+        visible.sort(Comparator
+                .comparingDouble(VisibleCellRegistration::minY)
+                .thenComparingInt(VisibleCellRegistration::rowIndex)
+                .thenComparingDouble(VisibleCellRegistration::minX));
+        return visible;
     }
 
     private void cancelNonVisible() {
@@ -221,6 +280,17 @@ public final class VisibleThumbnailManager {
         if (row.getItem() == null) return false;
         // If layout bounds are zero, it isn't actually rendered.
         return row.getLayoutBounds().getHeight() > 0 && row.getLayoutBounds().getWidth() > 0;
+    }
+
+    private static Bounds safeSceneBounds(TableCell<FileItem, ?> cell) {
+        try {
+            if (cell == null || cell.getScene() == null) {
+                return null;
+            }
+            return cell.localToScene(cell.getBoundsInLocal());
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     private static long longProp(String key, long def) {

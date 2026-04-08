@@ -203,6 +203,16 @@
     -fx-wrap-text: true;
 }
 
+.explorer-icon-slot-xl {
+    -fx-alignment: center;
+    -fx-min-width: 256px;
+    -fx-pref-width: 256px;
+    -fx-max-width: 256px;
+    -fx-min-height: 256px;
+    -fx-pref-height: 256px;
+    -fx-max-height: 256px;
+}
+
 .explorer-icon-flow-large .explorer-icon-name-label,
 .explorer-icon-flow-medium .explorer-icon-name-label {
     -fx-font-size: 11px;

@@ -1,0 +1,4 @@
+HOTFIX43 / Phase 4K.2G
+- Details view metadata popup now arms from per-row enter/move events.
+- Details popup no longer auto-hides from its own surface and anchors below the row.
+- Details row hover churn reduced by removing row.hoverProperty()-driven state updates and avoiding redundant hovered-row resets.

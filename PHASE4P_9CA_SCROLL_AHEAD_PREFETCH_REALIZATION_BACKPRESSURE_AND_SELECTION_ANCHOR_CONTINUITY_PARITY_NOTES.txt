@@ -1,0 +1,22 @@
+HOTFIX173 / Phase 4P.9CA — Scroll-Ahead Prefetch, Realization Backpressure, and Selection/Anchor Continuity Parity
+
+Summary
+- Adds viewport-scoped visible-first realization passes for Details and icon views.
+- Introduces icon queue backpressure and cancellation boundaries so stale viewport work is dropped quickly.
+- Preserves selection/focus/anchor and first-visible continuity across progressive reload completion.
+
+Implementation notes
+- `MainController` now tracks realization viewport and directory generations, debounces viewport-idle refreshes, and requests visible plus near-viewport assets with different priorities.
+- `AsyncIconService` now supports `VISIBLE`, `PREFETCH`, and `BACKGROUND` lanes with generation-aware cancellation and queue trimming.
+- `buildIconNode(...)` now stamps async icon bindings so recycled visuals ignore stale completions.
+- `loadDirectoryIntoTableAsync(...)` captures and restores viewport continuity around progressive refresh completion.
+
+Operational limitations in this packaging
+- This environment does not provide Maven or JavaFX 25 build verification, so the project was updated as a full source delivery but not compiled here.
+
+Toolbar Sort icon resource refresh
+- Replaced the toolbar Sort icon resource with the attached `ContextMenu.Sort.svg`.
+- Regenerated `src/main/resources/icons/toolbar.sort.png` from the attached vector and refreshed the packaged `target/classes/icons` copies so the shipped classpath matches the source resources.
+HOTFIX173 follow-up:
+- Reduced Tree view row spacing for a denser navigation pane presentation.
+- Lowered the fixed TreeView row height to 35px and trimmed vertical cell padding in source and packaged CSS/FXML resources.

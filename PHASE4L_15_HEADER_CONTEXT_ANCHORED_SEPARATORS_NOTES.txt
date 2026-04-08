@@ -1,0 +1,10 @@
+HOTFIX71 / Phase 4L.15 — Header Context Anchored Separators
+
+What changed
+- Updated the Table header right-click popup builder to use anchored trailing separators instead of a single unconditional separator before More....
+- Preserved the separator after Size All Columns to Fit.
+- Added separator support after Title when Title is present in the visible-details section.
+- When Title is not currently visible, the trailing separator is attached to the last visible Details row so More... still remains visually separated from the Details list.
+
+Files changed
+- src/main/java/com/fileexplorer/ui/table/TableHeaderContextMenuInstaller.java

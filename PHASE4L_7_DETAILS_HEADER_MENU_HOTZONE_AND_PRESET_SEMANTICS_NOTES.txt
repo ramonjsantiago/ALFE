@@ -1,0 +1,7 @@
+Phase 4L.7 — Details Header Menu Hot-zone and Preset Semantics
+
+Included:
+- Added a right-edge Details header hot-zone visual state and hand cursor for the drop-down trigger area.
+- Preset rows now use more meaningful placeholder icons: #, A, and a.
+- Preserved the aligned checkbox, icon, and string row structure.
+- Clicking a preset still applies primary sort on the clicked column.

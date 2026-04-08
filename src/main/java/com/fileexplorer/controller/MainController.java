@@ -141,6 +141,7 @@ import com.fileexplorer.service.icon.AsyncThumbnailService;
 import com.fileexplorer.service.icon.IconCacheService;
 import com.fileexplorer.ui.table.TableViewSupport;
 import com.fileexplorer.ui.table.TableHeaderContextMenuInstaller;
+import com.fileexplorer.ui.table.VisibleThumbnailManager;
 import com.fileexplorer.ui.table.DetailColumnCatalog;
 import com.fileexplorer.ui.dialog.ChooseDetailsDialog;
 import com.fileexplorer.ui.tree.TreeViewSupport;
@@ -195,7 +196,8 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     // Minimum vertical padding budget (top and bottom) used for runtime metrics.
     private static final double UI_MIN_VPAD_PX = 5.0;
     private static final double ICON_SIZE_MIN = 48.0;
-    private static final double ICON_SIZE_MAX = 160.0;
+    private static final double ICON_SIZE_MAX = 256.0;
+    private static final double EXTRA_LARGE_ICON_CELL_PX = 256.0;
     private static final double ICON_SIZE_STEP = 12.0;
     private static final String PROP_UI_FONT_PX = "main.uiFontPx";
     private static final String PROP_UI_FONT_FAMILY = "main.uiFontFamily";
@@ -348,7 +350,11 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     @FXML private CheckBox showHiddenItemsMenuItem;
     @FXML private Label statusLabel;
     @FXML private Label locationLabel;
+    @FXML private ToggleButton statusDetailsButton;
+    @FXML private ToggleButton statusLargeIconsButton;
+    @FXML private HBox searchShell;
     @FXML private TextField searchField;
+    @FXML private Button searchClearButton;
     @FXML private javafx.scene.control.ToolBar commandBar;
 // --- Top command bar / toolbar (wired programmatically) -----------------
 @FXML private javafx.scene.control.MenuButton newMenuButton;
@@ -364,6 +370,7 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
 @FXML private javafx.scene.control.Button deleteButton;
 @FXML private javafx.scene.control.MenuButton sortMenuButton;
 @FXML private javafx.scene.control.MenuButton viewMenuButton;
+@FXML private javafx.scene.control.MenuButton filterMenuButton;
     @FXML private javafx.scene.control.MenuButton seeMoreMenuButton;
     @FXML private HBox tabStrip;
     @FXML private Button homeTabButton;
@@ -414,6 +421,20 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     private enum InlineRenameSurface { FILE_DETAILS, FILE_ICON, TREE }
 
     private enum ExplorerCommandAction { EXECUTE, UNDO, REDO }
+
+    private enum SearchSessionState { IDLE, TYPING, SEARCHING, RESULTS, NO_RESULTS }
+
+    private static final class SearchComputationResult {
+        private final int snapshotItemCount;
+        private final int matchCount;
+        private final java.util.List<FileItem> hugeFolderMatches;
+
+        private SearchComputationResult(int snapshotItemCount, int matchCount, java.util.List<FileItem> hugeFolderMatches) {
+            this.snapshotItemCount = snapshotItemCount;
+            this.matchCount = matchCount;
+            this.hugeFolderMatches = hugeFolderMatches == null ? java.util.List.of() : java.util.List.copyOf(hugeFolderMatches);
+        }
+    }
 
     private static final class InlineRenameSession {
         private final InlineRenameSessionKind kind;
@@ -557,6 +578,18 @@ private volatile long hugeFolderScannedTotal = 0L;
     // Phase 3.5.4: Search (fast filter of current folder)
     private final javafx.animation.PauseTransition searchDebounce;
     private volatile String activeSearchQuery = "";
+    private volatile String searchSessionDisplayQuery = "";
+    private volatile SearchSessionState searchSessionState = SearchSessionState.IDLE;
+    private final AtomicLong searchSessionSeq = new AtomicLong(0L);
+    private volatile Path searchSessionScopeRoot;
+    private volatile Path searchSessionRestorePath;
+    private volatile int searchSessionRestoreIndex = -1;
+    private volatile int searchSessionSnapshotItemCount = 0;
+    private volatile int searchSessionPredictedMatchCount = -1;
+    private volatile boolean suppressSearchFieldListener = false;
+    private VBox searchResultsStateSurface;
+    private Label searchResultsStateTitle;
+    private Label searchResultsStateSubtitle;
     // Phase 4B.3.x: Find Next / Previous within search results
     private volatile String lastFindQuery = "";
     private volatile int lastFindIndex = -1;
@@ -672,10 +705,13 @@ private volatile Path hoverPrefetchTarget;
 private final ExecutorService hoverPrefetchExecutor;
     private boolean navigationPaneGrowthLockInstalled;
     private boolean navigationPaneDividerAdjustPending;
+    private boolean navigationPaneDividerProgrammaticChange;
+    private boolean navigationPaneDividerTrackingInstalled;
     private double pendingNavigationPaneShellWidthPx = -1.0;
     private double lastKnownNavigationPaneShellWidthPx = NAV_TREE_PREF_WIDTH_PX + (NAV_TREE_SHELL_PADDING_PX * 2.0);
     private double lastKnownMainSplitWidthPx = -1.0;
-    // Navigation tree sizing: preserve the current width when the window grows, but allow shrink down to a compact minimum.
+    // Navigation tree sizing: keep the left navigation shell width pinned while the window resizes,
+    // so growth and shrink are absorbed by the file view unless the user explicitly drags the divider.
     private static final double NAV_TREE_MIN_WIDTH_PX = 54.0;
     private static final double NAV_TREE_SHELL_PADDING_PX = 3.0;
     private static final double NAV_TREE_SHELL_MIN_WIDTH_PX = NAV_TREE_MIN_WIDTH_PX + (NAV_TREE_SHELL_PADDING_PX * 2.0);
@@ -684,6 +720,7 @@ private final ExecutorService hoverPrefetchExecutor;
     private static final double NAV_TREE_PREF_WIDTH_PX = 320.0;
     // Shared background I/O executor for directory listing and paste/copy/move operations.
     private final ExecutorService ioExecutor;
+    private final java.util.concurrent.atomic.AtomicBoolean controllerDisposed = new java.util.concurrent.atomic.AtomicBoolean(false);
     // Phase 4B.2: Low-CPU, budgeted metadata fetching (size/mtime/type) for selected/nearby rows.
     private com.fileexplorer.service.filesystem.FileMetadataBudgetService metadataBudgetService;
     // Phase 4B.2: fill-all metadata pass (bounded, low CPU but complete)
@@ -826,9 +863,57 @@ this.tableIndexByPath = new HashMap<>();
         this.showItemCheckBoxes = false;
         this.focusCycleIndex = 0;
     }
+
+    private boolean isIoExecutorAvailable() {
+        return !controllerDisposed.get()
+                && ioExecutor != null
+                && !ioExecutor.isShutdown()
+                && !ioExecutor.isTerminated();
+    }
+
+    private boolean isHoverPrefetchExecutorAvailable() {
+        return !controllerDisposed.get()
+                && hoverPrefetchExecutor != null
+                && !hoverPrefetchExecutor.isShutdown()
+                && !hoverPrefetchExecutor.isTerminated();
+    }
+
+    private void executeOnIoExecutor(String purpose, Runnable task) {
+        if (task == null || !isIoExecutorAvailable()) {
+            return;
+        }
+        try {
+            ioExecutor.execute(() -> {
+                if (controllerDisposed.get()) {
+                    return;
+                }
+                task.run();
+            });
+        } catch (java.util.concurrent.RejectedExecutionException ex) {
+            LOG.fine(() -> "Skipping IO task after executor shutdown: " + purpose);
+        }
+    }
+
+    private void executeOnHoverPrefetchExecutor(String purpose, Runnable task) {
+        if (task == null || !isHoverPrefetchExecutorAvailable()) {
+            return;
+        }
+        try {
+            hoverPrefetchExecutor.execute(() -> {
+                if (controllerDisposed.get()) {
+                    return;
+                }
+                task.run();
+            });
+        } catch (java.util.concurrent.RejectedExecutionException ex) {
+            LOG.fine(() -> "Skipping hover-prefetch task after executor shutdown: " + purpose);
+        }
+    }
+
 @Override
 /**
  * attach.
+
  *
  * @param context TODO
  */
@@ -931,28 +1016,28 @@ public void attach(ExplorerContext context) {
         configureStructuredCommandBarMenuButton(newMenuButton);
     }
     if (cutButton != null) {
-        configureCommandBarIconOnlyControl(cutButton);
+        configureCommandBarIconAndTextControl(cutButton);
         cutButton.setOnAction(e -> cutSelection());
     }
     if (copyButton != null) {
-        configureCommandBarIconOnlyControl(copyButton);
+        configureCommandBarIconAndTextControl(copyButton);
         copyButton.setOnAction(e -> copySelection());
     }
     if (pasteButton != null) {
-        configureCommandBarIconOnlyControl(pasteButton);
+        configureCommandBarIconAndTextControl(pasteButton);
         pasteButton.setOnAction(e -> pasteIntoCurrentFolder());
     }
     if (renameButton != null) {
-        configureCommandBarIconOnlyControl(renameButton);
+        configureCommandBarIconAndTextControl(renameButton);
         renameButton.setOnAction(e -> renameSelection());
     }
     // Optional / not yet implemented features in this codebase:
     if (shareButton != null) {
-        configureCommandBarIconOnlyControl(shareButton);
+        configureCommandBarIconAndTextControl(shareButton);
         shareButton.setOnAction(e -> setStatus("Share: not implemented yet."));
     }
     if (deleteButton != null) {
-        configureCommandBarIconOnlyControl(deleteButton);
+        configureCommandBarIconAndTextControl(deleteButton);
         deleteButton.setOnAction(e -> moveSelectionToTrash());
     }
     if (backButton != null) {
@@ -985,9 +1070,18 @@ public void attach(ExplorerContext context) {
     if (viewMenuButton != null) {
         configureStructuredCommandBarMenuButton(viewMenuButton);
     }
+    if (filterMenuButton != null) {
+        configureStructuredCommandBarMenuButton(filterMenuButton);
+    }
     if (previewToggle != null) {
-        syncCommandBarTooltip(previewToggle);
+        configureCommandBarRailToggle(previewToggle);
         previewToggle.setOnAction(e -> setPreviewPaneVisible(previewToggle.isSelected()));
+    }
+    if (operationsToggle != null) {
+        configureCommandBarRailToggle(operationsToggle);
+    }
+    if (detailsToggle != null) {
+        configureCommandBarRailToggle(detailsToggle);
     }
     wireSeeMoreMenuActions();
     updateNavigationButtonsState();
@@ -1026,6 +1120,20 @@ public void attach(ExplorerContext context) {
             control.setAccessibleText(label.trim());
         }
     }
+
+    private void configureCommandBarRailToggle(javafx.scene.control.ToggleButton control) {
+        if (control == null) {
+            return;
+        }
+        configureCommandBarIconAndTextControl(control);
+        if (!control.getStyleClass().contains("command-right-rail-toggle")) {
+            control.getStyleClass().add("command-right-rail-toggle");
+        }
+        control.setMnemonicParsing(false);
+        control.setContentDisplay(ContentDisplay.LEFT);
+        control.setGraphicTextGap(control.getGraphic() == null ? 0.0 : 6.0);
+    }
+
 
     private void configureStructuredCommandBarMenuButton(javafx.scene.control.MenuButton menuButton) {
         if (menuButton == null) {
@@ -1068,6 +1176,13 @@ public void attach(ExplorerContext context) {
         Node content = buildStructuredCommandBarMenuContent(menuButton, leadingGraphic, labelText);
         if (content != null) {
             content.setMouseTransparent(true);
+            /*
+             * HOTFIX195 final alignment corrective pass:
+             * the structured MenuButton skin still reads visually low compared to
+             * adjacent command-bar buttons, so lift the custom graphic content a
+             * full additional 2 px so it matches the Delete / Share / Preview row.
+             */
+            content.setTranslateY(-4.5);
             menuButton.setGraphic(content);
         }
         menuButton.setText("");
@@ -1095,7 +1210,10 @@ public void attach(ExplorerContext context) {
         textLabel.setMouseTransparent(true);
 
         StackPane chevronSlot = new StackPane();
+        iconSlot.setTranslateY(-1.0);
+        textLabel.setTranslateY(-0.75);
         chevronSlot.getStyleClass().add("command-bar-menu-chevron-slot");
+        chevronSlot.setTranslateY(-0.75);
         chevronSlot.setMouseTransparent(true);
         chevronSlot.getChildren().add(buildStructuredCommandBarMenuChevron());
 
@@ -1143,6 +1261,9 @@ public void attach(ExplorerContext context) {
         }
         if (menuButton == viewMenuButton) {
             return buildStructuredCommandBarViewVectorIcon();
+        }
+        if (menuButton == filterMenuButton) {
+            return buildStructuredCommandBarFilterVectorIcon();
         }
         return null;
     }
@@ -1193,6 +1314,7 @@ public void attach(ExplorerContext context) {
         imageView.setPickOnBounds(true);
         imageView.setMouseTransparent(true);
         imageView.getStyleClass().add("command-bar-menu-raster-icon");
+        imageView.setTranslateY(-0.35);
         return imageView;
     }
 
@@ -1207,10 +1329,21 @@ public void attach(ExplorerContext context) {
         return root;
     }
 
+    private Node buildStructuredCommandBarFilterVectorIcon() {
+        StackPane root = createStructuredCommandBarVectorIconRoot();
+        root.getChildren().addAll(
+                createStructuredCommandBarStrokePath("M 2.5 3.25 H 13.5"),
+                createStructuredCommandBarStrokePath("M 2.5 3.25 L 7.65 8.4"),
+                createStructuredCommandBarStrokePath("M 13.5 3.25 L 8.35 8.4"),
+                createStructuredCommandBarStrokePath("M 8 8.4 V 13")
+        );
+        return root;
+    }
+
     private StackPane createStructuredCommandBarVectorIconRoot() {
         StackPane root = new StackPane();
         root.getStyleClass().add("command-bar-menu-vector-icon-root");
-        root.setTranslateY(0.25);
+        root.setTranslateY(-0.35);
         root.setMinSize(24, 24);
         root.setPrefSize(24, 24);
         root.setMaxSize(24, 24);
@@ -2153,6 +2286,16 @@ private void initializeWithContext() {
         setViewMode(ViewMode.LARGE_ICONS);
     }
     @FXML
+    private void onStatusDetailsView(ActionEvent e) {
+        LogSupport.enter(LOG, "onStatusDetailsView");
+        setViewMode(ViewMode.DETAILS);
+    }
+    @FXML
+    private void onStatusLargeIconsView(ActionEvent e) {
+        LogSupport.enter(LOG, "onStatusLargeIconsView");
+        setViewMode(ViewMode.EXTRA_LARGE_ICONS);
+    }
+    @FXML
 /**
  * onDetailsToggle.
  *
@@ -2754,8 +2897,8 @@ if (!e.isAltDown() && !e.isControlDown() && !e.isMetaDown() && !e.isShiftDown())
                 e.consume();
                 return;
             }
-            // Ctrl + F: focus search box
-            if (e.isControlDown() && !e.isShiftDown() && code == KeyCode.F) {
+            // Ctrl + F / Ctrl + E: focus search box
+            if (e.isControlDown() && !e.isShiftDown() && (code == KeyCode.F || code == KeyCode.E)) {
                 focusSearch();
                 e.consume();
                 return;
@@ -3147,31 +3290,24 @@ private double clamp(double v, double lo, double hi) {
         }
         navigationPaneGrowthLockInstalled = true;
         navigationPaneShell.setMinWidth(NAV_TREE_SHELL_MIN_WIDTH_PX);
-        navigationPaneShell.widthProperty().addListener((obs, oldWidth, newWidth) -> {
-            if (newWidth != null && newWidth.doubleValue() > 0.0) {
-                lastKnownNavigationPaneShellWidthPx = Math.max(NAV_TREE_SHELL_MIN_WIDTH_PX, newWidth.doubleValue());
-            }
-        });
+        installNavigationPaneDividerWidthTracking();
         mainSplitPane.widthProperty().addListener((obs, oldWidth, newWidth) -> {
             if (!showNavigationPane || newWidth == null) {
                 return;
             }
-            double previousWidth = oldWidth == null ? lastKnownMainSplitWidthPx : oldWidth.doubleValue();
             double currentWidth = newWidth.doubleValue();
             if (currentWidth <= 0.0) {
                 return;
             }
-            if (previousWidth <= 0.0) {
-                lastKnownMainSplitWidthPx = currentWidth;
+            double previousWidth = oldWidth == null ? lastKnownMainSplitWidthPx : oldWidth.doubleValue();
+            lastKnownMainSplitWidthPx = currentWidth;
+            if (previousWidth > 0.0 && Math.abs(currentWidth - previousWidth) < 0.5) {
                 return;
             }
-            lastKnownMainSplitWidthPx = currentWidth;
-            if (currentWidth > previousWidth + 0.5) {
-                double targetWidth = navigationPaneShell.getWidth() > 0.0
-                        ? navigationPaneShell.getWidth()
-                        : lastKnownNavigationPaneShellWidthPx;
-                scheduleNavigationPaneDividerForShellWidth(targetWidth);
-            }
+            double targetWidth = lastKnownNavigationPaneShellWidthPx > 0.0
+                    ? lastKnownNavigationPaneShellWidthPx
+                    : (navigationPaneShell.getWidth() > 0.0 ? navigationPaneShell.getWidth() : NAV_TREE_SHELL_MIN_WIDTH_PX);
+            scheduleNavigationPaneDividerForShellWidth(targetWidth);
         });
         Platform.runLater(() -> {
             if (navigationPaneShell.getWidth() > 0.0) {
@@ -3180,6 +3316,31 @@ private double clamp(double v, double lo, double hi) {
             if (mainSplitPane.getWidth() > 0.0) {
                 lastKnownMainSplitWidthPx = mainSplitPane.getWidth();
             }
+            installNavigationPaneDividerWidthTracking();
+            if (showNavigationPane) {
+                scheduleNavigationPaneDividerForShellWidth(lastKnownNavigationPaneShellWidthPx);
+            }
+        });
+    }
+
+    private void installNavigationPaneDividerWidthTracking() {
+        if (navigationPaneDividerTrackingInstalled || mainSplitPane == null || mainSplitPane.getDividers().isEmpty()) {
+            return;
+        }
+        navigationPaneDividerTrackingInstalled = true;
+        mainSplitPane.getDividers().get(0).positionProperty().addListener((obs, oldValue, newValue) -> {
+            if (!showNavigationPane || navigationPaneDividerProgrammaticChange || navigationPaneShell == null) {
+                return;
+            }
+            Platform.runLater(() -> {
+                if (!showNavigationPane || navigationPaneDividerProgrammaticChange || navigationPaneShell == null) {
+                    return;
+                }
+                double shellWidth = navigationPaneShell.getWidth();
+                if (shellWidth > 0.0) {
+                    lastKnownNavigationPaneShellWidthPx = Math.max(NAV_TREE_SHELL_MIN_WIDTH_PX, shellWidth);
+                }
+            });
         });
     }
 
@@ -3203,9 +3364,13 @@ private double clamp(double v, double lo, double hi) {
             }
             double ratio = clamp(pendingNavigationPaneShellWidthPx / totalWidth, 0.0, 0.95);
             try {
+                navigationPaneDividerProgrammaticChange = true;
                 mainSplitPane.setDividerPositions(ratio);
+                lastKnownNavigationPaneShellWidthPx = Math.max(NAV_TREE_SHELL_MIN_WIDTH_PX, pendingNavigationPaneShellWidthPx);
             } catch (Exception ex) {
-                LOG.log(Level.FINE, "Unable to preserve navigation pane width on grow", ex);
+                LOG.log(Level.FINE, "Unable to preserve navigation pane width during window resize", ex);
+            } finally {
+                Platform.runLater(() -> navigationPaneDividerProgrammaticChange = false);
             }
         });
     }
@@ -3250,7 +3415,7 @@ private double clamp(double v, double lo, double hi) {
         if (startupTreeSkeletonMarked.compareAndSet(false, true)) {
             StartupTrace.mark("navigation tree skeleton attached");
         }
-        ioExecutor.execute(() -> {
+        executeOnIoExecutor("buildNavigationTreeRoot", () -> {
             TreeItem<Path> root = treeBuildService.buildComputerRoot();
             Platform.runLater(() -> {
                 folderTree.setRoot(root);
@@ -4819,6 +4984,10 @@ colType.setCellValueFactory(param -> {
         private final TextField renameField = new TextField();
         private final InvalidationListener rowStateSync = obs -> syncTextFill();
         private boolean suppressFocusCommit;
+        private String lastIdentity;
+        private Path lastPath;
+        private java.util.concurrent.CompletableFuture<Image> pendingIcon;
+        private long bindingStamp;
 
         private ExplorerNameTableCell() {
             box.setAlignment(Pos.CENTER_LEFT);
@@ -4868,6 +5037,13 @@ colType.setCellValueFactory(param -> {
             return p != null && p.equals(inlineRenameTablePath);
         }
 
+        private VisibleThumbnailManager thumbManager() {
+            if (fileTable == null || context == null) {
+                return null;
+            }
+            return TableViewSupport.visibleThumbnailManager(fileTable, context);
+        }
+
         private void syncTextFill() {
             textLabel.setTextFill(resolveExplorerTableTextFill(getTableRow()));
         }
@@ -4875,27 +5051,69 @@ colType.setCellValueFactory(param -> {
         @Override
         protected void updateItem(String item, boolean empty) {
             super.updateItem(item, empty);
+
+            if (pendingIcon != null) {
+                pendingIcon.cancel(false);
+                pendingIcon = null;
+            }
+            bindingStamp++;
+
+            VisibleThumbnailManager thumbMgr = thumbManager();
             if (empty) {
+                lastIdentity = null;
+                lastPath = null;
+                if (thumbMgr != null) {
+                    thumbMgr.unregister(this);
+                }
                 setText(null);
                 setGraphic(null);
                 setMouseTransparent(true);
                 return;
             }
+
             FileItem fi = (getTableRow() != null) ? getTableRow().getItem() : null;
             Path p = (fi != null) ? fi.path() : null;
-            double iconPx = clamp(uiFontSizePx + 4.0, 16.0, 24.0);
-            Image img;
-            try {
-                String identity = fileMetadataService.iconIdentity(p);
-                img = IconLoader.loadForIdentity(identity, themeService.isDarkPreferred(), (int) Math.round(iconPx));
-            } catch (Exception ex) {
-                img = IconLoader.load(IconLoader.IconType.FILE, themeService.isDarkPreferred(), (int) Math.round(iconPx));
-            }
+            final boolean dark = themeService != null && themeService.isDarkPreferred();
+            final int iconPx = (int) Math.round(clamp(uiFontSizePx + 4.0, 16.0, 24.0));
+            final String identity = resolveDetailsCellIdentity(p);
+
+            lastIdentity = identity;
+            lastPath = p;
+
             iconView.setFitWidth(iconPx);
             iconView.setFitHeight(iconPx);
-            iconView.setImage(img);
+            iconView.setImage(IconLoader.loadForIdentity(identity, dark, iconPx));
             syncTextFill();
             setText(null);
+
+            final long capturedStamp = bindingStamp;
+            pendingIcon = AsyncIconService.getInstance().request(
+                    identity,
+                    dark,
+                    iconPx,
+                    AsyncIconService.RequestPriority.VISIBLE);
+            pendingIcon.thenAccept(img -> Platform.runLater(() -> {
+                if (capturedStamp != bindingStamp) return;
+                if (!Objects.equals(lastIdentity, identity)) return;
+                if (!Objects.equals(lastPath, p)) return;
+                if (getTableRow() == null || getTableRow().getItem() != fi) return;
+                if (img == null) return;
+                iconView.setImage(img);
+            }));
+
+            if (thumbMgr != null && p != null && ImageSupport.isThumbCandidate(p)) {
+                thumbMgr.register(this, p, iconPx, identity, img -> {
+                    if (capturedStamp != bindingStamp) return;
+                    if (!Objects.equals(lastPath, p)) return;
+                    if (!Objects.equals(lastIdentity, identity)) return;
+                    if (getTableRow() == null || getTableRow().getItem() != fi) return;
+                    if (img == null) return;
+                    iconView.setImage(img);
+                });
+            } else if (thumbMgr != null) {
+                thumbMgr.unregister(this);
+            }
+
             if (isEditingTarget()) {
                 suppressFocusCommit = false;
                 renameField.setText(resolveInlineRenameInitialText(p, item));
@@ -4912,6 +5130,19 @@ colType.setCellValueFactory(param -> {
                 setGraphic(box);
                 setMouseTransparent(true);
             }
+        }
+
+        private String resolveDetailsCellIdentity(Path p) {
+            try {
+                if (fileMetadataService != null) {
+                    String identity = fileMetadataService.iconIdentity(p);
+                    if (identity != null && !identity.isBlank()) {
+                        return identity;
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+            return "type:" + IconLoader.IconType.FILE.name();
         }
 
         private void commitInlineRename() {
@@ -8307,7 +8538,7 @@ StringBuilder sb = new StringBuilder();
             return;
         }
         final boolean dark = themeService != null && themeService.isDarkPreferred();
-        final int px = (int) Math.round(clamp(iconSizePx, 16.0, 128.0));
+        final int px = (int) Math.round(clamp(iconSizePx, 16.0, ICON_SIZE_MAX));
         Path path = item.path();
         if (ImageSupport.isThumbCandidate(path)) {
             AsyncThumbnailService.getInstance().request(
@@ -8488,7 +8719,7 @@ StringBuilder sb = new StringBuilder();
                 if (!hoverPrefetchEnabled || target == null) {
                     return;
                 }
-                hoverPrefetchExecutor.execute(() -> runHoverPrefetch(target, expected));
+                executeOnHoverPrefetchExecutor("scheduleHoverPrefetch", () -> runHoverPrefetch(target, expected));
             });
         } else {
             hoverPrefetchTimer.setDuration(HOVER_PREFETCH_DELAY);
@@ -8563,10 +8794,10 @@ StringBuilder sb = new StringBuilder();
             }
             boolean dark = themeService != null && themeService.isDarkPreferred();
             int treePx = (int) Math.round(clamp(effectiveTreeIconPx(), 16.0, 32.0));
-            int iconPx = (int) Math.round(clamp(iconSizePx, 16.0, 128.0));
+            int iconPx = (int) Math.round(clamp(iconSizePx, 16.0, ICON_SIZE_MAX));
             int[] sizes = new int[] { 16, 20, 24, 32, 48, 64, 96, treePx, iconPx };
             for (int s : sizes) {
-                int px = (int) Math.round(clamp((double) s, 16.0, 128.0));
+                int px = (int) Math.round(clamp((double) s, 16.0, ICON_SIZE_MAX));
                 try {
                     IconLoader.loadForIdentity(identity, dark, px);
                 } catch (Exception ex) {
@@ -8969,32 +9200,340 @@ private String displayNameForTable(Path p) {
         if (searchField == null) {
             return;
         }
-        // Keep the search box lightweight: debounce changes and filter the current listing in-memory.
-        searchField.textProperty().addListener((obs, oldV, newV) -> {
-            searchDebounce.stop();
-            searchDebounce.setOnFinished(_ -> applySearchFilterNow(newV));
-            searchDebounce.playFromStart();
-        });
+        ensureSearchResultsStateSurfaceInstalled();
+        searchField.textProperty().addListener((obs, oldV, newV) -> handleSearchFieldChanged(newV));
+        searchField.focusedProperty().addListener((obs, oldV, newV) -> updateSearchChromeState());
         searchField.addEventFilter(javafx.scene.input.KeyEvent.KEY_PRESSED, e -> {
             if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
-                if (!searchField.getText().isEmpty()) {
-                    searchField.clear();
+                if (!normalizeSearchQuery(searchField.getText()).isEmpty()) {
+                    onClearSearchAction();
                     e.consume();
                     return;
                 }
+                if (searchSessionState != SearchSessionState.IDLE) {
+                    endSearchSession(true, true);
+                    e.consume();
+                    return;
+                }
+                focusPrimaryFileSurface();
+                e.consume();
+                return;
             }
             if (e.getCode() == javafx.scene.input.KeyCode.ENTER) {
                 // Phase 4B.3.x: Enter jumps to next match (Shift+Enter = previous)
                 if (activeSearchQuery != null && !activeSearchQuery.isBlank()) {
                     findNextMatch(!e.isShiftDown());
-                    try { fileTable.requestFocus(); } catch (Exception ignored) {}
+                    focusPrimaryFileSurface();
                 }
                 e.consume();
             }
-});
+        });
         // Initial predicate
         updateSearchPrompt(currentDirectory);
+        updateSearchChromeState();
         applySearchFilterNow(searchField.getText());
+        updateSearchResultSurfaceState();
+    }
+
+    private void handleSearchFieldChanged(String rawQuery) {
+        updateSearchChromeState();
+        if (suppressSearchFieldListener) {
+            updateSearchResultSurfaceState();
+            return;
+        }
+        if (homeActive) {
+            searchDebounce.stop();
+            return;
+        }
+        String normalized = normalizeSearchQuery(rawQuery);
+        searchSessionDisplayQuery = normalized;
+        if (normalized.isEmpty()) {
+            searchDebounce.stop();
+            endSearchSession(true, false);
+            return;
+        }
+        beginSearchSessionIfNeeded();
+        updateSearchSessionState(SearchSessionState.TYPING);
+        final long token = searchSessionSeq.incrementAndGet();
+        final Path scope = searchSessionScopeRoot != null ? searchSessionScopeRoot : currentDirectory;
+        final java.util.List<FileItem> snapshot = snapshotItemsForSearchComputation();
+        final boolean hugeMode = hugeFolderModeActive;
+        final boolean includeExtensions = showFileNameExtensions;
+        searchDebounce.stop();
+        searchDebounce.setOnFinished(_ -> launchSearchComputation(token, scope, rawQuery, normalized, snapshot, hugeMode, includeExtensions));
+        searchDebounce.playFromStart();
+    }
+
+    private void launchSearchComputation(long token,
+                                         Path scope,
+                                         String rawQuery,
+                                         String normalizedQuery,
+                                         java.util.List<FileItem> snapshot,
+                                         boolean hugeMode,
+                                         boolean includeExtensions) {
+        if (normalizedQuery == null || normalizedQuery.isBlank()) {
+            endSearchSession(true, false);
+            return;
+        }
+        updateSearchSessionState(SearchSessionState.SEARCHING);
+        executeOnIoExecutor("launchSearchComputation", () -> {
+            SearchComputationResult computed = computeSearchResult(snapshot, normalizedQuery, hugeMode, includeExtensions);
+            Platform.runLater(() -> applySearchComputationResult(token, scope, rawQuery, normalizedQuery, computed));
+        });
+    }
+
+    private SearchComputationResult computeSearchResult(java.util.List<FileItem> snapshot,
+                                                        String normalizedQuery,
+                                                        boolean hugeMode,
+                                                        boolean includeExtensions) {
+        if (snapshot == null || snapshot.isEmpty()) {
+            return new SearchComputationResult(0, 0, hugeMode ? java.util.List.of() : null);
+        }
+        java.util.ArrayList<FileItem> hugeMatches = hugeMode ? new java.util.ArrayList<>() : null;
+        int matchCount = 0;
+        for (FileItem item : snapshot) {
+            String candidate = searchCandidateName(item, includeExtensions);
+            if (candidate == null || candidate.isBlank()) {
+                continue;
+            }
+            if (candidate.toLowerCase(java.util.Locale.ROOT).contains(normalizedQuery.toLowerCase(java.util.Locale.ROOT))) {
+                matchCount++;
+                if (hugeMatches != null) {
+                    hugeMatches.add(item);
+                }
+            }
+        }
+        return new SearchComputationResult(snapshot.size(), matchCount, hugeMatches);
+    }
+
+    private java.util.List<FileItem> snapshotItemsForSearchComputation() {
+        if (hugeFolderModeActive) {
+            return new java.util.ArrayList<>(hugeFolderItems);
+        }
+        return new java.util.ArrayList<>(tableItems);
+    }
+
+    private String searchCandidateName(FileItem item, boolean includeExtensions) {
+        if (item == null) {
+            return "";
+        }
+        String name = item.name();
+        if (name == null || name.isBlank()) {
+            Path path = item.path();
+            Path fileName = path == null ? null : path.getFileName();
+            name = fileName != null ? fileName.toString() : (path == null ? "" : path.toString());
+        }
+        if (includeExtensions) {
+            return name;
+        }
+        int dot = name.lastIndexOf('.');
+        if (dot <= 0) {
+            return name;
+        }
+        return name.substring(0, dot);
+    }
+
+    private void applySearchComputationResult(long token,
+                                              Path scope,
+                                              String rawQuery,
+                                              String normalizedQuery,
+                                              SearchComputationResult computed) {
+        if (token != searchSessionSeq.get()) {
+            return;
+        }
+        if (scope != null && currentDirectory != null && !java.util.Objects.equals(scope.normalize(), currentDirectory.normalize())) {
+            return;
+        }
+        if (!java.util.Objects.equals(normalizedQuery.toLowerCase(java.util.Locale.ROOT), normalizeSearchQuery(searchField == null ? "" : searchField.getText()).toLowerCase(java.util.Locale.ROOT))) {
+            return;
+        }
+        searchSessionSnapshotItemCount = computed == null ? 0 : computed.snapshotItemCount;
+        searchSessionPredictedMatchCount = computed == null ? -1 : computed.matchCount;
+        applySearchFilterNow(rawQuery, computed == null ? null : computed.hugeFolderMatches);
+    }
+
+    private String normalizeSearchQuery(String rawQuery) {
+        return rawQuery == null ? "" : rawQuery.trim();
+    }
+
+    private void beginSearchSessionIfNeeded() {
+        Path scope = currentDirectory;
+        if (scope == null) {
+            return;
+        }
+        if (searchSessionScopeRoot != null && java.util.Objects.equals(searchSessionScopeRoot.normalize(), scope.normalize())) {
+            return;
+        }
+        searchSessionScopeRoot = scope;
+        searchSessionRestorePath = getFocusedOrSelectedPath();
+        searchSessionRestoreIndex = getFocusedOrSelectedIndex();
+        searchSessionPredictedMatchCount = -1;
+        searchSessionSnapshotItemCount = 0;
+    }
+
+    private void endSearchSession(boolean restoreSelection, boolean focusFileSurface) {
+        searchDebounce.stop();
+        searchSessionSeq.incrementAndGet();
+        Path restorePath = searchSessionRestorePath;
+        int restoreIndex = searchSessionRestoreIndex;
+        Path scope = searchSessionScopeRoot;
+        searchSessionDisplayQuery = "";
+        searchSessionPredictedMatchCount = -1;
+        searchSessionSnapshotItemCount = 0;
+        searchSessionScopeRoot = null;
+        searchSessionRestorePath = null;
+        searchSessionRestoreIndex = -1;
+        updateSearchSessionState(SearchSessionState.IDLE);
+        applySearchFilterNow("", null);
+        if (restoreSelection && scope != null && currentDirectory != null
+                && java.util.Objects.equals(scope.normalize(), currentDirectory.normalize())) {
+            restoreSelectionAfterSearchExit(restorePath, restoreIndex);
+        }
+        if (focusFileSurface) {
+            focusPrimaryFileSurface();
+        }
+        updateSearchResultSurfaceState();
+    }
+
+    private void restoreSelectionAfterSearchExit(Path restorePath, int restoreIndex) {
+        if (fileTable == null || fileTable.getSelectionModel() == null) {
+            return;
+        }
+        int index = findTableIndexForPath(restorePath);
+        if (index < 0 && restoreIndex >= 0 && restoreIndex < fileTable.getItems().size()) {
+            index = restoreIndex;
+        }
+        if (index < 0) {
+            return;
+        }
+        try {
+            fileTable.getSelectionModel().clearAndSelect(index);
+            if (fileTable.getFocusModel() != null) {
+                fileTable.getFocusModel().focus(index);
+            }
+            fileTable.scrollTo(Math.max(0, index - 2));
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void cancelSearchSessionForDirectoryChange(Path nextDirectory) {
+        if (nextDirectory == null) {
+            return;
+        }
+        if (searchSessionScopeRoot == null) {
+            return;
+        }
+        try {
+            if (java.util.Objects.equals(searchSessionScopeRoot.normalize(), nextDirectory.normalize())) {
+                return;
+            }
+        } catch (Exception ignored) {
+            if (java.util.Objects.equals(searchSessionScopeRoot, nextDirectory)) {
+                return;
+            }
+        }
+        searchDebounce.stop();
+        searchSessionSeq.incrementAndGet();
+        searchSessionDisplayQuery = "";
+        searchSessionPredictedMatchCount = -1;
+        searchSessionSnapshotItemCount = 0;
+        searchSessionScopeRoot = null;
+        searchSessionRestorePath = null;
+        searchSessionRestoreIndex = -1;
+        updateSearchSessionState(SearchSessionState.IDLE);
+        if (searchField != null) {
+            setSearchFieldTextSilently("");
+        }
+        applySearchFilterNow("", null);
+    }
+
+    private void setSearchFieldTextSilently(String value) {
+        if (searchField == null) {
+            return;
+        }
+        suppressSearchFieldListener = true;
+        try {
+            searchField.setText(value == null ? "" : value);
+        } finally {
+            suppressSearchFieldListener = false;
+        }
+        updateSearchChromeState();
+    }
+
+    private void updateSearchSessionState(SearchSessionState nextState) {
+        searchSessionState = nextState == null ? SearchSessionState.IDLE : nextState;
+        updateSearchChromeState();
+        updateSearchResultSurfaceState();
+    }
+
+    private void ensureSearchResultsStateSurfaceInstalled() {
+        if (viewHost == null || searchResultsStateSurface != null) {
+            return;
+        }
+        Label title = new Label();
+        title.getStyleClass().add("search-results-state-title");
+        title.setWrapText(true);
+
+        Label subtitle = new Label();
+        subtitle.getStyleClass().add("search-results-state-subtitle");
+        subtitle.setWrapText(true);
+        subtitle.setMaxWidth(520.0);
+
+        VBox surface = new VBox(6.0, title, subtitle);
+        surface.getStyleClass().add("search-results-state-surface");
+        surface.setAlignment(Pos.CENTER);
+        surface.setManaged(false);
+        surface.setVisible(false);
+        surface.setMouseTransparent(true);
+
+        searchResultsStateSurface = surface;
+        searchResultsStateTitle = title;
+        searchResultsStateSubtitle = subtitle;
+        viewHost.getChildren().add(surface);
+        StackPane.setAlignment(surface, Pos.CENTER);
+    }
+
+    private void updateSearchResultSurfaceState() {
+        ensureSearchResultsStateSurfaceInstalled();
+        boolean searchActive = activeSearchQuery != null && !activeSearchQuery.isBlank();
+        if (viewHost != null) {
+            setStyleClass(viewHost, "search-results-active", searchActive);
+            setStyleClass(viewHost, "search-results-empty", searchActive && !directoryLoading && fileTable != null
+                    && fileTable.getItems() != null && fileTable.getItems().isEmpty());
+        }
+        if (searchResultsStateSurface == null || searchResultsStateTitle == null || searchResultsStateSubtitle == null) {
+            return;
+        }
+        if (homeActive || !searchActive) {
+            searchResultsStateSurface.setVisible(false);
+            searchResultsStateSurface.toBack();
+            return;
+        }
+        int visible = (fileTable != null && fileTable.getItems() != null) ? fileTable.getItems().size() : 0;
+        String scope = directoryDisplayName(searchSessionScopeRoot != null ? searchSessionScopeRoot : currentDirectory);
+        if (scope == null || scope.isBlank()) {
+            scope = "this folder";
+        }
+        String queryDisplay = searchSessionDisplayQuery == null || searchSessionDisplayQuery.isBlank()
+                ? activeSearchQuery
+                : searchSessionDisplayQuery;
+        if (directoryLoading && visible == 0) {
+            searchResultsStateTitle.setText("Searching…");
+            searchResultsStateSubtitle.setText("Looking for \"" + queryDisplay + "\" in " + scope + ".");
+            searchResultsStateSurface.setVisible(true);
+            searchResultsStateSurface.toFront();
+            return;
+        }
+        if (visible == 0) {
+            searchResultsStateTitle.setText("No results found");
+            searchResultsStateSubtitle.setText("No items matched \"" + queryDisplay + "\" in " + scope
+                    + ". Clear the search to return to the folder view.");
+            searchResultsStateSurface.setVisible(true);
+            searchResultsStateSurface.toFront();
+            return;
+        }
+        searchResultsStateSurface.setVisible(false);
+        searchResultsStateSurface.toBack();
     }
     // Phase 4B.3.x: Find Next / Previous for the active search query.
     // Forward=true => next; Forward=false => previous.
@@ -9071,7 +9610,12 @@ private String displayNameForTable(Path p) {
  * @param rawQuery TODO
  */
     private void applySearchFilterNow(String rawQuery) {
-        String q = (rawQuery == null) ? "" : rawQuery.trim().toLowerCase(java.util.Locale.ROOT);
+        applySearchFilterNow(rawQuery, null);
+    }
+
+    private void applySearchFilterNow(String rawQuery, java.util.List<FileItem> precomputedHugeMatches) {
+        String normalized = normalizeSearchQuery(rawQuery);
+        String q = normalized.toLowerCase(java.util.Locale.ROOT);
         activeSearchQuery = q;
         if (!java.util.Objects.equals(lastFindQuery, q)) {
             lastFindQuery = q;
@@ -9085,10 +9629,14 @@ private String displayNameForTable(Path p) {
             hugeFolderPageStart = 0;
             hugeFolderSearchItems.clear();
             if (hugeFolderSearchActive) {
-                for (FileItem fi : hugeFolderItems) {
-                    String name = (fi == null ? null : fi.name());
-                    if (name != null && name.toLowerCase(java.util.Locale.ROOT).contains(q)) {
-                        hugeFolderSearchItems.add(fi);
+                if (precomputedHugeMatches != null && !precomputedHugeMatches.isEmpty()) {
+                    hugeFolderSearchItems.addAll(precomputedHugeMatches);
+                } else {
+                    for (FileItem fi : hugeFolderItems) {
+                        String name = (fi == null ? null : fi.name());
+                        if (name != null && name.toLowerCase(java.util.Locale.ROOT).contains(q)) {
+                            hugeFolderSearchItems.add(fi);
+                        }
                     }
                 }
             }
@@ -9131,6 +9679,16 @@ private String displayNameForTable(Path p) {
             });
         }
         // Keep status text honest when filtering is active.
+        int visibleCount = (fileTable != null && fileTable.getItems() != null) ? fileTable.getItems().size() : 0;
+        if (q.isEmpty()) {
+            updateSearchSessionState(SearchSessionState.IDLE);
+        } else if (directoryLoading && visibleCount == 0) {
+            updateSearchSessionState(SearchSessionState.SEARCHING);
+        } else if (visibleCount > 0) {
+            updateSearchSessionState(SearchSessionState.RESULTS);
+        } else {
+            updateSearchSessionState(SearchSessionState.NO_RESULTS);
+        }
         updateStatusCounts();
         // If icon view is currently visible, rebuild it from the filtered set.
         if (viewMode != null && viewMode != ViewMode.DETAILS) {
@@ -9161,14 +9719,54 @@ private String displayNameForTable(Path p) {
         if (statusLabel == null) return;
         int visible = (fileTable != null && fileTable.getItems() != null) ? fileTable.getItems().size() : 0;
         int total = (tableItems != null) ? tableItems.size() : 0;
-        if (activeSearchQuery != null && !activeSearchQuery.isEmpty() && total != visible) {
-            statusLabel.setText(String.format(java.util.Locale.ROOT, "%d of %d items", visible, total));
+        String scope = directoryDisplayName(searchSessionScopeRoot != null ? searchSessionScopeRoot : currentDirectory);
+        if (scope == null || scope.isBlank()) {
+            scope = "this folder";
+        }
+        if (activeSearchQuery != null && !activeSearchQuery.isEmpty()) {
+            String queryDisplay = searchSessionDisplayQuery == null || searchSessionDisplayQuery.isBlank()
+                    ? activeSearchQuery
+                    : searchSessionDisplayQuery;
+            if (directoryLoading && visible == 0) {
+                statusLabel.setText("Searching " + scope + " for \"" + queryDisplay + "\" …");
+                updateSearchSessionState(SearchSessionState.SEARCHING);
+            } else if (visible == 0) {
+                statusLabel.setText("No results for \"" + queryDisplay + "\" in " + scope);
+                updateSearchSessionState(SearchSessionState.NO_RESULTS);
+            } else {
+                statusLabel.setText(String.format(java.util.Locale.ROOT,
+                        "%d result%s in %s",
+                        visible,
+                        visible == 1 ? "" : "s",
+                        scope));
+                updateSearchSessionState(SearchSessionState.RESULTS);
+            }
+            if (locationLabel != null) {
+                String basePath = currentDirectory == null || fileMetadataService == null
+                        ? scope
+                        : fileMetadataService.displayPathForStatus(currentDirectory);
+                locationLabel.setText((directoryLoading ? "Searching in " : "Search results in ") + basePath);
+            }
         } else {
             statusLabel.setText(String.format(java.util.Locale.ROOT, "%d items", total));
+            if (locationLabel != null) {
+                if (homeActive) {
+                    locationLabel.setText("Home");
+                } else if (currentDirectory != null && fileMetadataService != null) {
+                    locationLabel.setText(fileMetadataService.displayPathForStatus(currentDirectory));
+                } else if (currentDirectory != null) {
+                    locationLabel.setText(currentDirectory.toString());
+                } else {
+                    locationLabel.setText("");
+                }
+            }
         }
+        updateSearchResultSurfaceState();
     }
+
     private void updateTopChromeState() {
         updateSearchPrompt(currentDirectory);
+        updateSearchChromeState();
         updateSelectionCommandState();
         syncPaneTogglesFromUiState();
         updateTabStrip();
@@ -9183,15 +9781,21 @@ private String displayNameForTable(Path p) {
         if (searchField == null) {
             return;
         }
+        String prompt;
         if (homeActive) {
-            searchField.setPromptText("Search Home");
-            return;
+            prompt = "Search Home";
+        } else {
+            String target = directoryDisplayName(directory);
+            if (target == null || target.isBlank()) {
+                target = "this folder";
+            }
+            prompt = "Search " + target;
         }
-        String target = directoryDisplayName(directory);
-        if (target == null || target.isBlank()) {
-            target = "this folder";
+        searchField.setPromptText(prompt);
+        Tooltip tooltip = searchField.getTooltip();
+        if (tooltip != null) {
+            tooltip.setText(homeActive ? "Search is unavailable on Home" : prompt);
         }
-        searchField.setPromptText("Search " + target);
     }
 
     private void scheduleCommandBarCompaction(double width) {
@@ -9718,6 +10322,7 @@ private void loadDirectoryIntoTableAsync(Path directory, boolean keepExistingUnt
     // Several downstream helpers (breadcrumb/status/progressive loader) rely on currentDirectory.
     // If callers pass a directory without having updated currentDirectory first, the table would
     // appear empty because the loader runs against the previous directory.
+    cancelSearchSessionForDirectoryChange(directory);
     currentDirectory = directory;
     noteDirectoryRealizationScopeChanged();
     clearExplorerMetadataTextCache();
@@ -10015,7 +10620,7 @@ if (hugeMode.get()) {
     // ---------------------------------------------------------------------
 
 private void startFillAllMetadataPassIfNeeded(long requestId) {
-    if (fileMetadataService == null || ioExecutor == null) return;
+    if (fileMetadataService == null || ioExecutor == null || !isIoExecutorAvailable()) return;
     if (fillAllMetadataSeq.get() == requestId && fillAllMetadataRunning.get()) return;
     // Only start one fill-all pass per directory-load sequence.
     if (!fillAllMetadataRunning.compareAndSet(false, true)) return;
@@ -10033,7 +10638,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
     final int perSecond = Math.max(1, Integer.getInteger("fileexplorer.metadata.fillAllStatsPerSecond", 25));
     final long nanosPer = 1_000_000_000L / perSecond;
 
-    ioExecutor.execute(() -> {
+    executeOnIoExecutor("startFillAllMetadataPassIfNeeded", () -> {
         long next = System.nanoTime();
         try {
             for (java.nio.file.Path p : targets) {
@@ -10413,10 +11018,10 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             case SMALL_ICONS -> 64;
             case MEDIUM_ICONS -> 88;
             case LARGE_ICONS -> 120;
-            case EXTRA_LARGE_ICONS -> 160;
+            case EXTRA_LARGE_ICONS -> 256;
             case TILES -> 96;
             case CONTENT -> 72;
-            default -> (int) Math.round(Math.max(18.0, Math.min(160.0, iconSizePx)));
+            default -> (int) Math.round(Math.max(18.0, Math.min(256.0, iconSizePx)));
         };
     }
 
@@ -11045,6 +11650,15 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                 && virtualIconGridView.isManaged();
     }
 
+    private boolean isUsingVirtualIconListForCurrentView() {
+        return (viewMode == ViewMode.LIST
+                || viewMode == ViewMode.TILES
+                || viewMode == ViewMode.CONTENT)
+                && virtualIconListView != null
+                && virtualIconListView.isVisible()
+                && virtualIconListView.isManaged();
+    }
+
     private double resolveIconFlowWrapLength(ViewMode mode, boolean verticalFlow) {
         if (!verticalFlow) {
             return resolveResponsiveIconViewportWidth();
@@ -11171,7 +11785,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             return Math.max(112.0, iconSizePx + 44.0);
         }
         return switch (mode) {
-            case EXTRA_LARGE_ICONS -> 228.0;
+            case EXTRA_LARGE_ICONS -> EXTRA_LARGE_ICON_CELL_PX;
             case LARGE_ICONS -> 184.0;
             case MEDIUM_ICONS -> 152.0;
             case SMALL_ICONS -> 116.0;
@@ -11181,6 +11795,29 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
 
     private double iconGridLabelWidthForMode(ViewMode mode) {
         return Math.max(88.0, iconGridTileWidthForMode(mode) - 22.0);
+    }
+
+    private double iconGridIconSlotSizeForMode(ViewMode mode) {
+        if (mode == ViewMode.EXTRA_LARGE_ICONS) {
+            return EXTRA_LARGE_ICON_CELL_PX;
+        }
+        return Math.max(16.0, iconSizePx);
+    }
+
+    private Node wrapGridIconNodeForMode(Node icon, ViewMode mode) {
+        if (icon == null) {
+            return new Region();
+        }
+        if (mode != ViewMode.EXTRA_LARGE_ICONS) {
+            return icon;
+        }
+        StackPane slot = new StackPane(icon);
+        slot.setAlignment(Pos.CENTER);
+        slot.setMinSize(EXTRA_LARGE_ICON_CELL_PX, EXTRA_LARGE_ICON_CELL_PX);
+        slot.setPrefSize(EXTRA_LARGE_ICON_CELL_PX, EXTRA_LARGE_ICON_CELL_PX);
+        slot.setMaxSize(EXTRA_LARGE_ICON_CELL_PX, EXTRA_LARGE_ICON_CELL_PX);
+        slot.getStyleClass().add("explorer-icon-slot-xl");
+        return slot;
     }
 
     private double iconGridTileSpacingForMode(ViewMode mode) {
@@ -11201,7 +11838,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             return new Insets(8.0, 10.0, 8.0, 10.0);
         }
         return switch (mode) {
-            case EXTRA_LARGE_ICONS -> new Insets(12.0, 12.0, 10.0, 12.0);
+            case EXTRA_LARGE_ICONS -> Insets.EMPTY;
             case LARGE_ICONS -> new Insets(10.0, 10.0, 8.0, 10.0);
             case MEDIUM_ICONS -> new Insets(8.0, 8.0, 6.0, 8.0);
             case SMALL_ICONS -> new Insets(6.0, 6.0, 4.0, 6.0);
@@ -11263,7 +11900,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         }
         switch (mode) {
             case EXTRA_LARGE_ICONS:
-                iconSizePx = 160.0;
+                iconSizePx = EXTRA_LARGE_ICON_CELL_PX;
                 break;
             case LARGE_ICONS:
                 iconSizePx = 120.0;
@@ -11318,6 +11955,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
     private void syncViewMenuSelection() {
         LogSupport.enter(LOG, "syncViewMenuSelection");
         if (viewExtraLargeIcons == null) {
+            syncStatusViewToggleSelection();
             return;
         }
         // If menu items are present, ensure selection matches viewMode.
@@ -11362,6 +12000,16 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                 break;
             default:
                 break;
+        }
+        syncStatusViewToggleSelection();
+    }
+
+    private void syncStatusViewToggleSelection() {
+        if (statusDetailsButton != null) {
+            statusDetailsButton.setSelected(viewMode == ViewMode.DETAILS);
+        }
+        if (statusLargeIconsButton != null) {
+            statusLargeIconsButton.setSelected(viewMode == ViewMode.EXTRA_LARGE_ICONS);
         }
     }
 /**
@@ -11943,16 +12591,18 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         tile.setAlignment(Pos.TOP_CENTER);
         tagIconTile(tile, p, "icon-tile", "explorer-icon-tile", "explorer-icon-tile-grid", iconTileModeStyleClass(viewMode));
         double w = iconGridTileWidthForMode(viewMode);
+        tile.setMinWidth(w);
         tile.setPrefWidth(w);
         tile.setMaxWidth(w);
         tile.setPadding(iconGridTilePaddingForMode(viewMode));
-        Node icon = buildIconNode(p, iconSizePx, "tile-item-icon");
+        Node icon = buildIconNode(p, iconGridIconSlotSizeForMode(viewMode), "tile-item-icon");
+        Node iconSlot = wrapGridIconNodeForMode(icon, viewMode);
         if (isIconInlineRenameTarget(p)) {
             TextField renameField = createExplorerInlineRenameField(p, displayNameForTable(p));
             renameField.setMaxWidth(iconGridLabelWidthForMode(viewMode));
-            tile.getChildren().addAll(icon, renameField);
+            tile.getChildren().addAll(iconSlot, renameField);
             tile.getProperties().put(EXPLORER_ICON_TILE_INLINE_RENAME_NODE_KEY, renameField);
-            markExplorerIconTileChild(icon);
+            markExplorerIconTileChild(iconSlot);
             markExplorerIconTileChild(renameField);
         } else {
             Label name = new Label(displayNameForTable(p));
@@ -11962,8 +12612,8 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             name.setMaxWidth(iconGridLabelWidthForMode(viewMode));
             name.setMinHeight(iconGridLabelMinHeightForMode(viewMode));
             name.setAlignment(Pos.TOP_CENTER);
-            tile.getChildren().addAll(icon, name);
-            markExplorerIconTileChild(icon);
+            tile.getChildren().addAll(iconSlot, name);
+            markExplorerIconTileChild(iconSlot);
             markExplorerIconTileChild(name);
         }
         installExplorerItemTooltip(tile, () -> buildExplorerItemTooltipText(p));
@@ -12794,9 +13444,12 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         }
         ImageView iv = new ImageView(placeholder);
         iv.setPreserveRatio(true);
-        iv.setSmooth(true);
-        iv.setFitWidth(effective);
-        iv.setFitHeight(effective);
+        boolean intrinsicExtraLarge = viewMode == ViewMode.EXTRA_LARGE_ICONS && effective >= (EXTRA_LARGE_ICON_CELL_PX - 0.5);
+        iv.setSmooth(!intrinsicExtraLarge);
+        if (!intrinsicExtraLarge) {
+            iv.setFitWidth(effective);
+            iv.setFitHeight(effective);
+        }
         if (styleClasses != null) {
             for (String s : styleClasses) {
                 if (s != null && !s.isBlank()) {
@@ -12911,7 +13564,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (button == null) {
             return;
         }
-        button.setTranslateY(3.0);
+        button.setTranslateY(2.0);
         if (button == newTabButton) {
             button.setContentDisplay(ContentDisplay.LEFT);
             button.setGraphicTextGap(0.0);
@@ -12993,7 +13646,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (button == null) {
             return;
         }
-        button.setTranslateY(3.0);
+        button.setTranslateY(2.0);
         button.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
         button.setGraphicTextGap(0.0);
         Label closeGlyph = new Label("×");
@@ -13081,8 +13734,11 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
     private void showHomePage() {
         homeActive = true;
         homeTabVisible = true;
-        if (searchField != null) {
-            searchField.clear();
+        cancelSearchSessionForDirectoryChange(Paths.get("__home__"));
+        if (searchField != null && !searchField.getText().isEmpty()) {
+            setSearchFieldTextSilently("");
+            activeSearchQuery = "";
+            updateSearchSessionState(SearchSessionState.IDLE);
         }
         refreshHomeSurface();
         applyHomeModeVisibility();
@@ -13116,6 +13772,8 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (searchField != null) {
             searchField.setDisable(homeActive);
         }
+        updateSearchChromeState();
+        updateSearchResultSurfaceState();
         setViewMode(viewMode == null ? ViewMode.DETAILS : viewMode);
         updateSidePaneVisibility();
     }
@@ -13597,7 +14255,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             src.add(f.toPath());
         }
         boolean doMove = cutMode && !cutBuffer.isEmpty() && sameSet(cutBuffer, src);
-        ioExecutor.execute(() -> {
+        executeOnIoExecutor("pasteIntoCurrentFolder", () -> {
             int count = 0;
                         for (Path s : src) {
                             try {
@@ -14120,9 +14778,81 @@ private void createNewFolder() {
  */
     private void focusSearch() {
         LogSupport.enter(LOG, "focusSearch");
-        if (searchField != null) {
+        if (searchField != null && !searchField.isDisabled()) {
             searchField.requestFocus();
             searchField.selectAll();
+            updateSearchChromeState();
+        }
+    }
+
+/**
+ * onClearSearchAction.
+ *
+ */
+    @FXML
+    private void onClearSearchAction() {
+        if (searchField == null) {
+            return;
+        }
+        setSearchFieldTextSilently("");
+        endSearchSession(true, false);
+        if (!searchField.isDisabled()) {
+            searchField.requestFocus();
+        }
+        updateSearchChromeState();
+    }
+
+    private void updateSearchChromeState() {
+        boolean active = isSearchQueryActive();
+        setStyleClass(searchShell, "search-active", active);
+        setStyleClass(searchShell, "search-focused", searchField != null && searchField.isFocused());
+        setStyleClass(searchShell, "search-typing", searchSessionState == SearchSessionState.TYPING);
+        setStyleClass(searchShell, "search-searching", searchSessionState == SearchSessionState.SEARCHING);
+        setStyleClass(searchShell, "search-results", searchSessionState == SearchSessionState.RESULTS);
+        setStyleClass(searchShell, "search-no-results", searchSessionState == SearchSessionState.NO_RESULTS);
+        if (searchClearButton != null) {
+            searchClearButton.setVisible(active && !homeActive);
+            searchClearButton.setManaged(active && !homeActive);
+            searchClearButton.setDisable(homeActive);
+            Tooltip tooltip = searchClearButton.getTooltip();
+            if (tooltip != null) {
+                tooltip.setText(active ? "Clear search" : "Search is empty");
+            }
+        }
+    }
+
+    private boolean isSearchQueryActive() {
+        return searchField != null && searchField.getText() != null && !searchField.getText().isBlank();
+    }
+
+    private void focusPrimaryFileSurface() {
+        if (homeActive) {
+            if (folderTree != null) {
+                folderTree.requestFocus();
+            }
+            return;
+        }
+        try {
+            if (viewMode == ViewMode.DETAILS && fileTable != null) {
+                fileTable.requestFocus();
+                return;
+            }
+            if (isUsingVirtualIconGridForCurrentView() && virtualIconGridView != null) {
+                virtualIconGridView.requestFocus();
+                return;
+            }
+            if (isUsingVirtualIconListForCurrentView() && virtualIconListView != null) {
+                virtualIconListView.requestFocus();
+                return;
+            }
+            if (iconScroll != null && iconScroll.isVisible()) {
+                iconScroll.requestFocus();
+                return;
+            }
+            if (fileTable != null) {
+                fileTable.requestFocus();
+            }
+        } catch (Exception ignored) {
         }
     }
 /**
@@ -14628,6 +15358,13 @@ private void expandNavigationTreeLimited(TreeItem<Path> root, int maxDepth, int 
             locationLabel.setMaxWidth(Double.MAX_VALUE);
             locationLabel.setAlignment(Pos.CENTER_LEFT);
         }
+        if (statusDetailsButton != null) {
+            statusDetailsButton.setFocusTraversable(false);
+        }
+        if (statusLargeIconsButton != null) {
+            statusLargeIconsButton.setFocusTraversable(false);
+        }
+        syncStatusViewToggleSelection();
     }
 /**
  * ensureStartupWindowSize.
@@ -15208,6 +15945,25 @@ private Integer findIndexByPath(Path p) {
     return null;
 }
 public void dispose() {
+        controllerDisposed.set(true);
+        try {
+            if (visibleMetadataDebounce != null) {
+                visibleMetadataDebounce.stop();
+            }
+        } catch (Exception ignored) {
+        }
+        try {
+            searchDebounce.stop();
+        } catch (Exception ignored) {
+        }
+        try {
+            metadataFlushDebounce.stop();
+        } catch (Exception ignored) {
+        }
+        try {
+            tableRefreshDebounce.stop();
+        } catch (Exception ignored) {
+        }
         try {
             localDisposables.close();
         } catch (Exception ignored) {

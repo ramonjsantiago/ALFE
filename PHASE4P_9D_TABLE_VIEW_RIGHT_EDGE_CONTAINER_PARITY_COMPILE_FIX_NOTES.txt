@@ -1,0 +1,15 @@
+HOTFIX97 / Phase 4P.9C — Table View Right Edge Container Parity
+
+Goal
+- Keep the Table View right edge anchored to the live width of the table container during both shrink and grow window resize cycles.
+
+Changes
+- Prioritized viewHost/left split-item width when resolving responsive table width so the refresh path tracks the actual visible container first.
+- Applied the snapped responsive width back onto detailsViewShell and fileTable during the refresh pulse instead of relying only on computed-size relayout.
+- Reapplied the constrained flex-last-column policy after width updates so the final visible column stretches to the container edge.
+- Refreshed last-visible-column header classes after responsive relayout to keep header/filler parity stable.
+
+
+Compile corrections
+- Replaced the stray call to syncDetailsLastVisibleColumnClasses() with the existing syncDetailsVisibleColumnRoleClasses() helper.
+- Replaced the invalid Node.getWidth() width probe on the split-pane left item with bounds-based width resolution that compiles against javafx.scene.Node.

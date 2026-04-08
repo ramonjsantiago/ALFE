@@ -1,0 +1,10 @@
+Phase 4P.9G — Toolbar Tooltip Visibility Fix
+
+This hotfix corrects toolbar tooltip visibility after the toolbar was converted to icon-only buttons.
+
+Changes:
+- restores readable tooltip foreground color and contrast in dark mode
+- aligns tooltip background/border colors with the dark surface palette
+- keeps the HOTFIX99 icon-only toolbar behavior intact
+
+Scope kept intentionally low-risk: stylesheet-only tooltip visibility correction.

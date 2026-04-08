@@ -1,0 +1,12 @@
+HOTFIX29 / Phase 4K.2 — Details Row Renderer Parity
+
+Included:
+- explicit stable row-state classes for Details rows
+- hoverProperty-driven row highlight sync instead of mouse entered/exited flapping
+- Windows 11-like inset rounded row highlight geometry
+- active vs inactive selection shaping for Details rows
+- removed cross-file CSS conflicts for Details row hover/selection rendering
+
+Why this patch exists:
+- HOTFIX28 stopped the parser warning and reduced row-hover churn, but Details view was still flickering because row visuals were being driven by multiple CSS layers plus mouse enter/exit event toggles.
+- HOTFIX29 makes Details row rendering single-owner and state-class driven.

@@ -1,0 +1,12 @@
+HOTFIX190 / Phase 4P.9CR — Extra-Large Icon 256px Fixed Cell Metrics and Intrinsic Render Parity
+
+Summary
+- Locks Extra large icon view to 256px asset requests and 256px icon-slot sizing.
+- Raises the controller-side icon request clamp from 160/128 ceilings to 256 where the active view needs it.
+- Avoids ImageView fit-width/fit-height scaling for 256px Extra large icon assets so the view uses intrinsic raster size instead of post-load transformation.
+
+Implementation notes
+- MainController now uses ICON_SIZE_MAX=256 and presets Extra large icon view to 256px.
+- Extra large grid tiles now request a fixed 256px icon slot and keep the tile width pinned to 256px.
+- Hover warmup and viewport realization requests now permit 256px icon work so the async icon/thumbnail pipeline can fetch the correct asset size for Extra large view.
+- CSS includes an explicit 256px slot class for the Extra large icon surface.

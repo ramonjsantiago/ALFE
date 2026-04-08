@@ -1,0 +1,23 @@
+HOTFIX85 / Phase 4P.1 — View Menu Vector Icons
+
+Scope
+- Replaced the current View menu glyph labels for the view mode rows with code-generated JavaFX vector icons.
+- Wired the new icons into the existing View menu implementation without changing the radio-button row behavior.
+- Kept the icons monochrome and DPI-safe so they stay crisp without bundled image assets.
+
+Implementation
+- Added com.fileexplorer.ui.menu.ViewMenuIcons to generate small vector menu icons for:
+  - Extra large icons
+  - Large icons
+  - Medium icons
+  - Small icons
+  - List
+  - Details
+  - Tiles
+  - Content
+- Installed the generated icons from MainController.configureViewMenu() by replacing each row's existing icon slot in-place.
+- Added CSS styles for the vector icon root and blocks so the new icons inherit the current theme text color path.
+
+Notes
+- This hotfix only changes the View menu mode-row icons. The remaining View menu rows and submenu items keep their current behavior.
+- No bundled image assets were added.

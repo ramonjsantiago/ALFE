@@ -1,0 +1,16 @@
+HOTFIX128 / Phase 4P.9AH — Icon View Marquee Hit-Set Commit and Tile Selection Rebind Finalization
+
+User-visible target
+- After an icon-view marquee selection completes, every icon inside the marquee must remain visibly selected after mouse release and after the pointer moves away.
+
+Implementation summary
+- Added iconPresentationSelectedPaths as the canonical icon-view paint set for committed selection presentation.
+- Updated MainController.applyExplorerPathSelection(...) to refresh icon selection presentation immediately and on deferred passes when the active view mode is an icon mode.
+- Updated MainController.handleExplorerFileViewMouseReleased(...) to reapply committed icon marquee selection on release and then refresh visible icon tiles from committed selection state.
+- Updated MainController.tagIconTile(...) so newly created/recycled tiles initialize their explorer-selected state from the current committed selection predicate.
+- Updated table-selection listeners to keep icon presentation state synchronized with the table selection model that backs all explorer views.
+
+Acceptance target
+- Marquee-select one or more icons, release the mouse, then move the pointer away: all selected icons remain visibly selected.
+- Ctrl+marquee additive selection remains visually stable after release.
+- Icon tile repaint remains correct after relayout or recycled tile rebuilds.

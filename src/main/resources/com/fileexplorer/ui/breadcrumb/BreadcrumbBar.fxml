@@ -16,18 +16,18 @@
       styleClass="breadcrumb-bar, explorer-breadcrumb-shell"
       spacing="0"
       alignment="CENTER_LEFT"
-      minHeight="40.0"
-      prefHeight="40.0"
-      maxHeight="40.0">
+      minHeight="32.0"
+      prefHeight="32.0"
+      maxHeight="32.0">
 
     <padding>
         <Insets top="0" right="0" bottom="0" left="0"/>
     </padding>
 
     <children>
-        <StackPane styleClass="address-shell, explorer-address-pill" HBox.hgrow="ALWAYS" minHeight="40.0" prefHeight="40.0" maxHeight="40.0">
+        <StackPane styleClass="address-shell, explorer-address-pill" HBox.hgrow="ALWAYS" minHeight="32.0" prefHeight="32.0" maxHeight="32.0">
             <children>
-                <HBox alignment="CENTER_LEFT" spacing="0" styleClass="address-content-host" minHeight="40.0" prefHeight="40.0" maxHeight="40.0">
+                <HBox alignment="CENTER_LEFT" spacing="0" styleClass="address-content-host" minHeight="32.0" prefHeight="32.0" maxHeight="32.0">
                     <children>
                         <Label text="&#xE8B7;" styleClass="fluent-icon, address-leading-icon"/>
                         <ScrollPane fx:id="crumbScroll"
@@ -37,18 +37,18 @@
                                     fitToHeight="true"
                                     fitToWidth="true"
                                     pannable="true"
-                                    minHeight="40.0"
-                                    prefHeight="40.0"
-                                    maxHeight="40.0"
+                                    minHeight="32.0"
+                                    prefHeight="32.0"
+                                    maxHeight="32.0"
                                     HBox.hgrow="ALWAYS">
                             <content>
                                 <HBox fx:id="crumbContainer"
                                       styleClass="breadcrumb-crumb-container, explorer-crumb-container"
                                       spacing="4"
                                       alignment="CENTER_LEFT"
-                                      minHeight="40.0"
-                                      prefHeight="40.0"
-                                      maxHeight="40.0"/>
+                                      minHeight="32.0"
+                                      prefHeight="32.0"
+                                      maxHeight="32.0"/>
                             </content>
                         </ScrollPane>
 
@@ -57,21 +57,21 @@
                                    visible="false"
                                    managed="false"
                                    styleClass="breadcrumb-address-field, address-field, explorer-address-field"
-                                   minHeight="32.0"
-                                   prefHeight="32.0"
-                                   maxHeight="32.0"
+                                   minHeight="28.0"
+                                   prefHeight="28.0"
+                                   maxHeight="28.0"
                                    HBox.hgrow="ALWAYS"/>
 
                         <Region HBox.hgrow="ALWAYS"/>
 
                         <Button fx:id="dropdownButton"
                                 focusTraversable="false"
-                                minWidth="32.0"
-                                prefWidth="32.0"
-                                maxWidth="32.0"
-                                minHeight="32.0"
-                                prefHeight="32.0"
-                                maxHeight="32.0"
+                                minWidth="28.0"
+                                prefWidth="28.0"
+                                maxWidth="28.0"
+                                minHeight="28.0"
+                                prefHeight="28.0"
+                                maxHeight="28.0"
                                 styleClass="breadcrumb-dropdown-button, explorer-address-dropdown">
                             <graphic>
                                 <Label text="&#xE70D;" styleClass="fluent-icon, breadcrumb-dropdown-glyph"/>

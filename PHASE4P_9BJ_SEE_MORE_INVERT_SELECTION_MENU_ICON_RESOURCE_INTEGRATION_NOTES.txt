@@ -1,0 +1,19 @@
+HOTFIX156 / Phase 4P.9BJ — See More Invert Selection Menu Icon Resource Integration
+
+Summary
+- Added the attached Invert selection icon resource under the packaged icons directory.
+- Rendered a JavaFX-friendly PNG from the supplied SVG for menu usage.
+- Updated the See more > Invert selection row to use the packaged image resource instead of the prior glyph label.
+- Synced the same packaged resources and FXML change under target/classes for delivery consistency.
+
+Files Updated
+- src/main/resources/icons/see_more_invert_selection.svg
+- src/main/resources/icons/see_more_invert_selection.png
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- target/classes/icons/see_more_invert_selection.svg
+- target/classes/icons/see_more_invert_selection.png
+- target/classes/com/fileexplorer/ui/layout/MainLayout.fxml
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE4P_9BJ_SEE_MORE_INVERT_SELECTION_MENU_ICON_RESOURCE_INTEGRATION_NOTES.txt

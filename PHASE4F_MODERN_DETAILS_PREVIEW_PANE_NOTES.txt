@@ -1,0 +1,14 @@
+Phase 4F - Modern details pane + preview pane parity (HOTFIX21)
+
+Included changes:
+- modernized right-side pane surface and card styling
+- dedicated side-pane parity CSS layer
+- improved details pane metadata formatting
+- text preview fallback for common text/code file types
+- larger preview image shell and Explorer-like right-pane width behavior
+
+Key files touched:
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- src/main/resources/com/fileexplorer/ui/css/side-pane-parity.css
+- src/main/java/com/fileexplorer/app/MainApp.java
+- src/main/java/com/fileexplorer/controller/MainController.java

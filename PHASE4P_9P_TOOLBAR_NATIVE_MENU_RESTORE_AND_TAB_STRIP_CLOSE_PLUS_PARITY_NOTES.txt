@@ -1,0 +1,14 @@
+HOTFIX110 / Phase 4P.9P — Toolbar Native Menu Restore and Tab Strip Close/Plus Parity
+
+This hotfix addresses:
+- New / Sort / View toolbar entries restoring native icon + text + down-chevron rendering
+- tab-strip close button positioned immediately after the last visible tab
+- '+' button stripped of gradient and border chrome
+
+Implementation summary:
+- restored native MenuButton content for New / Sort / View while preserving original FXML icons
+- retained explicit arrow styling for down-chevron visibility/alignment
+- added closeTabButton to MainLayout tab strip after currentTabButton and before the spacer/new-tab button
+- wired closeTabButton to close the active explorer tab with the existing guard that prevents ending with zero visible tabs
+- removed per-tab embedded close-slot chrome so the strip-close button is the dedicated close affordance
+- restyled explorer-new-tab-button and explorer-tab-close-button to be borderless / gradient-free

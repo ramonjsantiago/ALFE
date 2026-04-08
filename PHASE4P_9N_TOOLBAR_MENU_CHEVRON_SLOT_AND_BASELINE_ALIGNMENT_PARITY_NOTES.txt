@@ -1,0 +1,20 @@
+HOTFIX108 / Phase 4P.9N — Toolbar Menu Chevron Slot and Baseline Alignment Parity
+
+Summary
+- Reworked the New, Sort, and View command-bar flyout buttons into a fixed-structure layout: icon, label, and a dedicated trailing down-chevron slot.
+- Hid the skin-provided MenuButton arrow lane for these three controls so the visible chevron is now owned by the button content itself instead of depending on the default arrow-button layout.
+
+What changed
+- Added a structured MenuButton content builder in MainController for New, Sort, and View.
+- Wrapped each button in an Explorer-style content row with a fixed icon lane, text lane, and fixed-width chevron slot.
+- Switched the buttons to graphic-only presentation while preserving the full-button hit target and existing flyout menus.
+- Added HOTFIX108 command-bar CSS so the default arrow-button collapses to zero width and no longer competes with the visible chevron alignment.
+- Preserved the existing flyout hierarchy and toolbar hover/pressed states.
+
+Changed files
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE4P_9N_TOOLBAR_MENU_CHEVRON_SLOT_AND_BASELINE_ALIGNMENT_PARITY_NOTES.txt
+- src/main/java/com/fileexplorer/controller/MainController.java
+- src/main/resources/com/fileexplorer/ui/css/explorer-override-everything.css

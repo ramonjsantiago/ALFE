@@ -1,0 +1,17 @@
+HOTFIX147 / Phase 4P.9BA — View Menu Preview Pane Icon Resource Integration
+
+Summary
+- Added the supplied Preview-pane icon asset under the packaged resources.
+- Replaced the View > Preview pane glyph label with an ImageView-backed resource reference.
+- Synced the same resource and FXML changes into target/classes for the delivered full-project snapshot.
+
+Files changed
+- src/main/resources/icons/view.preview.pane.svg
+- src/main/resources/icons/view.preview.pane.png
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- target/classes/icons/view.preview.pane.svg
+- target/classes/icons/view.preview.pane.png
+- target/classes/com/fileexplorer/ui/layout/MainLayout.fxml
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt

@@ -1,0 +1,18 @@
+HOTFIX165 / Phase 4P.9BS — Newly Created Item Scroll-Into-View, Anchor Stability, and Rename Visibility Parity
+
+Summary
+- Added repeated path-visibility stabilization passes for newly created and renamed targets so the active item is brought back into view across Details, icon, list, tile, and content surfaces even after refresh/rebind pulses.
+- Routed post-create and post-refresh selection restore through the same visibility helper so new items remain visible before inline rename begins.
+- Updated inline-rename entry and post-cancel focus restoration to reuse the shared visibility pass, reducing off-screen rename fields and reflow-induced clipping.
+
+Primary implementation notes
+- MainController.restoreFocusToTablePath(Path) now schedules a multi-pulse visibility stabilization pass instead of doing a single one-shot scroll/focus operation.
+- MainController.beginTableInlineRename(Path) now drives rename startup through the same stabilization path for both Details and non-Details views.
+- MainController.applyDirectoryListing(Path, List<FileItem>) now remembers the restored path, reapplies visibility after the refreshed surface is rebuilt, and stabilizes the created item before re-entering inline rename.
+
+Files changed
+- src/main/java/com/fileexplorer/controller/MainController.java
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE4P_9BS_NEWLY_CREATED_ITEM_SCROLL_INTO_VIEW_ANCHOR_STABILITY_AND_RENAME_VISIBILITY_PARITY_NOTES.txt

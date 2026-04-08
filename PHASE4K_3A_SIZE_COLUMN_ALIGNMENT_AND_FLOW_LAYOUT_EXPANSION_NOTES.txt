@@ -1,0 +1,15 @@
+Phase 4K.3A - Size Column Alignment and Flow Layout Expansion
+
+Included:
+- Details/Table Size column cells explicitly right-justified
+- strengthened Size column cell factory and CSS alignment hooks
+- List view moved onto the icon/flow rendering pipeline
+- Tiles view flow wrapping now uses viewport-height-based vertical flow instead of a forced single-column stack
+- iconFlow wrap length now refreshes from ScrollPane viewport changes
+- per-mode flow classes expanded with explorer-icon-flow-list
+- List tiles render as icon + single-line name rows with wrapping flow columns
+
+Files changed:
+- src/main/java/com/fileexplorer/controller/MainController.java
+- src/main/resources/com/fileexplorer/ui/css/selection-state-tokens.css
+- src/main/resources/com/fileexplorer/ui/css/details-view-parity.css

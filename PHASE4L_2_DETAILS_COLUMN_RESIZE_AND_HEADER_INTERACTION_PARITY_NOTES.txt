@@ -1,0 +1,6 @@
+HOTFIX42 / Phase 4L.2
+- Added Explorer-like Details header resize hot-zone feedback.
+- Double-clicking a Details header divider now sizes that column to fit.
+- Debounced Details column width/order persistence during resize drag.
+- Added first/last visible column role classes for cleaner header separators.
+- Clamped Details column auto-fit widths to per-column min/max bounds.

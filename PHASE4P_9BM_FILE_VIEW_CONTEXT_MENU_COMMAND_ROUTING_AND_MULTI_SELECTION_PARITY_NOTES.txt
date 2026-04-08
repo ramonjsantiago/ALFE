@@ -1,0 +1,31 @@
+HOTFIX159 / Phase 4P.9BM — File View Context Menu Command Routing and Multi-Selection Parity
+
+Summary
+- Expanded the shared file-item context menu so item-surface right-click behavior now routes actions against the correct file-view selection set.
+- Restored a distinct background context menu for empty-space right-clicks so file views do not reuse the item menu when no item is the actual target.
+- Added selection-aware `Open in new tab` (new-window fallback) and `Pin to Quick access` handling for directory items.
+
+Implementation notes
+- The shared file-operations menu now includes:
+  - Open
+  - Open in new tab
+  - Pin to Quick access
+  - Copy / Cut / Paste
+  - Rename / Delete
+  - Properties
+- Command enablement now differentiates between:
+  - any selection
+  - single-item selection
+  - single-directory selection
+- Empty-space right-click now opens a background menu with:
+  - Paste
+  - New folder
+  - Select all
+  - Refresh
+  - Properties
+- The icon/list/tile/content host now intercepts empty-space context-menu requests separately from item-surface requests, while allowing item tiles to continue handling their own context menus.
+- Quick-access pinning remains session-scoped and is rendered in the Home pinned row without duplicating the built-in default pinned folders.
+
+Known packaging note
+- The full project tree has been updated and repackaged from the provided baseline.
+- Compiled `target/classes` bytecode was not rebuilt in this environment.

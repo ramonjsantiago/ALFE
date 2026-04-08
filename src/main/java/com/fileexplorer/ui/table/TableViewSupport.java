@@ -356,6 +356,10 @@ syncTint();
         return (long) bytes;
     }
 
+    public static VisibleThumbnailManager visibleThumbnailManager(TableView<FileItem> table, ExplorerContext ctx) {
+        return ensureThumbManager(table, ctx);
+    }
+
     private static VisibleThumbnailManager ensureThumbManager(TableView<FileItem> table, ExplorerContext ctx) {
         final String key = "fileexplorer.visibleThumbMgr";
         Object existing = table.getProperties().get(key);

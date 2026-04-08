@@ -1,0 +1,17 @@
+HOTFIX87 / Phase 4P.3 — Single-Pass Styled Startup
+
+Purpose
+- remove the black pre-show frame and the white unstyled intermediate frame seen during application launch
+- keep startup on a single styled Scene so the user sees the dark shell first and then the dark fully styled UI
+
+Changes
+- changed MainApp.configureExplorerStage(...) to build the lightweight shell root before stage.show() instead of showing a temporary black pre-show root first
+- attached the critical stylesheet layer before the first frame so the shell scene is already themed when it becomes visible
+- set the Scene fill to a matching startup color to avoid default white flash during root swaps
+- kept the existing single-Scene shell-to-main-root swap, but removed the deferred re-attachment of the critical stylesheet layer after the main UI loads
+- preserved deferred/noncritical stylesheet loading and the deferred FXML/controller startup path
+
+Result
+- startup no longer intentionally paints a black placeholder frame first
+- the main UI is attached onto an already styled Scene, reducing the visible unstyled white flash during launch
+- the launch path remains conservative by keeping heavier work deferred until after the first visible styled shell frame

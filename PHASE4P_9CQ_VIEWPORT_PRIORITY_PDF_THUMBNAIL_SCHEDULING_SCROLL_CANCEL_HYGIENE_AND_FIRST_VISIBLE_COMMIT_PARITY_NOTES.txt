@@ -1,0 +1,11 @@
+HOTFIX189 / Phase 4P.9CQ — Viewport-Priority PDF Thumbnail Scheduling, Scroll-Cancel Hygiene, and First-Visible Commit Parity
+
+Scope
+- Bias visible thumbnail issuance toward the first rows currently realized in the Details viewport.
+- Prevent late thumbnail completions from painting into cells that are no longer visibly realized.
+- Preserve the existing shared Details thumbnail manager architecture introduced in HOTFIX188.
+
+Implementation notes
+- VisibleThumbnailManager now snapshots registered visible cells, computes scene-order bounds, and sorts them top-to-bottom / left-to-right before issuing VISIBLE requests.
+- Non-visible cells discovered during the visible pump are cancelled immediately and left eligible for a fresh request once they re-enter the viewport.
+- Completion-time guards now require the cell to still be visible before the thumbnail image is committed.

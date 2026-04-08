@@ -1,0 +1,12 @@
+HOTFIX119 / Phase 4P.9Y — Details View Marquee Selection Parity
+
+Scope
+- Added click-and-drag marquee selection support to the Details view when dragging from blank table/view area.
+- Ensured marquee selection applies to all intersected visible rows both logically and visually.
+- Preserved additive selection behavior with Ctrl-drag from blank space.
+
+Implementation notes
+- Reused the existing file-view marquee overlay and generalized it so it can operate in both icon modes and Details mode.
+- Details marquee hit-testing collects visible TableRow bounds and maps them back to FileItem paths.
+- During Details marquee updates, the TableView is explicitly focused so active selection paint remains correct while dragging.
+- Multi-row selection refresh is forced through the existing visible-row presentation path after applying marquee selection.

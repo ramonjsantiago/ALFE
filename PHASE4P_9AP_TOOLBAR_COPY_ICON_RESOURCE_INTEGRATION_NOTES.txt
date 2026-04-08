@@ -1,0 +1,17 @@
+HOTFIX136 / Phase 4P.9AP — Toolbar Copy Icon Resource Integration
+
+Summary
+- Added the user-supplied Copy toolbar icon asset under src/main/resources/icons and synced the packaged copy under target/classes/icons.
+- Generated a toolbar.copy.png raster resource for JavaFX Image loading while preserving the original ContexMenu.Copy.svg source asset.
+- Updated MainLayout.fxml so the toolbar Copy command now uses the packaged image resource instead of the previous Segoe Fluent glyph label.
+
+Files Changed
+- src/main/resources/icons/ContexMenu.Copy.svg
+- src/main/resources/icons/toolbar.copy.png
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- target/classes/icons/ContexMenu.Copy.svg
+- target/classes/icons/toolbar.copy.png
+- target/classes/com/fileexplorer/ui/layout/MainLayout.fxml
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt

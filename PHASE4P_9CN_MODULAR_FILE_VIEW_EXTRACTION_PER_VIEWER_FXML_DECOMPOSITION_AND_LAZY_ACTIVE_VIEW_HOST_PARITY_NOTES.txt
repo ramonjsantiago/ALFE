@@ -1,0 +1,15 @@
+HOTFIX186 / Phase 4P.9CN — Modular File-View Extraction, Per-Viewer FXML Decomposition, and Lazy Active-View Host Parity
+
+What changed
+- Extracted file-view surfaces into dedicated FXML/controller packages under com.fileexplorer.ui.fileview.
+- Added modular file-view host infrastructure that lazy-loads the active file-view surface into MainLayout's viewHost.
+- Moved the Details view into its own FXML/controller pair.
+- Added dedicated viewer FXML/controller packages for Extra large icons, Large icons, Medium icons, Small icons, List, Tiles, and Content.
+- MainController now activates modular file-view surfaces on view-mode changes and keeps the Details / icon nodes rebound to the active module.
+
+Notes
+- HOTFIX186 keeps the existing MainController interaction logic and command routing intact while decomposing the visual surfaces into separately loadable modules.
+- The icon-family viewers still share the current icon-tile build pipeline in MainController; this phase focuses on structural extraction and lazy hosting rather than a full presenter/service split.
+
+Compile correction:
+- Restored missing MainApp imports for Label and Priority so the shell bootstrap compiles.

@@ -1,0 +1,15 @@
+HOTFIX89 / Phase 4P.5 — View menu icon-slot restore
+
+Scope
+- back out the HOTFIX88 native mark-gutter parity changes
+- restore the previous View menu structure that retained the dedicated icon/graphic slot the user preferred
+- keep HOTFIX87 single-pass styled startup and all thumbnail/cache work unchanged
+
+Implementation
+- restored MainController.java, MainLayout.fxml, and app-main.css from the HOTFIX87 baseline
+- removed the HOTFIX88 native RadioMenuItem / CheckMenuItem gutter retuning work
+- preserved the startup correction from HOTFIX87 without further changes
+
+Notes
+- this rollback is intentionally conservative and restores the pre-HOTFIX88 View menu appearance rather than attempting a partial hybrid adjustment
+- the missing icon slot complaint is addressed by reverting to the prior menu wiring and spacing model

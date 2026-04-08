@@ -1,0 +1,17 @@
+HOTFIX92 / Phase 4P.8 — Icon View Live Resize Anchor and Metrics Parity
+
+Goal
+- keep grid icon views responsive after the first open and across later application-window resizes
+- avoid stale fixed column counts caused by latching onto an earlier, larger width measurement
+- preserve the visible vertical anchor better when the virtual icon grid rebuilds because the row count changes
+
+What changed
+- MainController now resolves the active icon-view width by preferring the currently visible host / viewport path instead of taking the maximum width from every candidate node
+- the virtual icon grid and virtual icon list are bound to the live StackPane host width/height so they follow inner-viewport changes continuously
+- responsive relayout listeners now also react to Scene and Window size changes, not just the initial icon-scroll and host bounds changes
+- virtual icon-grid rebuilds capture and restore the vertical scrollbar position so resize-driven row regrouping is less jumpy
+
+Expected result
+- Extra large, Large, Medium, and Small icon views should continue to reflow after repeated window stretch/shrink cycles
+- column counts should track the actual visible width instead of reverting to a stale fixed width from a previous layout pass
+- resize-driven grid rebuilds should feel more stable because the vertical anchor is restored after regrouping

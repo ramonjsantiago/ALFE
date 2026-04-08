@@ -1,0 +1,12 @@
+HOTFIX184 / Phase 4P.9CL — Stage-Show Critical-Path Triage, Split-FXML Bootstrap, and Lazy Thumbnail Capability Initialization Parity
+
+Primary runtime intent
+- Reduce pre-show and first-bootstrap FX-thread cost visible in startup traces.
+- Move non-essential included FXML subtrees out of the main bootstrap load.
+- Stop eager ImageIO capability discovery from instantiating the thumbnail service during startup.
+
+Implemented code-path changes
+- MainApp: startup shell CSS is now optional for the shell-first scene; heavy startup maintenance now queries the lazily loaded progress pane through MainController.
+- MainController: breadcrumb bar and progress pane are loaded after the main scene is live and attached back into their host containers.
+- AsyncThumbnailService: plugin/capability probing is no longer performed in the constructor; it is delayed until after thumbnail enablement and only forced synchronously for ImageIO-managed formats that need reader discovery.
+- MainLayout.fxml: removed direct `fx:include` bootstrap cost for breadcrumb and progress subtrees.

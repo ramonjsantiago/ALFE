@@ -1,43 +1,140 @@
 .explorer-tabstrip {
-    -fx-padding: 0 8 6 8;
+    -fx-padding: 0 12 0 12;
     -fx-background-color: transparent;
     -fx-alignment: center-left;
+    -fx-spacing: 4;
+    -fx-min-height: 34;
+    -fx-pref-height: 34;
+    -fx-max-height: 34;
+}
+
+.theme-dark .explorer-tabstrip {
+    -fx-background-color: #1f1f1f;
+    -fx-border-color: transparent transparent #262626 transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.theme-light .explorer-tabstrip {
+    -fx-background-color: #f6f6f6;
+    -fx-border-color: transparent transparent #d9d9d9 transparent;
+    -fx-border-width: 0 0 1 0;
 }
 
 .explorer-tab-button {
-    -fx-background-color: linear-gradient(to bottom, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+    -fx-background-color: transparent;
     -fx-background-radius: 10 10 0 0;
-    -fx-border-color: rgba(255,255,255,0.12);
+    -fx-border-color: transparent;
     -fx-border-radius: 10 10 0 0;
     -fx-border-width: 1 1 0 1;
-    -fx-padding: 8 14 8 14;
+    -fx-padding: 0 12 0 12;
     -fx-min-height: 34;
+    -fx-pref-height: 34;
+    -fx-max-height: 34;
     -fx-font-size: 13px;
+    -fx-alignment: center-left;
+    -fx-content-display: graphic-only;
 }
 
-.explorer-tab-button:hover {
-    -fx-background-color: linear-gradient(to bottom, rgba(255,255,255,0.12), rgba(255,255,255,0.05));
+.theme-dark .explorer-tab-button:hover {
+    -fx-background-color: rgba(255,255,255,0.05);
 }
 
-.explorer-tab-button.selected-tab {
-    -fx-background-color: linear-gradient(to bottom, rgba(255,255,255,0.18), rgba(255,255,255,0.08));
-    -fx-border-color: rgba(255,255,255,0.18);
+.theme-light .explorer-tab-button:hover {
+    -fx-background-color: rgba(0,0,0,0.045);
+}
+
+.theme-dark .explorer-tab-button.selected-tab {
+    -fx-background-color: #2c2c2c;
+    -fx-border-color: #3a3a3a #3a3a3a transparent #3a3a3a;
+}
+
+.theme-light .explorer-tab-button.selected-tab {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d7d7d7 #d7d7d7 transparent #d7d7d7;
 }
 
 .explorer-new-tab-button {
-    -fx-min-width: 28;
-    -fx-pref-width: 28;
-    -fx-max-width: 28;
-    -fx-min-height: 32;
-    -fx-pref-height: 32;
-    -fx-max-height: 32;
+    -fx-min-width: 30;
+    -fx-pref-width: 30;
+    -fx-max-width: 30;
+    -fx-min-height: 30;
+    -fx-pref-height: 30;
+    -fx-max-height: 30;
     -fx-padding: 0;
     -fx-alignment: center;
     -fx-background-color: transparent;
     -fx-border-color: transparent;
-    -fx-background-radius: 0;
-    -fx-border-radius: 0;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
     -fx-border-width: 0;
+}
+
+.explorer-tab-button .explorer-tab-content {
+    -fx-spacing: 7px;
+    -fx-alignment: center-left;
+}
+
+.explorer-tab-button .explorer-tab-text {
+    -fx-padding: 0 2 0 0;
+}
+
+.explorer-tab-button .explorer-tab-close-slot {
+    -fx-min-width: 18;
+    -fx-pref-width: 18;
+    -fx-max-width: 18;
+    -fx-min-height: 18;
+    -fx-pref-height: 18;
+    -fx-max-height: 18;
+    -fx-alignment: center;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-opacity: 0.84;
+}
+
+.theme-dark .explorer-tab-button:hover .explorer-tab-close-slot,
+.theme-dark .explorer-tab-button.selected-tab .explorer-tab-close-slot {
+    -fx-background-color: rgba(255,255,255,0.07);
+    -fx-opacity: 1.0;
+}
+
+.theme-light .explorer-tab-button:hover .explorer-tab-close-slot,
+.theme-light .explorer-tab-button.selected-tab .explorer-tab-close-slot {
+    -fx-background-color: rgba(0,0,0,0.06);
+    -fx-opacity: 1.0;
+}
+
+.explorer-tab-inline-close-glyph,
+.explorer-strip-close-glyph {
+    -fx-font-size: 10px;
+    -fx-font-weight: 700;
+}
+
+.explorer-tab-close-button {
+    -fx-min-width: 30;
+    -fx-pref-width: 30;
+    -fx-max-width: 30;
+    -fx-min-height: 30;
+    -fx-pref-height: 30;
+    -fx-max-height: 30;
+    -fx-padding: 0;
+    -fx-alignment: center;
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-border-width: 0;
+}
+
+.theme-dark .explorer-tab-close-button:hover,
+.theme-dark .explorer-new-tab-button:hover {
+    -fx-background-color: rgba(255,255,255,0.06);
+    -fx-border-color: transparent;
+}
+
+.theme-light .explorer-tab-close-button:hover,
+.theme-light .explorer-new-tab-button:hover {
+    -fx-background-color: rgba(0,0,0,0.06);
+    -fx-border-color: transparent;
 }
 
 .explorer-home-pane {

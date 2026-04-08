@@ -1,0 +1,16 @@
+Phase 4G — Context menus, flyouts, and inline rename
+Build: HOTFIX22
+
+Included changes:
+- Explorer-style generic context menu / flyout styling via context-menu-parity.css
+- richer table context menu with Open / Copy / Cut / Paste / Rename / Delete / Properties
+- richer tree context menu with Open / Expand-Collapse / Refresh / Rename / Properties
+- toolbar flyout menu item styling hooks applied to New / Sort / View / See more
+- wired See more actions for Copy path / Select all / Select none / Invert selection / Properties
+- inline rename in the details Name column
+- inline rename in the navigation tree
+- MainApp updated to load the new CSS layer
+
+Notes:
+- This is a best-effort Phase 4G package created from the HOTFIX21 baseline in the container.
+- I did not run a full Maven / JavaFX 25 compile in the container.

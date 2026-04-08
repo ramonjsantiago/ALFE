@@ -1,0 +1,7 @@
+HOTFIX138 / Phase 4P.9AR — View Menu Extra Large Icons Icon Resource Integration
+
+Summary
+- Added the supplied View > Extra large icons asset under src/main/resources/icons/view.extra.large.svg.
+- Generated a JavaFX-friendly raster copy at src/main/resources/icons/view.extra.large.png.
+- Replaced the Extra large icons menu-row glyph in MainLayout.fxml with an ImageView that loads /icons/view.extra.large.png.
+- Synced the packaged target/classes resource copies so the full-project archive carries the updated icon resources and FXML together.

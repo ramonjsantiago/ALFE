@@ -1,3 +1,30 @@
+## HOTFIX195 / Phase 4P.9CW — Command Bar Template Fidelity, Segment Spacing, and Right-Rail Action Parity
+
+- HOTFIX195 crash follow-up: added controller-disposal guards, stopped pending metadata/search debounces during dispose(), and routed IO/hover background dispatch through safe executor wrappers so shutdown cannot throw `RejectedExecutionException` on the JavaFX thread.
+
+- converted Cut / Copy / Paste / Rename / Share / Delete to Explorer-style icon+text command-bar entries
+- grouped Preview / Operations / Details into a more Windows-like trailing action rail with dedicated separator treatment
+- tightened command-bar height, padding, icon/text spacing, and structured menu chevron spacing for closer Explorer parity
+
+- HOTFIX194 follow-up: removed the bottom status-bar view-mode text labels so the Details and Extra large icons toggles render as icon-only buttons.
+- HOTFIX194 follow-up: corrected Sort/View/Filter structured menu vertical alignment by collapsing the native MenuButton arrow lane and re-centering the custom icon/text/chevron content to match the surrounding command-bar controls.
+- HOTFIX194: top-chrome metrics parity pass with tighter tab/address/search geometry, command-bar icon alignment refinements, and a structured Filter command added to match the Windows Explorer reference.
+## HOTFIX192 / Phase 4P.9CT — Explorer Search UX Parity
+- Added an in-field clear-search affordance to the main Explorer search box and only surface it while a query is active.
+- Added focused and active search-shell chrome states plus dynamic search tooltip/prompt syncing so the top-right search surface behaves more like Windows 11 Explorer.
+- Added `Ctrl+E` focus parity and tightened Escape semantics so Escape clears the query first, then returns focus to the active file surface once the search box is already empty.
+- Updated active-search status text to report scoped result counts for the current folder.
+
+## HOTFIX191 / Phase 4P.9CS — Navigation Pane Fixed-Width Window Resize Parity
+- Reworked `MainController` navigation-pane resize handling so the left tree shell keeps a pinned pixel width during window stretch and shrink, letting the file-view side absorb resize deltas.
+- Added main-divider tracking that refreshes the stored navigation width only after explicit user divider moves, eliminating width drift caused by proportional `SplitPane` resizing.
+- Added a programmatic-divider guard so resize correction passes do not recursively overwrite the user-established navigation width.
+
+## HOTFIX189 / Phase 4P.9CQ — Viewport-Priority PDF Thumbnail Scheduling, Scroll-Cancel Hygiene, and First-Visible Commit Parity
+- Reworked `VisibleThumbnailManager` to snapshot visible Details cells and issue visible thumbnail requests in scene/viewport order instead of `WeakHashMap` iteration order, so top-of-viewport thumbnails begin first.
+- Added a late-commit visibility guard so async thumbnail completions are ignored once a recycled or scrolled-out cell is no longer visibly realized.
+- Preserved the existing cancellation path for non-visible cells and now cancel hidden registrations opportunistically during the visible pump as well.
+
 - Added dedicated .ini file icon resources under src/main/resources/com/fileexplorer/ui/icons/{light,dark} and routed ext:ini through IconLoader override resolution.
 ## HOTFIX186 / Phase 4P.9CN — Modular File-View Extraction, Per-Viewer FXML Decomposition, and Lazy Active-View Host Parity
 - Added a new modular `com.fileexplorer.ui.fileview` package family plus a lazy `FileViewHost` to load file viewers into the main `viewHost` on demand.
@@ -111,3 +138,37 @@
 - H187 resource update: added dedicated packaged DOCX default icons (`docx-16..256.png`, light/dark) and mapped `ext:docx` to the DOCX resource icon while thumbnails are pending.
 
 - H187 resource update: added dedicated packaged compressed-archive default icons (`compressed-16..256.png`, light/dark) and mapped `ext:zip`, `ext:7z`, `ext:gz`, `ext:bz2`, and `ext:tar` to the compressed resource icon while thumbnails are pending.
+## HOTFIX188 / Phase 4P.9CP
+- Reintegrated the Details name cell with the viewport-aware thumbnail pipeline while preserving inline rename.
+- Restored small Details-cell thumbnail request sizing and kept extension-specific fallback icons active until thumbnail completion.
+- Exposed the shared table VisibleThumbnailManager for custom Details name cells so viewport cancellation/debounce behavior remains consistent.
+
+
+- HOTFIX188 follow-up: tuned the main Explorer search box to match Windows 11 Explorer more closely, added an in-field magnifying glass on the left, and retained dynamic prompt text in the form `Search <current folder>`.
+
+## HOTFIX190 / Phase 4P.9CR
+- Locked Extra large icon view to 256px request sizing and widened controller-side icon request clamps up to 256px.
+- Added a fixed 256px Extra large icon slot and pinned grid tile width to 256px so the File view no longer uses the earlier 228px width budget in this mode.
+- Switched the 256px Extra large icon path to intrinsic-size ImageView rendering so loaded 256px assets are not post-scaled via fitWidth/fitHeight.
+
+## HOTFIX193 / Phase 4P.9CU
+- Added an explicit Explorer search session lifecycle with idle/typing/searching/results/no-results controller states.
+- Captured the current folder as the active search scope and cancel the session automatically when navigation moves to a different folder or Home.
+- Added debounced generation-token search dispatch so stale search completions are discarded instead of publishing into the wrong folder or older query state.
+- Added a dedicated in-surface `Searching…` / `No results found` overlay so empty search results are visually distinct from an empty folder.
+- Restored the original folder surface on search clear and perform best-effort selection/focus recovery after exiting search.
+
+- HOTFIX193 compile fix: restored the missing `isUsingVirtualIconListForCurrentView()` controller helper used by search-session focus restoration so the project compiles again.
+
+- HOTFIX194 follow-up: wired the bottom status-bar `Details` button to switch to Details view and the bottom status-bar `Large` button to switch to Extra large icons view.
+- HOTFIX194 follow-up: assigned the supplied icon assets to the two status-bar view buttons and synchronized their selected state with the active file view.
+
+- HOTFIX194 follow-up: removed the top command-bar `Filter` menu and replaced the top `Preview` button glyph with the newly supplied icon asset.
+
+- HOTFIX195 corrective pass: raised structured command-bar menu content baseline so New / Sort / View align vertically with adjacent command buttons.
+
+- HOTFIX195 final corrective pass: increased the structured command-bar menu baseline lift and raised the icon/text/chevron slots together so New / Sort / View no longer sit visibly lower than neighboring toolbar commands.
+
+- Corrective pass: raised structured New / Sort / View command-bar menu content an additional 2 px for closer vertical baseline parity.
+
+- HOTFIX195 follow-up: pinned dark top-chrome / command-bar labels, glyph icons, vector icons, and chevrons to white for stronger Windows Explorer parity.

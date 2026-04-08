@@ -1,0 +1,20 @@
+HOTFIX169 / Phase 4P.9BW — Undo/Redo Create-Rename Shell-State Parity and Post-Action Reveal Stability
+
+Intent
+- Make create-folder and inline-rename actions participate in Ctrl+Z / Ctrl+Y parity.
+- Preserve Explorer shell state after undo/redo: selection, focus owner, viewport anchor, and minimal reveal behavior.
+
+Implementation summary
+- Added `CreateDirectoryCommand` for synchronous new-folder command-stack participation.
+- Added `RenamePathCommand` for synchronous single-path rename command-stack participation.
+- Updated command-stack serialization/restoration to understand both new command kinds.
+- Added `discardUndoCommand` to `CommandManager` so cancelling a transient create+rename session removes the stale create command from the undo stack.
+- Reworked `createNewFolder()` to execute via `CommandManager`, then queue inline rename on the newly created item.
+- Reworked inline rename commit to execute via `RenamePathCommand` when `CommandManager` is available.
+- Added shell-state restoration planning around undo/redo in `MainController`, including viewport snapshot capture and post-refresh reveal restoration.
+- Added nearest-index fallback selection handling when undoing a create removes the selected item from the listing.
+
+Notes
+- This patch keeps the existing async operation queue for copy/move/delete flows.
+- The create/rename undo/redo path is intentionally synchronous to keep shell-state restoration deterministic.
+- New text document creation still queues inline rename but does not yet use the synchronous command-stack create command.

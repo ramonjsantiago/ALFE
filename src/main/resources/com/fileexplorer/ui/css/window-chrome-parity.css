@@ -326,6 +326,9 @@
     -fx-padding: 0 10 0 10;
     -fx-background-radius: 8;
     -fx-border-radius: 8;
+    -fx-content-display: left;
+    -fx-graphic-text-gap: 6;
+    -fx-alignment: center;
 }
 
 .theme-dark .status-bar-surface .status-view-toggle {

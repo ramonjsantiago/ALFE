@@ -1,0 +1,7 @@
+Phase 4L.10 — Details Header Hover Chevron
+
+Included:
+- The Table View Details right-edge menu trigger now uses a small down chevron indicator instead of the previous generic icon treatment.
+- The chevron is only visible while the cursor is over the Details header menu hot-zone.
+- The chevron tracks the hovered header and hides automatically when the pointer leaves the hot-zone or the menu opens.
+- Existing compact visible-only drop-down behavior is preserved.

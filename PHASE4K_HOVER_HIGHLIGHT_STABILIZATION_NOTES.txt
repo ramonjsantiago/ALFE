@@ -1,0 +1,20 @@
+HOTFIX27 / Phase 4K.1A — Hover Highlight Stabilization
+
+Scope
+- Stabilize icon/tile hover highlighting introduced by Phase 4K.1.
+- Replace CSS :hover-driven icon tile highlighting with an explicit explorer-hover style class.
+- Route pointer hit-testing through the tile container so hover state does not flap when moving across labels, images, or async thumbnail updates.
+
+Implementation
+- MainController.java
+  - Added stable hover handler installation for explorer icon tiles.
+  - Added helper to mark icon/label descendants mouseTransparent for tile hit-testing stability.
+  - Applied the helper to grid icon tiles and tile/content row renderers.
+- selection-state-tokens.css
+  - Replaced icon-tile :hover selectors with explorer-hover class selectors.
+  - Kept selected+hover styling, now using explorer-hover instead of :hover.
+
+Expected result
+- Hover highlight no longer flickers while moving across the icon, label, or whitespace inside a tile.
+- Selected tile hover remains visually stronger without rapid state toggling.
+- Next recommended phase remains 4K.2 — Details row renderer parity.

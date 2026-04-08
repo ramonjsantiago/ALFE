@@ -1,0 +1,19 @@
+HOTFIX141 / Phase 4P.9AU — View Menu Small Icons Icon Resource Integration
+
+Summary
+- Added the supplied Small Icons asset under `src/main/resources/icons`.
+- Exported a PNG companion for JavaFX image loading.
+- Replaced the View > Small icons glyph entry in `MainLayout.fxml` with the packaged image resource.
+- Synced the matching packaged-resource copies under `target/classes`.
+
+Resources added
+- `src/main/resources/icons/view.small.svg`
+- `src/main/resources/icons/view.small.png`
+
+FXML updated
+- `src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml`
+
+Packaged-resource sync
+- `target/classes/icons/view.small.svg`
+- `target/classes/icons/view.small.png`
+- `target/classes/com/fileexplorer/ui/layout/MainLayout.fxml`

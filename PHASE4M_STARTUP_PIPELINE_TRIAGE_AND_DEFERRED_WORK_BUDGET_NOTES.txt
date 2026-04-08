@@ -1,0 +1,15 @@
+HOTFIX31 / Phase 4M — Startup Pipeline Triage and Deferred Work Budget
+
+Goals
+- keep critical startup work on a bounded next-pulse path
+- stop idle work from drifting indefinitely when the user keeps moving the mouse
+- move startup maintenance / recovery IO off the FX thread
+- split theme, font, and motion passes so first interaction is less congested
+
+Included
+- StartupWorkQueue now has a critical queue and a maximum idle deferral timer
+- critical stylesheet attach now uses the bounded critical queue instead of nested runLater scheduling
+- non-critical stylesheet layers still defer, but within a time budget
+- deferred startup maintenance now runs via CompletableFuture.runAsync and only returns to FX for dialogs / UI hooks
+- initial folder open is promoted to the critical queue for a steadier shell-to-content handoff
+- MainController.setScene now stages theme, font, and motion work across separate pulses

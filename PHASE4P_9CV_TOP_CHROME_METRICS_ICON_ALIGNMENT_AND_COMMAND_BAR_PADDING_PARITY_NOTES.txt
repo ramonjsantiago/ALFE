@@ -1,0 +1,25 @@
+HOTFIX194 / Phase 4P.9CV
+
+Reference-driven top-chrome parity pass:
+- reduced vertical chrome density in the address row and breadcrumb shell
+- aligned nav hitboxes, address/search shell radii, and command-row button metrics
+- preserved the existing structured menu-button pipeline and extended it to Filter
+- tuned tab strip padding, active-tab silhouette, inline-close slot sizing, and plus-button metrics
+
+HOTFIX194 follow-up alignment correction:
+- hid the native MenuButton arrow lane for structured command-bar menus so Sort/View/Filter do not carry an extra internal arrow column that shifts their content rhythm
+- re-centered structured menu icon/text/chevron content with a slight upward baseline adjustment for closer parity with Delete/Share and adjacent command-bar controls
+
+HOTFIX194 follow-up status-bar view-mode wiring:
+- wired the bottom status-bar Details button to switch to Details view
+- wired the bottom status-bar Large button to switch to Extra large icons view
+- assigned the supplied details / extra-large icon assets to the two status-bar buttons and synchronized their selected state to the active file view
+
+HOTFIX194 follow-up status-bar icon-only presentation:
+- removed the Details and Large text labels from the bottom status-bar view toggles
+- switched both status-bar view toggles to graphic-only presentation while preserving the existing tooltip and view-switch wiring
+
+
+Follow-up correction 4:
+- Removed the top command-bar Filter menu from the command surface.
+- Replaced the top Preview button glyph with the newly supplied icon asset.

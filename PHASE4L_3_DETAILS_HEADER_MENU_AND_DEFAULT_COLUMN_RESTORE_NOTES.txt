@@ -1,0 +1,5 @@
+HOTFIX45 / Phase 4L.3 — Details Header Menu and Default Column Restore
+- header context menu now reflects actual visible-column state without forcing core columns visible on open
+- added Restore default columns action to reset Details visible set, order, and core widths
+- header menu now uses the full ordered details catalog so menu rows stay in sync with Choose Details ordering
+- tightened header details menu row padding for Explorer-like parity

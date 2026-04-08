@@ -1,0 +1,17 @@
+HOTFIX40 / Phase 4L — Details Metrics and Header Parity
+
+Scope
+- tuned Details header height, row height, gutters, and text padding toward Windows 11 Explorer proportions
+- aligned default Name/Type/Size/Date modified column widths to a steadier baseline
+- added Details column style classes so header and column-specific alignment rules can target Name and Size cleanly
+- reduced header border contrast and refined hover fill for flatter Explorer-like header chrome
+- tightened Details table cell padding and fixed cell size for denser, more native-looking row metrics
+
+Files changed
+- src/main/java/com/fileexplorer/controller/MainController.java
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- src/main/resources/com/fileexplorer/ui/css/details-view-parity.css
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE4L_DETAILS_METRICS_AND_HEADER_PARITY_NOTES.txt

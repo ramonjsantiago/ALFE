@@ -1,0 +1,17 @@
+PHASE 4O.12 / HOTFIX84 — Disk Cache Touch-On-Read and Cold Aging
+
+Summary
+- Added optional touch-on-read refresh for thumbnail disk-cache payload files.
+- Age-based pruning now naturally favors recently used cached thumbnails instead of just recently written ones.
+- Added throttling so repeated reads do not rewrite mtimes too frequently.
+- Extended diagnostics with touch write / skip / fail counters.
+
+New tuning switches
+- -Dfileexplorer.thumb.diskCache.touchOnRead=true|false
+- -Dfileexplorer.thumb.diskCache.touchMinIntervalMinutes=<minutes>
+
+Behavior
+- Successful disk-cache payload reads can refresh the payload file modified time.
+- Manifest and temporary files are excluded from touch-on-read refresh.
+- Touch refreshes are skipped until the configured minimum interval has elapsed for a cache entry.
+- Cache pruning continues to use file mtimes, so colder entries age out first while frequently reused thumbnails remain warmer.

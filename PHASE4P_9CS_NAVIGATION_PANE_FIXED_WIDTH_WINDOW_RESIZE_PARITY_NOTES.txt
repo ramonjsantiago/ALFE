@@ -1,0 +1,11 @@
+HOTFIX191 / Phase 4P.9CS — Navigation Pane Fixed-Width Window Resize Parity
+
+Intent:
+- Keep the left navigation pane visually fixed while the application window is stretched or shrunk.
+- Make the file view take the resize delta instead of letting the tree pane proportionally expand with the SplitPane.
+
+Implementation summary:
+- Treat the navigation pane width as a pinned shell width.
+- Update that pinned width only when the user explicitly moves the main divider.
+- Reapply the pinned width on SplitPane width changes so resize deltas are absorbed by the file-view side.
+- Ignore programmatic divider corrections while tracking user divider movement to avoid width drift.

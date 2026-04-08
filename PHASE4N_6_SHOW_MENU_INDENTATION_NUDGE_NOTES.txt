@@ -1,0 +1,6 @@
+Phase 4N.6 — Show Menu Indentation Nudge
+
+Included:
+- Nudged the View > Show row a few more pixels to the right for closer alignment with the other View menu entries.
+- Increased the submenu graphic-container left padding from 14px to 18px.
+- Preserved the Show label, right chevron, and submenu behavior.

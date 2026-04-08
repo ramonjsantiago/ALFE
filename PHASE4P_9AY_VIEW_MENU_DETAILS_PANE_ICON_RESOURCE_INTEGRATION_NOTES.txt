@@ -1,0 +1,17 @@
+HOTFIX145 / Phase 4P.9AY — View Menu Details Pane Icon Resource Integration
+
+Summary
+- Replaced the View menu Details pane row glyph with the newly supplied packaged icon resource.
+
+Resources added
+- src/main/resources/icons/view.details.pane.svg
+- src/main/resources/icons/view.details.pane.png
+- target/classes/icons/view.details.pane.svg
+- target/classes/icons/view.details.pane.png
+
+FXML update
+- src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
+- target/classes/com/fileexplorer/ui/layout/MainLayout.fxml
+
+Behavior
+- The View > Details pane menu row now loads its icon from /icons/view.details.pane.png through an ImageView, matching the resource-backed menu item pattern used by the other View menu entries.

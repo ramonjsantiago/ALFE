@@ -1,0 +1,5 @@
+HOTFIX193 / Phase 4P.9CU — Explorer Search Session Lifecycle, Scope Routing, and Result-Surface Parity
+
+Implemented an explicit search session model in MainController so the main Explorer search box now behaves like a scoped, cancellable search session instead of a purely cosmetic field. Search captures the current directory as its scope root, cancels when navigation moves to a different folder, restores the unfiltered folder surface on clear, and attempts to restore the prior selection/focus anchor.
+
+Added a debounced generation-token pipeline so stale search work is discarded when users keep typing or navigate away. Large-folder search computation now precomputes huge-folder matches before re-entering the existing paging flow. Added an in-surface overlay for `Searching…` and `No results found`, plus scope-aware status/location text so empty search results are visually distinct from a genuinely empty folder.

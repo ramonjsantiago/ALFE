@@ -1,0 +1,5 @@
+HOTFIX192 / Phase 4P.9CT — Explorer Search UX Parity
+- Added a Windows-style clear-search affordance directly inside the main search shell.
+- Added focused and active search chrome states so the surface communicates query/focus ownership more clearly.
+- Added Ctrl+E search focus parity and Escape-to-clear / Escape-to-return semantics.
+- Updated active-search status text to report result counts in the current folder scope.

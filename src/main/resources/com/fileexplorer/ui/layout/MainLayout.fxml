@@ -42,13 +42,13 @@
 
     <!-- Top: breadcrumb bar, command bar, secondary bar -->
     <top>
-        <VBox spacing="6" styleClass="window-top-stack, explorer-top-work-area">
+        <VBox spacing="0" styleClass="window-top-stack, explorer-top-work-area">
             <padding>
-                <Insets top="8" right="0" bottom="6" left="0"/>
+                <Insets top="0" right="0" bottom="0" left="0"/>
             </padding>
             <children>
 
-                <HBox fx:id="tabStrip" alignment="CENTER_LEFT" spacing="8" styleClass="explorer-tabstrip">
+                <HBox fx:id="tabStrip" alignment="CENTER_LEFT" spacing="4" styleClass="explorer-tabstrip">
                     <children>
                         <Button fx:id="homeTabButton" text="Home" focusTraversable="false" onAction="#onShowHomeTab" styleClass="explorer-tab-button, explorer-home-tab"/>
                         <Button fx:id="currentTabButton" text="Current folder" focusTraversable="false" onAction="#onShowCurrentTab" styleClass="explorer-tab-button, explorer-current-tab"/>
@@ -65,7 +65,7 @@
 
                         <BorderPane fx:id="breadcrumbRow"
                                     styleClass="fluent-toolbar, breadcrumb-row, breadcrumb-row-force, explorer-address-row"
-                                    minHeight="56.0" prefHeight="56.0" maxHeight="56.0"
+                                    minHeight="44.0" prefHeight="44.0" maxHeight="44.0"
                                     visible="true" managed="true">
                             <left>
                                 <HBox fx:id="navCluster"
@@ -100,35 +100,58 @@
                                                    id="breadcrumbHost"
                                                    alignment="CENTER_LEFT"
                                                    styleClass="addressBarShell, explorer-address-shell"
-                                                   minHeight="40.0"
-                                                   prefHeight="40.0"
-                                                   maxHeight="40.0"
+                                                   minHeight="32.0"
+                                                   prefHeight="32.0"
+                                                   maxHeight="32.0"
                                                    HBox.hgrow="ALWAYS">
                                             <children>
                                                 <Label text="Loading address bar…" styleClass="address-placeholder-label"/>
                                             </children>
                                         </StackPane>
-                                        <StackPane fx:id="searchShell"
-                                                   styleClass="search-shell, explorer-search-shell"
-                                                   minWidth="220.0"
-                                                   prefWidth="320.0"
-                                                   maxWidth="420.0"
-                                                   minHeight="40.0"
-                                                   prefHeight="40.0"
-                                                   maxHeight="40.0">
+                                        <HBox fx:id="searchShell"
+                                              alignment="CENTER_LEFT"
+                                              spacing="8.0"
+                                              styleClass="search-shell, explorer-search-shell"
+                                              minWidth="220.0"
+                                              prefWidth="352.0"
+                                              maxWidth="420.0"
+                                              minHeight="32.0"
+                                              prefHeight="32.0"
+                                              maxHeight="32.0">
                                             <children>
+                                                <Label text="&#xE721;"
+                                                       mouseTransparent="true"
+                                                       styleClass="fluent-icon, explorer-search-glyph"/>
                                                 <TextField fx:id="searchField"
                                                            styleClass="search-field-chrome, explorer-search-field"
                                                            promptText="Search"
-                                                           prefWidth="320"
-                                                           maxWidth="420"
-                                                           minHeight="36.0"
-                                                           prefHeight="36.0"
-                                                           maxHeight="36.0">
+                                                           prefWidth="320.0"
+                                                           maxWidth="1.7976931348623157E308"
+                                                           minHeight="28.0"
+                                                           prefHeight="28.0"
+                                                           maxHeight="28.0"
+                                                           HBox.hgrow="ALWAYS">
                                                     <tooltip><Tooltip text="Search in current folder"/></tooltip>
                                                 </TextField>
+                                                <Button fx:id="searchClearButton"
+                                                        onAction="#onClearSearchAction"
+                                                        focusTraversable="false"
+                                                        visible="false"
+                                                        managed="false"
+                                                        minWidth="18.0"
+                                                        prefWidth="18.0"
+                                                        maxWidth="18.0"
+                                                        minHeight="18.0"
+                                                        prefHeight="18.0"
+                                                        maxHeight="18.0"
+                                                        styleClass="explorer-search-clear-button">
+                                                    <graphic>
+                                                        <Label text="&#xE711;" styleClass="fluent-icon, explorer-search-clear-glyph"/>
+                                                    </graphic>
+                                                    <tooltip><Tooltip text="Clear search"/></tooltip>
+                                                </Button>
                                             </children>
-                                        </StackPane>
+                                        </HBox>
                                     </children>
                                 </HBox>
                             </center>
@@ -218,38 +241,50 @@
 
                         <Region HBox.hgrow="ALWAYS"/>
 
-                        <ToggleButton fx:id="previewToggle"
-                                      text="Preview"
-                                      selected="false"
-                                      focusTraversable="false"
-                                      onAction="#onPreviewToggle"
-                                      styleClass="command-pane-toggle">
-                            <tooltip><Tooltip text="Show/Hide Preview pane"/></tooltip>
-                            <graphic>
-                                <Label text="&#xE8A5;" styleClass="fluent-icon"/>
-                            </graphic>
-                        </ToggleButton>
+                        <Separator orientation="VERTICAL" styleClass="command-separator, command-right-rail-separator"/>
 
-                        <ToggleButton fx:id="operationsToggle"
-                                      text="Operations"
-                                      selected="false"
-                                      focusTraversable="false"
-                                      onAction="#onOperationsToggle"
-                                      styleClass="command-pane-toggle">
-                            <tooltip><Tooltip text="Show/Hide Operations"/></tooltip>
-                        </ToggleButton>
+                        <HBox alignment="CENTER_RIGHT" spacing="0.0" styleClass="command-right-rail">
+                            <children>
+                                <ToggleButton fx:id="previewToggle"
+                                              text="Preview"
+                                              selected="false"
+                                              focusTraversable="false"
+                                              onAction="#onPreviewToggle"
+                                              styleClass="command-pane-toggle, command-right-rail-toggle, command-right-rail-leading">
+                                    <tooltip><Tooltip text="Show/Hide Preview pane"/></tooltip>
+                                    <graphic>
+                                        <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true">
+                                            <image>
+                                                <Image url="@/icons/toolbar.preview.custom.png"/>
+                                            </image>
+                                        </ImageView>
+                                    </graphic>
+                                </ToggleButton>
 
-                        <ToggleButton fx:id="detailsToggle"
-                                      text="Details"
-                                      selected="false"
-                                      focusTraversable="false"
-                                      onAction="#onDetailsToggle"
-                                      styleClass="command-pane-toggle">
-                            <tooltip><Tooltip text="Show/Hide Details pane"/></tooltip>
-                            <graphic>
-                                <Label text="&#xE8A7;" styleClass="fluent-icon"/>
-                            </graphic>
-                        </ToggleButton>
+                                <ToggleButton fx:id="operationsToggle"
+                                              text="Operations"
+                                              selected="false"
+                                              focusTraversable="false"
+                                              onAction="#onOperationsToggle"
+                                              styleClass="command-pane-toggle, command-right-rail-toggle, command-right-rail-middle">
+                                    <tooltip><Tooltip text="Show/Hide Operations"/></tooltip>
+                                </ToggleButton>
+
+                                <Separator orientation="VERTICAL" styleClass="command-separator, command-rail-divider"/>
+
+                                <ToggleButton fx:id="detailsToggle"
+                                              text="Details"
+                                              selected="false"
+                                              focusTraversable="false"
+                                              onAction="#onDetailsToggle"
+                                              styleClass="command-pane-toggle, command-right-rail-toggle, command-right-rail-trailing">
+                                    <tooltip><Tooltip text="Show/Hide Details pane"/></tooltip>
+                                    <graphic>
+                                        <Label text="&#xE8A7;" styleClass="fluent-icon"/>
+                                    </graphic>
+                                </ToggleButton>
+                            </children>
+                        </HBox>
 
                     </items>
                 </ToolBar>
@@ -437,14 +472,38 @@
             <right>
                 <HBox spacing="6" alignment="CENTER_RIGHT" BorderPane.alignment="CENTER_RIGHT">
                     <ToggleButton fx:id="statusDetailsButton"
-                                 text="Details"
+                                 text=""
                                  selected="true"
                                  focusTraversable="false"
-                                 styleClass="status-view-toggle"/>
+                                 onAction="#onStatusDetailsView"
+                                 contentDisplay="GRAPHIC_ONLY"
+                                 graphicTextGap="0.0"
+                                 styleClass="status-view-toggle">
+                        <graphic>
+                            <ImageView fitWidth="16.0" fitHeight="16.0" preserveRatio="true" smooth="true" pickOnBounds="true">
+                                <image>
+                                    <Image url="@/icons/status.view.details.png"/>
+                                </image>
+                            </ImageView>
+                        </graphic>
+                        <tooltip><Tooltip text="Switch to Details view"/></tooltip>
+                    </ToggleButton>
                     <ToggleButton fx:id="statusLargeIconsButton"
-                                 text="Large"
+                                 text=""
                                  focusTraversable="false"
-                                 styleClass="status-view-toggle"/>
+                                 onAction="#onStatusLargeIconsView"
+                                 contentDisplay="GRAPHIC_ONLY"
+                                 graphicTextGap="0.0"
+                                 styleClass="status-view-toggle">
+                        <graphic>
+                            <ImageView fitWidth="16.0" fitHeight="16.0" preserveRatio="true" smooth="true" pickOnBounds="true">
+                                <image>
+                                    <Image url="@/icons/status.view.xl.icons.png"/>
+                                </image>
+                            </ImageView>
+                        </graphic>
+                        <tooltip><Tooltip text="Switch to Extra large icons view"/></tooltip>
+                    </ToggleButton>
                 </HBox>
             </right>
         </BorderPane>

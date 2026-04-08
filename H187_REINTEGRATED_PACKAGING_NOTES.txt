@@ -1,0 +1,2 @@
+Cause of prior size reduction:
+The smaller HOTFIX187 archives were built from a reduced baseline that did not contain the same fully populated mirrored build/resource payload under target/classes as the larger HOTFIX186 compile-fix baseline. Reintegrating on top of the HOTFIX186 compile-fix baseline restores that content while keeping all newer HOTFIX187 changes.

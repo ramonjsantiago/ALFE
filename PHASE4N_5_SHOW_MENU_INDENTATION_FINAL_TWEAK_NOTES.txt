@@ -1,0 +1,6 @@
+Phase 4N.5 — Show Menu Indentation Final Tweak
+
+Included:
+- Nudged the View > Show row a few more pixels to the right for closer alignment with the other View menu entries.
+- Increased the submenu graphic-container left padding from 10px to 14px.
+- Preserved the Show label, right chevron, and submenu behavior.

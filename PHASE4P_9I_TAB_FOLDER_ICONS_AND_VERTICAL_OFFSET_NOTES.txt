@@ -1,0 +1,14 @@
+HOTFIX102 / Phase 4P.9I — Tab Folder Icons and Vertical Offset
+
+Summary
+- Added folder icons to the left of the Home and Current folder tab text.
+- Current folder tab uses the active directory icon path when available and otherwise falls back to the generic folder icon.
+- Moved the tab buttons 3px downward to better match the requested tab baseline.
+- Preserved the new-tab button as a plain plus button without a folder icon.
+
+Changed files
+- src/main/java/com/fileexplorer/controller/MainController.java
+- src/main/resources/com/fileexplorer/ui/css/explorer-override-everything.css
+- PHASE_LABEL.txt
+- CHANGELOG.md
+- CHANGED_FILES.txt

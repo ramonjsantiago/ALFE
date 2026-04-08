@@ -1,0 +1,7 @@
+Phase 4K.2I — Shared Tooltip Singleton, Details Selection Responsiveness, and Selected Text Contrast
+
+Included:
+- kept explorer metadata popup on a single shared popup path and refreshed its text from the current selection when visible
+- reduced Details selection churn by avoiding hidden icon-view selection refresh work while in Details mode
+- reduced Details row CSS churn by caching the last applied inline row style and skipping redundant row.setStyle(...) calls
+- forced selected text in dark icon/list/tile/content views to #dedede for both name and metadata labels

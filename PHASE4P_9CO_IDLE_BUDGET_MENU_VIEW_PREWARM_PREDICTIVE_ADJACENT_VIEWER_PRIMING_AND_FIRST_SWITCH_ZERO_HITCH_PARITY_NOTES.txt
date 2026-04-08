@@ -1,0 +1,13 @@
+HOTFIX187 / Phase 4P.9CO — Idle-Budget Menu/View Prewarm, Predictive Adjacent-Viewer Priming, and First-Switch Zero-Hitch Parity
+
+What changed
+- Added opportunistic idle startup work support in StartupWorkQueue so speculative prewarm tasks only run during a real idle window and are never forced through by the maximum-deferral timer.
+- Added zero-hitch startup prewarm scheduling in MainController immediately after the first visible hydration batch commits.
+- Prewarms View, See more, Sort, and New command-bar menus during idle so first open no longer pays the full materialization cost.
+- Prewarms likely next file-view surfaces in predictive order (anchored from the last icon view mode) so the first switch into icon/list/tile/content viewers avoids the initial FXML/controller hitch.
+
+Notes
+- Startup-critical behavior remains lazy: startup still shows the shell quickly, and the new work only runs after the first visible directory batch is committed.
+- Prewarm tasks use the shared startup idle queue and back off automatically whenever the user is actively interacting with the scene.
+
+Supplemental resource update: added dedicated MSI file-type icon resources and IconLoader ext:msi override mapping.
