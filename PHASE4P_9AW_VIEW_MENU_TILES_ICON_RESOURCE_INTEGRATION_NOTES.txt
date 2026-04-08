@@ -1,7 +1,0 @@
-HOTFIX143 / Phase 4P.9AW — View Menu Tiles Icon Resource Integration
-
-Summary
-- Added the supplied Tiles icon under src/main/resources/icons as view.tiles.svg.
-- Rendered a JavaFX-friendly packaged bitmap copy as view.tiles.png for the View menu row.
-- Replaced the prior glyph-based Tiles menu icon in MainLayout.fxml with the packaged image resource.
-- Synced the matching packaged-resource copies under target/classes for delivery consistency.

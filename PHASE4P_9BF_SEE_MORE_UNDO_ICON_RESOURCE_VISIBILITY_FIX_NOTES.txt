@@ -1,8 +1,0 @@
-Phase 4P.9BF refreshes the See more > Undo icon resource to correct visibility in the overflow menu.
-
-Changes:
-- Added a trimmed and normalized undo icon resource with a simple classpath-safe filename: src/main/resources/icons/see_more_undo.png
-- Kept compatibility copies at the prior dotted filename locations.
-- Updated MainLayout.fxml to reference /icons/see_more_undo.png for the See more > Undo menu item.
-- Reduced the Undo ImageView fit size from 18x18 to 16x16 to avoid clipping and broken-image presentation artifacts in the menu skin.
-- Synced the same updates under target/classes for the packaged resource tree.

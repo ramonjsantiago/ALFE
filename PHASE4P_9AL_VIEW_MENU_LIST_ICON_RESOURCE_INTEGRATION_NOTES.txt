@@ -1,6 +1,0 @@
-Phase 4P.9AL — View Menu List Icon Resource Integration
-
-Changes:
-- Added the supplied raster list icon to src/main/resources/icons/view.list.png.
-- Replaced the View > List menu row glyph in MainLayout.fxml with an ImageView that loads /icons/view.list.png from the application resources.
-- Kept the icon in the standard resources tree so it is bundled on the runtime classpath with the rest of the UI assets.

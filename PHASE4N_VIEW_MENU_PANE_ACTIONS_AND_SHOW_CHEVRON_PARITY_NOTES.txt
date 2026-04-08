@@ -1,7 +1,0 @@
-Phase 4N — View Menu Pane Actions and Show Chevron Parity
-
-Included:
-- View menu row activation now works for Content, Details pane, and Preview pane entries when clicking the row content, not just the toggle itself.
-- Details pane and Preview pane rows now toggle their associated panes from the full row.
-- Content row now switches to Content view from the full row.
-- Show submenu arrow now uses a right chevron instead of the down-chevron shape and the row uses a visible aligned icon.

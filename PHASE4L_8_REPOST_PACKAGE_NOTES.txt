@@ -1,5 +1,0 @@
-HOTFIX64 repost package
-
-Included:
-- Fully populated project zip reposted from the HOTFIX63 compact preset drop-down build.
-- No source-code delta versus HOTFIX63; this artifact exists to restore the missing downloadable package.

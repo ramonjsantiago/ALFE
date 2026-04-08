@@ -93,6 +93,8 @@ private static final Set<String> LOGGED_RESOURCES = ConcurrentHashMap.newKeySet(
     public static final String PROP_STARTUP_STYLE_PROFILE = "fileexplorer.startupStyleProfile";
     private static final String STARTUP_STYLE_PROFILE_SHELL = "shell";
     private static final String STARTUP_STYLE_PROFILE_MAIN_UI = "main-ui";
+    private static final String APP_ICON_RESOURCE = "/icons/app.png";
+    private static final String APP_TRAY_ICON_RESOURCE = "/icons/app.tray.png";
 
     // Diagnostics (printed once per process).
     // Disable via: -Dfileexplorer.debug.printJvmArgs=false
@@ -468,9 +470,14 @@ try {
 }
 
 // App icon is optional; defer until after first paint.
+final java.util.concurrent.atomic.AtomicReference<java.awt.TrayIcon> trayIconRef = new java.util.concurrent.atomic.AtomicReference<>();
 Platform.runLater(() -> {
     try {
-        stage.getIcons().add(new Image(MainApp.class.getResourceAsStream("/icons/app.png")));
+        installApplicationIcon(stage);
+    } catch (Exception ignored) {
+    }
+    try {
+        trayIconRef.set(installSystemTrayIcon(stage));
     } catch (Exception ignored) {
     }
 });
@@ -536,6 +543,10 @@ stage.setOnCloseRequest(e -> {
             ctx.close();
         } catch (Exception ignored) {
         }
+    }
+    try {
+        removeSystemTrayIcon(trayIconRef.getAndSet(null));
+    } catch (Exception ignored) {
     }
 });
 // Defer the heavy FXML load so the window can paint at least once.
@@ -2682,6 +2693,109 @@ private static StackPane buildShellGlyphButton(String glyph) {
     }
 
 
+
+
+    private static void installApplicationIcon(Stage stage) {
+        if (stage == null || !stage.getIcons().isEmpty()) {
+            return;
+        }
+        Image image = loadFxImage(APP_ICON_RESOURCE);
+        if (image != null) {
+            stage.getIcons().setAll(image);
+        }
+    }
+
+    private static Image loadFxImage(String resourcePath) {
+        if (resourcePath == null || resourcePath.isBlank()) {
+            return null;
+        }
+        try (InputStream in = MainApp.class.getResourceAsStream(resourcePath)) {
+            if (in == null) {
+                return null;
+            }
+            return new Image(in);
+        } catch (IOException ignored) {
+            return null;
+        }
+    }
+
+    private static java.awt.Image loadAwtImage(String resourcePath) {
+        if (resourcePath == null || resourcePath.isBlank()) {
+            return null;
+        }
+        try (InputStream in = MainApp.class.getResourceAsStream(resourcePath)) {
+            if (in == null) {
+                return null;
+            }
+            return javax.imageio.ImageIO.read(in);
+        } catch (IOException ignored) {
+            return null;
+        }
+    }
+
+    private static java.awt.TrayIcon installSystemTrayIcon(Stage stage) {
+        if (stage == null) {
+            return null;
+        }
+        if (java.awt.GraphicsEnvironment.isHeadless() || !java.awt.SystemTray.isSupported()) {
+            return null;
+        }
+        java.awt.Image trayImage = loadAwtImage(APP_TRAY_ICON_RESOURCE);
+        if (trayImage == null) {
+            trayImage = loadAwtImage(APP_ICON_RESOURCE);
+        }
+        if (trayImage == null) {
+            return null;
+        }
+
+        java.awt.PopupMenu popupMenu = new java.awt.PopupMenu();
+        java.awt.MenuItem openItem = new java.awt.MenuItem("Open File Explorer");
+        openItem.addActionListener(event -> Platform.runLater(() -> {
+            try {
+                stage.show();
+                stage.setIconified(false);
+                stage.toFront();
+                stage.requestFocus();
+            } catch (Throwable ignored) {
+            }
+        }));
+        popupMenu.add(openItem);
+        popupMenu.addSeparator();
+        java.awt.MenuItem exitItem = new java.awt.MenuItem("Exit");
+        exitItem.addActionListener(event -> Platform.runLater(stage::close));
+        popupMenu.add(exitItem);
+
+        java.awt.TrayIcon trayIcon = new java.awt.TrayIcon(trayImage, "File Explorer", popupMenu);
+        trayIcon.setImageAutoSize(true);
+        trayIcon.addActionListener(event -> Platform.runLater(() -> {
+            try {
+                stage.show();
+                stage.setIconified(false);
+                stage.toFront();
+                stage.requestFocus();
+            } catch (Throwable ignored) {
+            }
+        }));
+        try {
+            java.awt.SystemTray.getSystemTray().add(trayIcon);
+            return trayIcon;
+        } catch (java.awt.AWTException ignored) {
+            return null;
+        }
+    }
+
+    private static void removeSystemTrayIcon(java.awt.TrayIcon trayIcon) {
+        if (trayIcon == null) {
+            return;
+        }
+        if (java.awt.GraphicsEnvironment.isHeadless() || !java.awt.SystemTray.isSupported()) {
+            return;
+        }
+        try {
+            java.awt.SystemTray.getSystemTray().remove(trayIcon);
+        } catch (Throwable ignored) {
+        }
+    }
 
     private static final class SimpleConsoleFormatter extends Formatter {
         @Override

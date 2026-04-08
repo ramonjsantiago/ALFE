@@ -1,5 +1,0 @@
-HOTFIX39
-- Details hover resolved from table-level row geometry instead of volatile child-node hit testing.
-- Details row visuals moved to deterministic row-owned presentation updates.
-- Metadata popup for Details view is now keyed by hovered row index and anchored against visible row bounds after delay.
-- Deferred TableView refreshes remain suppressed while a Details row is hovered and flush once hover clears.

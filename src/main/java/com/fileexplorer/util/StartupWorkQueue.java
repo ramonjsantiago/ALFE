@@ -115,8 +115,21 @@ public final class StartupWorkQueue {
      * work still drains within a bounded time even if the user keeps moving the mouse.
      */
     public void runIdle(Runnable task) {
+        enqueueIdleTask(task, true);
+    }
+
+    /**
+     * Run only during an actual idle window. Unlike {@link #runIdle(Runnable)}, this flavor is
+     * never forced through by the maximum-deferral timer, which keeps speculative prewarm work from
+     * competing with active interaction.
+     */
+    public void runOpportunisticIdle(Runnable task) {
+        enqueueIdleTask(task, false);
+    }
+
+    private void enqueueIdleTask(Runnable task, boolean allowForcedDrain) {
         Objects.requireNonNull(task, "task");
-        idle.add(new QueuedTask(task));
+        idle.add(new QueuedTask(task, allowForcedDrain));
         restartIdleTimer();
         armMaxDeferralTimerIfNeeded(false);
     }
@@ -142,7 +155,7 @@ public final class StartupWorkQueue {
             Platform.runLater(() -> armMaxDeferralTimerIfNeeded(reset));
             return;
         }
-        if (idle.isEmpty()) {
+        if (idle.isEmpty() || !hasForceableIdleTasks()) {
             maxDeferralTimer.stop();
             return;
         }
@@ -199,10 +212,18 @@ public final class StartupWorkQueue {
 
         try {
             QueuedTask queued;
+            java.util.ArrayDeque<QueuedTask> deferred = new java.util.ArrayDeque<>();
             int max = intProp("fileexplorer.startup.idleBatch", 3);
             int ran = 0;
+            int scanned = 0;
+            int scanLimit = forced ? Math.max(1, idle.size()) : Integer.MAX_VALUE;
             long deadline = System.nanoTime() + idleBatchBudgetNanos;
-            while (ran < max && (queued = idle.poll()) != null) {
+            while (ran < max && scanned < scanLimit && (queued = idle.poll()) != null) {
+                scanned++;
+                if (forced && !queued.allowForcedDrain) {
+                    deferred.addLast(queued);
+                    continue;
+                }
                 try {
                     queued.task.run();
                 } catch (Throwable ignored) {
@@ -211,6 +232,9 @@ public final class StartupWorkQueue {
                 if (System.nanoTime() >= deadline) {
                     break;
                 }
+            }
+            while (!deferred.isEmpty()) {
+                idle.add(deferred.removeFirst());
             }
         } finally {
             idlePumpScheduled.set(false);
@@ -256,11 +280,22 @@ public final class StartupWorkQueue {
         }
     }
 
+    private boolean hasForceableIdleTasks() {
+        for (QueuedTask queuedTask : idle) {
+            if (queuedTask != null && queuedTask.allowForcedDrain) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static final class QueuedTask {
         private final Runnable task;
+        private final boolean allowForcedDrain;
 
-        private QueuedTask(Runnable task) {
+        private QueuedTask(Runnable task, boolean allowForcedDrain) {
             this.task = task;
+            this.allowForcedDrain = allowForcedDrain;
         }
     }
 }

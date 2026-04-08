@@ -1,7 +1,0 @@
-Phase 4L.12 / HOTFIX68 — Column-Specific Details Header Preset Menus
-
-- Extended the right-edge compact preset drop-down to all Details table headers using column-specific preset sets.
-- Size-family columns now show: Empty (0 KB), Tiny (0 - 16 KB), Small (16 KB - 1 MB), Medium (1 - 128 MB), Large (128 MB - 1 GB), Unspecified.
-- Date-family columns now show: A long time ago, Earlier this year, Last month, Earlier this month, Last week, Yesterday, Today.
-- Other text-like Details columns continue to use the aligned range presets: 0-9, A-H, I-P, Q-Z.
-- Preserved the Explorer-style checkbox, icon, string row layout and the hover-only right-edge chevron trigger.

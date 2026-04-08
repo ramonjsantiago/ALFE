@@ -1,9 +1,15 @@
+- Added dedicated .ini file icon resources under src/main/resources/com/fileexplorer/ui/icons/{light,dark} and routed ext:ini through IconLoader override resolution.
 ## HOTFIX186 / Phase 4P.9CN — Modular File-View Extraction, Per-Viewer FXML Decomposition, and Lazy Active-View Host Parity
 - Added a new modular `com.fileexplorer.ui.fileview` package family plus a lazy `FileViewHost` to load file viewers into the main `viewHost` on demand.
 - Split the Details, Extra large icons, Large icons, Medium icons, Small icons, List, Tiles, and Content surfaces into dedicated FXML/controller modules.
 - Reworked `MainLayout.fxml` and `MainController` so view-mode changes activate modular viewer surfaces while preserving the current MainController-driven interaction pipeline.
 
 # Changelog
+
+## HOTFIX187 / Phase 4P.9CO — Idle-Budget Menu/View Prewarm, Predictive Adjacent-Viewer Priming, and First-Switch Zero-Hitch Parity
+- Added opportunistic idle startup work in `StartupWorkQueue` so speculative menu/view prewarm only runs during a true quiet window and is never forced through by the maximum-deferral timer.
+- Added zero-hitch startup prewarm scheduling in `MainController` right after the first visible directory batch commits.
+- Prewarmed `View`, `See more`, `Sort`, and `New` command-bar menus plus the likely next file-view surfaces so first-open / first-switch hitching is reduced without giving back the HOTFIX186 startup win.
 
 ## HOTFIX186 compile correction
 - Restored the missing JavaFX imports in `MainApp` for `Label` and `Priority`, fixing the shell-scene build break introduced during the H186 modular file-view extraction pass.
@@ -80,3 +86,28 @@
 - Split progressive directory enumeration into a smaller startup-first batch and larger follow-on batches to reduce first-click/first-scroll contention.
 - Added async icon gating so placeholder icons stay cheap until the first visible directory batch is committed.
 - Deferred current-folder thumbnail warmup until after first-interaction readiness, keeping preview/thumbnail work behind a later startup gate.
+
+[APP/TRAY ICON UPDATE]
+- Added src/main/resources/icons/app.png from the attached asset.
+- Added src/main/resources/icons/app.tray.png from the attached asset.
+- Updated MainApp to apply the application icon and install/remove the system tray icon.
+
+- Added dedicated .msi file-type icon resources and IconLoader ext:msi override mapping.
+
+- Added dedicated default PDF resource icons (light/dark, 16-256) for ext:pdf so PDF files show the attached icon until thumbnails are ready.
+
+## H187 Text File Icon Update
+- Added dedicated packaged default icons for `.txt` and `.text` files in light and dark resource sets.
+- Updated `IconLoader` so `ext:txt` and `ext:text` resolve to the new packaged text-file icon while content/text loading is pending.
+- Mirrored the new resources into `target/classes` for the packaged full-project tree.
+
+
+## Packaging reintegration
+- Reintegrated HOTFIX187 updates onto the larger HOTFIX186 compile-fix baseline to preserve the fully populated project footprint.
+- Restored missing mirrored build/resource payload under target/classes while keeping HOTFIX187 code and icon changes.
+
+- H187 resource update: added dedicated packaged CSV default icons (`csv-16..256.png`, light/dark) and mapped `ext:csv` to the CSV resource icon while thumbnails are pending.
+
+- H187 resource update: added dedicated packaged DOCX default icons (`docx-16..256.png`, light/dark) and mapped `ext:docx` to the DOCX resource icon while thumbnails are pending.
+
+- H187 resource update: added dedicated packaged compressed-archive default icons (`compressed-16..256.png`, light/dark) and mapped `ext:zip`, `ext:7z`, `ext:gz`, `ext:bz2`, and `ext:tar` to the compressed resource icon while thumbnails are pending.

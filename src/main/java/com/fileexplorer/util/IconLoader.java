@@ -119,7 +119,7 @@ public final class IconLoader {
                 id,
                 darkTheme,
                 clamped,
-                () -> loadUncached(type, darkTheme, clamped)
+                () -> loadForIdentityUncached(id, type, darkTheme, clamped)
         );
     }
 
@@ -240,7 +240,7 @@ public final class IconLoader {
             case "png", "jpg", "jpeg", "gif", "bmp", "webp", "avif", "heif", "heic", "tif", "tiff", "svg", "ico" -> IconType.IMAGE;
 
             // Text-ish documents
-            case "txt", "md", "log", "rtf", "ini", "cfg", "conf", "csv", "tsv", "json", "xml", "yaml", "yml", "properties" -> IconType.TEXT;
+            case "txt", "text", "md", "log", "rtf", "ini", "cfg", "conf", "csv", "tsv", "json", "xml", "yaml", "yml", "properties" -> IconType.TEXT;
 
             // Archives
             case "zip", "7z", "rar", "tar", "gz", "bz2", "xz", "zst" -> IconType.ARCHIVE;
@@ -277,6 +277,46 @@ public final class IconLoader {
  * @param clampedSize TODO
  * @return TODO
  */
+    private static Image loadForIdentityUncached(String normalizedIdentity, IconType type, boolean darkTheme, int clampedSize) {
+        LogSupport.enter(LOG, "loadForIdentityUncached");
+        Image override = loadIdentityOverride(normalizedIdentity, darkTheme, clampedSize);
+        if (override != null) {
+            return override;
+        }
+        return loadUncached(type, darkTheme, clampedSize);
+    }
+
+/**
+ * loadIdentityOverride.
+ *
+ * @param normalizedIdentity TODO
+ * @param darkTheme TODO
+ * @param clampedSize TODO
+ * @return TODO
+ */
+    private static Image loadIdentityOverride(String normalizedIdentity, boolean darkTheme, int clampedSize) {
+        LogSupport.enter(LOG, "loadIdentityOverride");
+        if (normalizedIdentity == null || normalizedIdentity.isBlank()) {
+            return null;
+        }
+
+        String resourcePath = switch (normalizedIdentity) {
+            case "ext:ini" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/ini-" + clampedSize + ".png";
+            case "ext:msi" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/msi-" + clampedSize + ".png";
+            case "ext:pdf" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/pdf-" + clampedSize + ".png";
+            case "ext:txt", "ext:text" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/txt-" + clampedSize + ".png";
+            case "ext:csv" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/csv-" + clampedSize + ".png";
+            case "ext:docx" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/docx-" + clampedSize + ".png";
+            case "ext:zip", "ext:7z", "ext:gz", "ext:bz2", "ext:tar" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/compressed-" + clampedSize + ".png";
+            default -> null;
+        };
+
+        if (resourcePath == null) {
+            return null;
+        }
+        return loadFromResource(resourcePath);
+    }
+
     private static Image loadUncached(IconType type, boolean darkTheme, int clampedSize) {
         LogSupport.enter(LOG, "loadUncached");
         String resourceName = resourceNameFor(type, darkTheme, clampedSize);

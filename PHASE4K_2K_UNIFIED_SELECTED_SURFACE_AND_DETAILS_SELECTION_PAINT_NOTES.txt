@@ -1,8 +1,0 @@
-Phase 4K.2K — Unified Selected Surface and Details Selection Paint
-
-Included:
-- selected/highlighted explorer items now use border color #c3c3c3
-- selected/highlighted explorer items now use background color rgba(80,80,80,0.50)
-- Details/Table selected row inline paint was updated to the same border/fill as icon/list/tile/content selections
-- selected Details row text is forced to #dedede for readability
-- shared selection tokens were aligned so focused, unfocused, and inactive selected surfaces match the new selection spec

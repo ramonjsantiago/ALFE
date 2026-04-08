@@ -643,6 +643,7 @@ private volatile long hugeFolderScannedTotal = 0L;
     private final java.util.concurrent.atomic.AtomicBoolean startupThumbnailWarmupGateOpened = new java.util.concurrent.atomic.AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicBoolean startupFirstInteractionTrackingArmed = new java.util.concurrent.atomic.AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicBoolean startupFirstInteractionReadyMarked = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicBoolean startupZeroHitchPrewarmScheduled = new java.util.concurrent.atomic.AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicBoolean deferredOperationQueueBindingsInstalled = new java.util.concurrent.atomic.AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicBoolean deferredExplorerContextActivationScheduled = new java.util.concurrent.atomic.AtomicBoolean(false);
     private volatile boolean directoryLoading;
@@ -1345,19 +1346,24 @@ private void installLazyMenuPopulation(javafx.scene.control.MenuButton menuButto
     if (menuButton == null || populator == null) {
         return;
     }
-    menuButton.setOnShowing(e -> {
-        if (Boolean.TRUE.equals(menuButton.getProperties().get("fileexplorer.lazyMenu.materialized"))) {
-            return;
-        }
-        menuButton.getProperties().put("fileexplorer.lazyMenu.materialized", Boolean.TRUE);
-        StartupTrace.mark(traceLabel + " begin");
-        try {
-            populator.run();
-            styleCommandFlyout(menuButton);
-        } finally {
-            StartupTrace.mark(traceLabel + " end");
-        }
-    });
+    menuButton.setOnShowing(e -> ensureMenuButtonMaterialized(menuButton, traceLabel, populator));
+}
+
+private void ensureMenuButtonMaterialized(javafx.scene.control.MenuButton menuButton, String traceLabel, Runnable populator) {
+    if (menuButton == null || populator == null) {
+        return;
+    }
+    if (Boolean.TRUE.equals(menuButton.getProperties().get("fileexplorer.lazyMenu.materialized"))) {
+        return;
+    }
+    menuButton.getProperties().put("fileexplorer.lazyMenu.materialized", Boolean.TRUE);
+    StartupTrace.mark(traceLabel + " begin");
+    try {
+        populator.run();
+        styleCommandFlyout(menuButton);
+    } finally {
+        StartupTrace.mark(traceLabel + " end");
+    }
 }
 
 private javafx.scene.control.MenuItem createTextMenuItem(String text, Node graphic) {
@@ -1607,6 +1613,108 @@ private void materializeSeeMoreMenuButton() {
             createTextMenuItem("Options:", createMenuGlyph("\uE713", "fluent-icon", "menuitem-icon-gap"))
     );
     wireSeeMoreMenuActions();
+}
+
+private StartupWorkQueue getStartupWorkQueue() {
+    Scene scene = root != null ? root.getScene() : null;
+    if (scene == null) {
+        scene = boundScene;
+    }
+    if (scene == null) {
+        return null;
+    }
+    Object value = scene.getProperties().get(MainApp.PROP_STARTUP_WORK_QUEUE);
+    return value instanceof StartupWorkQueue queue ? queue : null;
+}
+
+private void scheduleZeroHitchPrewarm() {
+    if (!startupZeroHitchPrewarmScheduled.compareAndSet(false, true)) {
+        return;
+    }
+    StartupWorkQueue queue = getStartupWorkQueue();
+    if (queue == null) {
+        Platform.runLater(this::runZeroHitchPrewarmFallback);
+        return;
+    }
+    queue.runOpportunisticIdle(() -> prewarmMenuButton(viewMenuButton, "viewMenuButton prewarm", this::materializeViewMenuButton));
+    queue.runOpportunisticIdle(() -> prewarmMenuButton(seeMoreMenuButton, "seeMoreMenuButton prewarm", this::materializeSeeMoreMenuButton));
+    queue.runOpportunisticIdle(() -> prewarmMenuButton(sortMenuButton, "sortMenuButton prewarm", this::materializeSortMenuButton));
+    queue.runOpportunisticIdle(() -> prewarmMenuButton(newMenuButton, "newMenuButton prewarm", this::materializeNewMenuButton));
+    for (ViewMode mode : buildPredictivePrewarmModes()) {
+        final ViewMode nextMode = mode;
+        queue.runOpportunisticIdle(() -> prewarmFileViewMode(nextMode));
+    }
+}
+
+private void runZeroHitchPrewarmFallback() {
+    prewarmMenuButton(viewMenuButton, "viewMenuButton prewarm", this::materializeViewMenuButton);
+    prewarmMenuButton(seeMoreMenuButton, "seeMoreMenuButton prewarm", this::materializeSeeMoreMenuButton);
+    prewarmMenuButton(sortMenuButton, "sortMenuButton prewarm", this::materializeSortMenuButton);
+    prewarmMenuButton(newMenuButton, "newMenuButton prewarm", this::materializeNewMenuButton);
+    for (ViewMode mode : buildPredictivePrewarmModes()) {
+        prewarmFileViewMode(mode);
+    }
+}
+
+private void prewarmMenuButton(javafx.scene.control.MenuButton menuButton, String traceLabel, Runnable populator) {
+    ensureMenuButtonMaterialized(menuButton, traceLabel, populator);
+}
+
+private List<ViewMode> buildPredictivePrewarmModes() {
+    List<ViewMode> order = new ArrayList<>();
+    ViewMode anchor = isGridIconMode(lastIconViewMode) ? lastIconViewMode : ViewMode.MEDIUM_ICONS;
+    switch (anchor) {
+        case EXTRA_LARGE_ICONS -> {
+            order.add(ViewMode.EXTRA_LARGE_ICONS);
+            order.add(ViewMode.LARGE_ICONS);
+            order.add(ViewMode.MEDIUM_ICONS);
+            order.add(ViewMode.SMALL_ICONS);
+        }
+        case LARGE_ICONS -> {
+            order.add(ViewMode.LARGE_ICONS);
+            order.add(ViewMode.EXTRA_LARGE_ICONS);
+            order.add(ViewMode.MEDIUM_ICONS);
+            order.add(ViewMode.SMALL_ICONS);
+        }
+        case SMALL_ICONS -> {
+            order.add(ViewMode.SMALL_ICONS);
+            order.add(ViewMode.MEDIUM_ICONS);
+            order.add(ViewMode.LARGE_ICONS);
+            order.add(ViewMode.EXTRA_LARGE_ICONS);
+        }
+        default -> {
+            order.add(ViewMode.MEDIUM_ICONS);
+            order.add(ViewMode.LARGE_ICONS);
+            order.add(ViewMode.SMALL_ICONS);
+            order.add(ViewMode.EXTRA_LARGE_ICONS);
+        }
+    }
+    order.add(ViewMode.LIST);
+    order.add(ViewMode.TILES);
+    order.add(ViewMode.CONTENT);
+    return order;
+}
+
+private void prewarmFileViewMode(ViewMode mode) {
+    if (mode == null) {
+        return;
+    }
+    initializeFileViewModules();
+    if (modularFileViewHost == null) {
+        return;
+    }
+    if (mode == ViewMode.DETAILS) {
+        ensureDetailsFileViewLoaded();
+        return;
+    }
+    String viewKey = fileViewKeyFor(mode);
+    if (viewKey == null) {
+        return;
+    }
+    if (modularFileViewHost.getViewRoot(viewKey) != null) {
+        return;
+    }
+    ensureIconFileViewLoaded(mode);
 }
 
 private void scheduleDeferredOperationQueueBindings() {
@@ -1969,6 +2077,7 @@ private void initializeWithContext() {
             AsyncIconService.getInstance().setEnabled(true);
             StartupTrace.mark("icon warmup gate open");
         }
+        scheduleZeroHitchPrewarm();
         startupFirstInteractionFallback.playFromStart();
     }
 

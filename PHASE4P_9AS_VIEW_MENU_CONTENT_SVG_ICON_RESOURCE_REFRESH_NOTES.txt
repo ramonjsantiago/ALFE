@@ -1,7 +1,0 @@
-HOTFIX139 / Phase 4P.9AS — View Menu Content SVG Icon Resource Refresh
-
-Summary
-- Added the supplied View > Content SVG asset under src/main/resources/icons/view.content.svg.
-- Re-rendered a JavaFX-friendly raster copy at src/main/resources/icons/view.content.png from the supplied SVG.
-- Kept MainLayout.fxml pointed at /icons/view.content.png so the existing View > Content menu-row ImageView picks up the refreshed attached icon without further FXML wiring changes.
-- Synced the packaged target/classes resource copies so the full-project archive carries the refreshed icon resources and FXML snapshot together.

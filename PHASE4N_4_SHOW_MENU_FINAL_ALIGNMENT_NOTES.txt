@@ -1,6 +1,0 @@
-Phase 4N.4 — Show Menu Final Alignment
-
-Included:
-- Nudged the View > Show submenu row a few more pixels to the right for alignment parity.
-- Increased the submenu graphic-container left padding from 6px to 10px.
-- Preserved the Show label, right chevron, and existing row behavior.

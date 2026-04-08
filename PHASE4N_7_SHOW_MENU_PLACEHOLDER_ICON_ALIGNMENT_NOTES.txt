@@ -1,6 +1,0 @@
-Phase 4N.7 — Show Menu Placeholder Icon Alignment
-
-Included:
-- Replaced the View > Show visible glyph with a placeholder icon region so the row aligns using the same checkbox+icon columns as the other View menu entries.
-- Reset the submenu graphic-container left padding back to 6px.
-- Preserved the Show label, right chevron, and submenu behavior.

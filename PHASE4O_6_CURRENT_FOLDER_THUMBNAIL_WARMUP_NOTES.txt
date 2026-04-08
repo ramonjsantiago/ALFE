@@ -1,7 +1,0 @@
-Phase 4O.6 adds a bounded current-folder thumbnail warmup pass.
-After folder navigation settles, the controller warms only the current folder's visible/top thumbnail candidates using background-priority requests,
-reusing the existing in-memory cache, coalescing, throttling, and fail-open pipeline.
-Warmup is canceled/restarted on navigation and can be tuned with
--Dfileexplorer.thumb.warmup.enabled=true|false,
--Dfileexplorer.thumb.warmup.delayMs=<ms>, and
--Dfileexplorer.thumb.warmup.maxItems=<count>.

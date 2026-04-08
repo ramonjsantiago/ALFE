@@ -1,8 +1,0 @@
-Phase 4L.6 — Details Header Drop-down Alignment and Sort Preset Placeholders
-
-Included:
-- Added a right-edge primary-click drop-down trigger zone on Details column headers.
-- Added aligned sort preset rows at the top of each header drop-down: 0-9, A-Z, a-z.
-- Each preset row now renders as checkbox, icon, and label in that order.
-- Preset rows stay aligned through fixed-width checkbox and icon columns.
-- Clicking a preset applies ascending/descending primary sort on the clicked column.

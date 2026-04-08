@@ -1,27 +1,154 @@
-src/main/java/com/fileexplorer/app/MainApp.java
+src/main/java/com/fileexplorer/util/StartupWorkQueue.java
 src/main/java/com/fileexplorer/controller/MainController.java
-src/main/java/com/fileexplorer/ui/fileview/api/FileViewComponent.java
-src/main/java/com/fileexplorer/ui/fileview/host/FileViewHost.java
-src/main/java/com/fileexplorer/ui/fileview/shared/AbstractIconFlowFileViewController.java
-src/main/java/com/fileexplorer/ui/fileview/details/DetailsViewController.java
-src/main/java/com/fileexplorer/ui/fileview/extralargeicons/ExtraLargeIconsViewController.java
-src/main/java/com/fileexplorer/ui/fileview/largeicons/LargeIconsViewController.java
-src/main/java/com/fileexplorer/ui/fileview/mediumicons/MediumIconsViewController.java
-src/main/java/com/fileexplorer/ui/fileview/smallicons/SmallIconsViewController.java
-src/main/java/com/fileexplorer/ui/fileview/listview/ListFileViewController.java
-src/main/java/com/fileexplorer/ui/fileview/tiles/TilesFileViewController.java
-src/main/java/com/fileexplorer/ui/fileview/content/ContentFileViewController.java
-src/main/resources/com/fileexplorer/ui/layout/MainLayout.fxml
-src/main/resources/com/fileexplorer/ui/fileview/details/DetailsView.fxml
-src/main/resources/com/fileexplorer/ui/fileview/extralargeicons/ExtraLargeIconsView.fxml
-src/main/resources/com/fileexplorer/ui/fileview/largeicons/LargeIconsView.fxml
-src/main/resources/com/fileexplorer/ui/fileview/mediumicons/MediumIconsView.fxml
-src/main/resources/com/fileexplorer/ui/fileview/smallicons/SmallIconsView.fxml
-src/main/resources/com/fileexplorer/ui/fileview/listview/ListFileView.fxml
-src/main/resources/com/fileexplorer/ui/fileview/tiles/TilesFileView.fxml
-src/main/resources/com/fileexplorer/ui/fileview/content/ContentFileView.fxml
-docs/README_HOTFIX186.md
-PHASE4P_9CN_MODULAR_FILE_VIEW_EXTRACTION_PER_VIEWER_FXML_DECOMPOSITION_AND_LAZY_ACTIVE_VIEW_HOST_PARITY_NOTES.txt
+docs/README_HOTFIX187.md
+PHASE4P_9CO_IDLE_BUDGET_MENU_VIEW_PREWARM_PREDICTIVE_ADJACENT_VIEWER_PRIMING_AND_FIRST_SWITCH_ZERO_HITCH_PARITY_NOTES.txt
 CHANGELOG.md
 PHASE_LABEL.txt
 CHANGED_FILES.txt
+
+[APP/TRAY ICON UPDATE]
+- Added src/main/resources/icons/app.png from the attached asset.
+- Added src/main/resources/icons/app.tray.png from the attached asset.
+- Updated MainApp to apply the application icon and install/remove the system tray icon.
+src/main/java/com/fileexplorer/util/IconLoader.java
+src/main/resources/com/fileexplorer/ui/icons/light/ini-16.png
+src/main/resources/com/fileexplorer/ui/icons/light/ini-24.png
+src/main/resources/com/fileexplorer/ui/icons/light/ini-32.png
+src/main/resources/com/fileexplorer/ui/icons/light/ini-48.png
+src/main/resources/com/fileexplorer/ui/icons/light/ini-64.png
+src/main/resources/com/fileexplorer/ui/icons/light/ini-96.png
+src/main/resources/com/fileexplorer/ui/icons/light/ini-128.png
+src/main/resources/com/fileexplorer/ui/icons/light/ini-256.png
+src/main/resources/com/fileexplorer/ui/icons/dark/ini-16.png
+src/main/resources/com/fileexplorer/ui/icons/dark/ini-24.png
+src/main/resources/com/fileexplorer/ui/icons/dark/ini-32.png
+src/main/resources/com/fileexplorer/ui/icons/dark/ini-48.png
+src/main/resources/com/fileexplorer/ui/icons/dark/ini-64.png
+src/main/resources/com/fileexplorer/ui/icons/dark/ini-96.png
+src/main/resources/com/fileexplorer/ui/icons/dark/ini-128.png
+src/main/resources/com/fileexplorer/ui/icons/dark/ini-256.png
+
+- Added dedicated .msi file-type icon resources and IconLoader ext:msi override mapping.
+src/main/java/com/fileexplorer/util/IconLoader.java
+src/main/resources/com/fileexplorer/ui/icons/light/pdf-16.png
+target/classes/com/fileexplorer/ui/icons/light/pdf-16.png
+src/main/resources/com/fileexplorer/ui/icons/light/pdf-24.png
+target/classes/com/fileexplorer/ui/icons/light/pdf-24.png
+src/main/resources/com/fileexplorer/ui/icons/light/pdf-32.png
+target/classes/com/fileexplorer/ui/icons/light/pdf-32.png
+src/main/resources/com/fileexplorer/ui/icons/light/pdf-48.png
+target/classes/com/fileexplorer/ui/icons/light/pdf-48.png
+src/main/resources/com/fileexplorer/ui/icons/light/pdf-64.png
+target/classes/com/fileexplorer/ui/icons/light/pdf-64.png
+src/main/resources/com/fileexplorer/ui/icons/light/pdf-96.png
+target/classes/com/fileexplorer/ui/icons/light/pdf-96.png
+src/main/resources/com/fileexplorer/ui/icons/light/pdf-128.png
+target/classes/com/fileexplorer/ui/icons/light/pdf-128.png
+src/main/resources/com/fileexplorer/ui/icons/light/pdf-256.png
+target/classes/com/fileexplorer/ui/icons/light/pdf-256.png
+src/main/resources/com/fileexplorer/ui/icons/dark/pdf-16.png
+target/classes/com/fileexplorer/ui/icons/dark/pdf-16.png
+src/main/resources/com/fileexplorer/ui/icons/dark/pdf-24.png
+target/classes/com/fileexplorer/ui/icons/dark/pdf-24.png
+src/main/resources/com/fileexplorer/ui/icons/dark/pdf-32.png
+target/classes/com/fileexplorer/ui/icons/dark/pdf-32.png
+src/main/resources/com/fileexplorer/ui/icons/dark/pdf-48.png
+target/classes/com/fileexplorer/ui/icons/dark/pdf-48.png
+src/main/resources/com/fileexplorer/ui/icons/dark/pdf-64.png
+target/classes/com/fileexplorer/ui/icons/dark/pdf-64.png
+src/main/resources/com/fileexplorer/ui/icons/dark/pdf-96.png
+target/classes/com/fileexplorer/ui/icons/dark/pdf-96.png
+src/main/resources/com/fileexplorer/ui/icons/dark/pdf-128.png
+target/classes/com/fileexplorer/ui/icons/dark/pdf-128.png
+src/main/resources/com/fileexplorer/ui/icons/dark/pdf-256.png
+target/classes/com/fileexplorer/ui/icons/dark/pdf-256.png
+src/main/resources/com/fileexplorer/ui/icons/light/txt-16.png
+src/main/resources/com/fileexplorer/ui/icons/light/txt-24.png
+src/main/resources/com/fileexplorer/ui/icons/light/txt-32.png
+src/main/resources/com/fileexplorer/ui/icons/light/txt-48.png
+src/main/resources/com/fileexplorer/ui/icons/light/txt-64.png
+src/main/resources/com/fileexplorer/ui/icons/light/txt-96.png
+src/main/resources/com/fileexplorer/ui/icons/light/txt-128.png
+src/main/resources/com/fileexplorer/ui/icons/light/txt-256.png
+src/main/resources/com/fileexplorer/ui/icons/dark/txt-16.png
+src/main/resources/com/fileexplorer/ui/icons/dark/txt-24.png
+src/main/resources/com/fileexplorer/ui/icons/dark/txt-32.png
+src/main/resources/com/fileexplorer/ui/icons/dark/txt-48.png
+src/main/resources/com/fileexplorer/ui/icons/dark/txt-64.png
+src/main/resources/com/fileexplorer/ui/icons/dark/txt-96.png
+src/main/resources/com/fileexplorer/ui/icons/dark/txt-128.png
+src/main/resources/com/fileexplorer/ui/icons/dark/txt-256.png
+Packaging reintegration:
+- Restored larger fully populated target/classes footprint from HOTFIX186 compile-fix baseline
+- Overlaid HOTFIX187 startup/prewarm changes
+- Overlaid app/tray icon and ini/msi/pdf/txt icon resource updates
+
+H187 text icon resource refresh (no target packaging)
+- src/main/resources/com/fileexplorer/ui/icons/light/txt-16.png
+- src/main/resources/com/fileexplorer/ui/icons/light/txt-24.png
+- src/main/resources/com/fileexplorer/ui/icons/light/txt-32.png
+- src/main/resources/com/fileexplorer/ui/icons/light/txt-48.png
+- src/main/resources/com/fileexplorer/ui/icons/light/txt-64.png
+- src/main/resources/com/fileexplorer/ui/icons/light/txt-96.png
+- src/main/resources/com/fileexplorer/ui/icons/light/txt-128.png
+- src/main/resources/com/fileexplorer/ui/icons/light/txt-256.png
+- src/main/resources/com/fileexplorer/ui/icons/dark/txt-16.png
+- src/main/resources/com/fileexplorer/ui/icons/dark/txt-24.png
+- src/main/resources/com/fileexplorer/ui/icons/dark/txt-32.png
+- src/main/resources/com/fileexplorer/ui/icons/dark/txt-48.png
+- src/main/resources/com/fileexplorer/ui/icons/dark/txt-64.png
+- src/main/resources/com/fileexplorer/ui/icons/dark/txt-96.png
+- src/main/resources/com/fileexplorer/ui/icons/dark/txt-128.png
+- src/main/resources/com/fileexplorer/ui/icons/dark/txt-256.png
+src/main/resources/com/fileexplorer/ui/icons/light/csv-16.png
+src/main/resources/com/fileexplorer/ui/icons/light/csv-24.png
+src/main/resources/com/fileexplorer/ui/icons/light/csv-32.png
+src/main/resources/com/fileexplorer/ui/icons/light/csv-48.png
+src/main/resources/com/fileexplorer/ui/icons/light/csv-64.png
+src/main/resources/com/fileexplorer/ui/icons/light/csv-96.png
+src/main/resources/com/fileexplorer/ui/icons/light/csv-128.png
+src/main/resources/com/fileexplorer/ui/icons/light/csv-256.png
+src/main/resources/com/fileexplorer/ui/icons/dark/csv-16.png
+src/main/resources/com/fileexplorer/ui/icons/dark/csv-24.png
+src/main/resources/com/fileexplorer/ui/icons/dark/csv-32.png
+src/main/resources/com/fileexplorer/ui/icons/dark/csv-48.png
+src/main/resources/com/fileexplorer/ui/icons/dark/csv-64.png
+src/main/resources/com/fileexplorer/ui/icons/dark/csv-96.png
+src/main/resources/com/fileexplorer/ui/icons/dark/csv-128.png
+src/main/resources/com/fileexplorer/ui/icons/dark/csv-256.png
+
+src/main/java/com/fileexplorer/util/IconLoader.java
+src/main/resources/com/fileexplorer/ui/icons/light/docx-16.png
+src/main/resources/com/fileexplorer/ui/icons/light/docx-24.png
+src/main/resources/com/fileexplorer/ui/icons/light/docx-32.png
+src/main/resources/com/fileexplorer/ui/icons/light/docx-48.png
+src/main/resources/com/fileexplorer/ui/icons/light/docx-64.png
+src/main/resources/com/fileexplorer/ui/icons/light/docx-96.png
+src/main/resources/com/fileexplorer/ui/icons/light/docx-128.png
+src/main/resources/com/fileexplorer/ui/icons/light/docx-256.png
+src/main/resources/com/fileexplorer/ui/icons/dark/docx-16.png
+src/main/resources/com/fileexplorer/ui/icons/dark/docx-24.png
+src/main/resources/com/fileexplorer/ui/icons/dark/docx-32.png
+src/main/resources/com/fileexplorer/ui/icons/dark/docx-48.png
+src/main/resources/com/fileexplorer/ui/icons/dark/docx-64.png
+src/main/resources/com/fileexplorer/ui/icons/dark/docx-96.png
+src/main/resources/com/fileexplorer/ui/icons/dark/docx-128.png
+src/main/resources/com/fileexplorer/ui/icons/dark/docx-256.png
+
+src/main/java/com/fileexplorer/util/IconLoader.java
+src/main/resources/com/fileexplorer/ui/icons/light/compressed-16.png
+src/main/resources/com/fileexplorer/ui/icons/light/compressed-24.png
+src/main/resources/com/fileexplorer/ui/icons/light/compressed-32.png
+src/main/resources/com/fileexplorer/ui/icons/light/compressed-48.png
+src/main/resources/com/fileexplorer/ui/icons/light/compressed-64.png
+src/main/resources/com/fileexplorer/ui/icons/light/compressed-96.png
+src/main/resources/com/fileexplorer/ui/icons/light/compressed-128.png
+src/main/resources/com/fileexplorer/ui/icons/light/compressed-256.png
+src/main/resources/com/fileexplorer/ui/icons/dark/compressed-16.png
+src/main/resources/com/fileexplorer/ui/icons/dark/compressed-24.png
+src/main/resources/com/fileexplorer/ui/icons/dark/compressed-32.png
+src/main/resources/com/fileexplorer/ui/icons/dark/compressed-48.png
+src/main/resources/com/fileexplorer/ui/icons/dark/compressed-64.png
+src/main/resources/com/fileexplorer/ui/icons/dark/compressed-96.png
+src/main/resources/com/fileexplorer/ui/icons/dark/compressed-128.png
+src/main/resources/com/fileexplorer/ui/icons/dark/compressed-256.png

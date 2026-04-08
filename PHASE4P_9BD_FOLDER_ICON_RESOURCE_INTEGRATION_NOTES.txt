@@ -1,8 +1,0 @@
-HOTFIX150 / Phase 4P.9BD — Folder Icon Resource Integration
-
-Summary
-- Replaced the generic folder icon resource set with the attached packaged folder image.
-- Added the supplied PNG under `src/main/resources/com/fileexplorer/ui/icons/folder.png` for source traceability.
-- Generated JavaFX-ready folder PNG resources for all standard IconLoader sizes under both `light` and `dark` resource directories.
-- Refreshed the legacy packaged folder ICO resources so older icon paths continue to resolve to the same new folder art.
-- Synced the same assets under `target/classes` for project snapshot consistency.

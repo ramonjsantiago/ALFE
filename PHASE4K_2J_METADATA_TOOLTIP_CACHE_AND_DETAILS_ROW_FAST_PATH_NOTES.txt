@@ -1,7 +1,0 @@
-Phase 4K.2J — Metadata Tooltip Cache and Details Row Fast Path
-
-- Added a shared per-path metadata tooltip text cache to reduce repeated string building.
-- Cache is cleared on directory navigation and invalidated when metadata updates arrive.
-- Shared metadata popup now skips redundant text relayout when the displayed text has not changed.
-- Details row inline style generation now uses cached templates for common hover/selection state buckets.
-- Existing shared-popup singleton behavior and selected-text contrast changes are preserved.

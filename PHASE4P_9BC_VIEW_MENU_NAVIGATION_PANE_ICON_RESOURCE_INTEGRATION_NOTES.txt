@@ -1,7 +1,0 @@
-HOTFIX149 / Phase 4P.9BC — View Menu Navigation Pane Icon Resource Integration
-
-Summary
-- Replaced the View > Show > Navigation pane glyph label with the attached packaged icon asset.
-- Added the supplied SVG under src/main/resources/icons as view.navigation.pane.svg.
-- Rendered a JavaFX-friendly PNG companion as view.navigation.pane.png for use by MainLayout.fxml.
-- Synced the same resource files and FXML update under target/classes for project snapshot consistency.

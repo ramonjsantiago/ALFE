@@ -1,5 +1,0 @@
-HOTFIX46 / Phase 4L.4 — Choose Details Dialog Keyboard Parity and Default Width Actions
-- added keyboard parity for Choose Details: Space/Enter toggle visibility, Alt+Up/Alt+Down reorder, Insert show, Delete/Backspace hide, Ctrl+0 reset selected width
-- added double-click toggle behavior on Choose Details rows
-- added Default Width command button to reset the selected detail width to a label-based default
-- widened the command stack and added a small in-dialog keyboard hint for discoverability

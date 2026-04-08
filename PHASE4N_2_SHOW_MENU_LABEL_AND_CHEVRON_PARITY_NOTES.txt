@@ -1,7 +1,0 @@
-Phase 4N.2 — Show Menu Label and Chevron Parity
-
-Included:
-- Restored the View > Show label so it no longer collapses to an ellipsis.
-- Kept the built-in submenu chevron path and text label visible.
-- Moved the leading blank checkbox column and icon into the graphic only, so the Show row aligns with other View menu items.
-- Adjusted submenu graphic/text gap and padding for correct alignment.

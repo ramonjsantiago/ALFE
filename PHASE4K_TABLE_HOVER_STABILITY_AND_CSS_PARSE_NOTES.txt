@@ -1,6 +1,0 @@
-HOTFIX28 / Phase 4K.1B
-
-- Fixed JavaFX CSS parser warning in context-menu-parity.css by replacing unsupported scientific-notation max width with a large literal value.
-- Stabilized Details/Table hover highlight by switching from pseudo-class hover painting to an explicit explorer-hover row style class.
-- Cleared explorer-hover on empty/recycled rows to prevent row reuse artifacts.
-- Removed unnecessary row hover listeners from table cells so text-fill sync no longer churns during pointer movement.

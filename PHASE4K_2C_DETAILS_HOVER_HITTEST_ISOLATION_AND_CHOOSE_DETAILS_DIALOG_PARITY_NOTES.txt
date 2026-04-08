@@ -1,5 +1,0 @@
-HOTFIX34 / Phase 4K.2C
-- Added stable Details-row hover ownership using a row-index tracker and custom pseudo class.
-- Neutralized native TableRow :hover paint in Details view and moved visual hover to :explorer-hover only.
-- Added Choose Details dialog parity pass with Explorer-like dark mode styling, checkbox-first rows, Show/Hide controls, and width field support.
-- Wired Choose Details dialog width changes back into persisted detail column widths.

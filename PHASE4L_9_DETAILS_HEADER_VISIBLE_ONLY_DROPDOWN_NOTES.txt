@@ -1,7 +1,0 @@
-Phase 4L.9 — Details Header Visible-Only Drop-down
-
-Included:
-- Right-edge primary-click Details header drop-down now contains only menu items that are currently checked on / visible.
-- The compact drop-down preserves the Explorer-style row structure: checkbox, icon, then label.
-- Visible rows stay checked to reflect the current checked-on state.
-- Choosing an item from the compact drop-down applies primary ascending sort to that visible Details column.

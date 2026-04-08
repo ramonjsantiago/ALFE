@@ -1,6 +1,0 @@
-Phase 4N.3 — Show Menu Indentation Parity
-
-Included:
-- nudged the View > Show menu row content slightly to the right to align with the other View menu rows
-- preserved the existing Show label and right chevron behavior
-- kept the leading blank checkbox/icon columns intact for Explorer-style alignment

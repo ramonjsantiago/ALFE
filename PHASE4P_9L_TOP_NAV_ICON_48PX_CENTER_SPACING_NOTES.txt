@@ -1,8 +1,0 @@
-Phase 4P.9L / HOTFIX105
-
-Adjusted the top navigation toolbar icon spacing to 48px center-to-center to match the supplied Windows reference rhythm.
-
-Updated behavior:
-- Back, Forward, Up, and Refresh now use a 40px button well
-- inter-button spacing is 8px, producing a 48px center-to-center icon rhythm
-- existing icon glyphs, hover treatment, and tooltips remain unchanged
