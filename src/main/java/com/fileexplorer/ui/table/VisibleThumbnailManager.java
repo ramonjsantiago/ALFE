@@ -103,18 +103,31 @@ public final class VisibleThumbnailManager {
         }
 
         Registration r = regs.computeIfAbsent(cell, _ -> new Registration());
+        boolean sameBinding = Objects.equals(r.path, path)
+                && r.size == sizePx
+                && Objects.equals(r.identity, identity)
+                && Objects.equals(currentPathForCell(cell), path);
+
         // Cancel old work if binding changed.
-        if (r.future != null && (!Objects.equals(r.path, path) || r.size != sizePx)) {
+        if (!sameBinding && r.future != null) {
             r.future.cancel(false);
             r.future = null;
         }
+
         r.path = path;
         r.size = sizePx;
         r.identity = identity;
-        r.bindingStamp++;
         r.apply = apply;
 
-        // Debounce: user may still be scrolling.
+        if (!sameBinding) {
+            r.bindingStamp++;
+        }
+
+        // Debounce: user may still be scrolling. Duplicate same-binding registrations from
+        // watcher/refresh bursts are collapsed into the current future or the next single pump.
+        if (sameBinding && r.future != null) {
+            return;
+        }
         idleDebounce.stop();
         idleDebounce.playFromStart();
     }

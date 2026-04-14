@@ -1,0 +1,18 @@
+HOTFIX203 / Phase 4P.9DE
+Details View Refresh/Sort Commit Barrier, Anchor Preservation, and Header-State Isolation
+
+Summary
+- Added a generation-based commit barrier around Details refresh/restore so repaint and selection replay only land after the active sort/model generation settles.
+- Published active directory scope + anchor/lead selection state from MainController into the Details refresh coordinator.
+- Reset ephemeral header dropdown state on model/sort churn and bound preset/menu actions to the clicked header snapshot for the active menu instance.
+
+Files changed
+- src/main/java/com/fileexplorer/ui/table/DetailsViewRefreshCoordinator.java
+- src/main/java/com/fileexplorer/ui/table/TableViewSupport.java
+- src/main/java/com/fileexplorer/ui/table/TableHeaderContextMenuInstaller.java
+- src/main/java/com/fileexplorer/controller/MainController.java
+- docs/README_HOTFIX203.md
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE_LABEL.txt
+- PHASE4P_9DE_DETAILS_VIEW_REFRESH_SORT_COMMIT_BARRIER_ANCHOR_PRESERVATION_AND_HEADER_STATE_ISOLATION_NOTES.txt

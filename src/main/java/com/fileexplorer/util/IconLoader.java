@@ -7,11 +7,13 @@ import javafx.scene.image.PixelWriter;
 import javafx.scene.image.WritableImage;
 import javafx.scene.paint.Color;
 
+import java.io.File;
 import java.io.InputStream;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
+import javax.swing.filechooser.FileSystemView;
 import java.util.logging.Logger;
 import com.fileexplorer.util.LogSupport;
 
@@ -68,24 +70,49 @@ public final class IconLoader {
     public static Image loadForPath(Path path, boolean darkTheme, int size) {
         LogSupport.enter(LOG, "loadForPath");
         int clamped = clampSize(size);
+        return loadForIdentity(identityForPath(path), darkTheme, clamped);
+    }
 
-        String identity;
+    /**
+     * Resolve a canonical placeholder/icon identity for the given path.
+     * <p>
+     * This keeps shell identity routing stable across the tree, breadcrumb/tab/title surfaces,
+     * preview placeholders, and any file views that need to bind a placeholder first and then
+     * lazily swap in a decoded thumbnail.
+     */
+    public static String identityForPath(Path path) {
+        LogSupport.enter(LOG, "identityForPath");
         if (path == null) {
-            identity = "type:" + IconType.FILE.name();
-        } else if (safeIsDirectory(path)) {
-            LogSupport.enter(LOG, "safeIsDirectory");
-            identity = "type:" + IconType.FOLDER.name();
-        } else {
-            String ext = extensionLower(fileNameOrPath(path));
-            if (!ext.isBlank()) {
-                identity = "ext:" + ext;
-            } else {
-                // Extensionless: fall back to generic file
-                identity = "type:" + IconType.FILE.name();
-            }
+            return "type:" + IconType.FILE.name();
         }
+        if (safeIsDirectory(path)) {
+            return isNetworkDrivePath(path)
+                    ? "special:networkdrive"
+                    : (isRootDiskPath(path)
+                        ? "special:localdisk"
+                        : "type:" + IconType.FOLDER.name());
+        }
+        String ext = extensionLower(fileNameOrPath(path));
+        if (ext.isBlank()) {
+            return "type:" + IconType.FILE.name();
+        }
+        return switch (ext) {
+            case "bin", "csv", "docx", "ico", "ini", "iso", "msi", "pdf", "reg", "txt", "text" -> "ext:" + ext;
+            case "mp4", "mkv", "mov", "avi", "wmv", "webm", "m4v" -> "kind:video";
+            case "mp3", "wav", "flac", "m4a", "ogg", "aac", "wma" -> "kind:audio";
+            case "png", "jpg", "jpeg", "gif", "bmp", "webp", "avif", "heif", "heic", "tif", "tiff", "svg" -> "kind:image";
+            case "zip", "7z", "rar", "tar", "gz", "bz2", "xz", "zst" -> "kind:archive";
+            case "md", "log", "rtf", "cfg", "conf", "tsv", "json", "xml", "yaml", "yml", "properties" -> "kind:text";
+            default -> "ext:" + ext;
+        };
+    }
 
-        return loadForIdentity(identity, darkTheme, clamped);
+    /**
+     * Convenience loader for placeholder-first binding surfaces.
+     */
+    public static Image placeholderForPath(Path path, boolean darkTheme, int size) {
+        LogSupport.enter(LOG, "placeholderForPath");
+        return loadForIdentity(identityForPath(path), darkTheme, size);
     }
 
     /**
@@ -170,6 +197,22 @@ public final class IconLoader {
             return "ext:" + v;
         }
 
+        if (raw.regionMatches(true, 0, "special:", 0, 8)) {
+            String v = raw.substring(8).trim().toLowerCase(Locale.ROOT);
+            if (v.isBlank()) {
+                return "type:" + IconType.FILE.name();
+            }
+            return "special:" + v;
+        }
+
+        if (raw.regionMatches(true, 0, "kind:", 0, 5)) {
+            String v = raw.substring(5).trim().toLowerCase(Locale.ROOT);
+            if (v.isBlank()) {
+                return "type:" + IconType.FILE.name();
+            }
+            return "kind:" + v;
+        }
+
         // If someone passes "pdf" or ".pdf", treat it as ext
         if (raw.startsWith(".")) {
             String v = raw.substring(1).trim().toLowerCase(Locale.ROOT);
@@ -203,6 +246,35 @@ public final class IconLoader {
         if (normalizedIdentity.startsWith("ext:")) {
             String ext = normalizedIdentity.substring(4).trim().toLowerCase(Locale.ROOT);
             return iconTypeForExtension(ext);
+        }
+
+        if (normalizedIdentity.startsWith("special:")) {
+            String special = normalizedIdentity.substring(8).trim().toLowerCase(Locale.ROOT);
+            return switch (special) {
+                case "home" -> IconType.FOLDER;
+                case "disk", "localdisk", "networkdrive", "thispc" -> IconType.FILE;
+                default -> IconType.FILE;
+            };
+        }
+
+        if (normalizedIdentity.startsWith("kind:")) {
+            String kind = normalizedIdentity.substring(5).trim().toLowerCase(Locale.ROOT);
+            return switch (kind) {
+                case "folder" -> IconType.FOLDER;
+                case "image" -> IconType.IMAGE;
+                case "text" -> IconType.TEXT;
+                case "archive" -> IconType.ARCHIVE;
+                case "audio" -> IconType.AUDIO;
+                case "video" -> IconType.VIDEO;
+                case "pdf" -> IconType.PDF;
+                case "word" -> IconType.WORD;
+                case "excel" -> IconType.EXCEL;
+                case "powerpoint" -> IconType.POWERPOINT;
+                case "code" -> IconType.CODE;
+                case "executable" -> IconType.EXECUTABLE;
+                case "link" -> IconType.LINK;
+                default -> IconType.FILE;
+            };
         }
 
         return IconType.FILE;
@@ -306,8 +378,20 @@ public final class IconLoader {
             case "ext:pdf" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/pdf-" + clampedSize + ".png";
             case "ext:txt", "ext:text" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/txt-" + clampedSize + ".png";
             case "ext:csv" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/csv-" + clampedSize + ".png";
+            case "ext:bin" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/bin-" + clampedSize + ".png";
+            case "ext:iso" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/iso-" + clampedSize + ".png";
+            case "ext:reg" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/reg-" + clampedSize + ".png";
+            case "ext:ico" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/ico-" + clampedSize + ".png";
+            case "special:home" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/home-" + clampedSize + ".png";
+            case "special:thispc" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/this-pc-" + clampedSize + ".png";
+            case "special:disk" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/disk-" + clampedSize + ".png";
+            case "special:localdisk" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/local-disk-" + clampedSize + ".png";
+            case "special:networkdrive" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/network-drive-" + clampedSize + ".png";
             case "ext:docx" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/docx-" + clampedSize + ".png";
-            case "ext:zip", "ext:7z", "ext:gz", "ext:bz2", "ext:tar" -> "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/compressed-" + clampedSize + ".png";
+            case "kind:archive",
+                 "ext:zip", "ext:7z", "ext:rar", "ext:tar",
+                 "ext:gz", "ext:bz2", "ext:xz", "ext:zst" ->
+                    "/com/fileexplorer/ui/icons/" + (darkTheme ? "dark" : "light") + "/compressed-" + clampedSize + ".png";
             default -> null;
         };
 
@@ -315,6 +399,40 @@ public final class IconLoader {
             return null;
         }
         return loadFromResource(resourcePath);
+    }
+
+
+
+    private static boolean isRootDiskPath(Path path) {
+        if (path == null) {
+            return false;
+        }
+        try {
+            Path normalized = path.toAbsolutePath().normalize();
+            Path root = normalized.getRoot();
+            return root != null && normalized.equals(root.normalize()) && !isNetworkDrivePath(normalized);
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    private static boolean isNetworkDrivePath(Path path) {
+        if (path == null) {
+            return false;
+        }
+        try {
+            Path normalized = path.toAbsolutePath().normalize();
+            String raw = normalized.toString();
+            if (raw.startsWith("\\") || raw.startsWith("//")) {
+                return true;
+            }
+            File file = normalized.toFile();
+            FileSystemView fsv = FileSystemView.getFileSystemView();
+            String description = fsv.getSystemTypeDescription(file);
+            return description != null && description.toLowerCase(Locale.ROOT).contains("network");
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     private static Image loadUncached(IconType type, boolean darkTheme, int clampedSize) {
@@ -344,7 +462,7 @@ public final class IconLoader {
             case FOLDER      -> typeSegment = "folder";
             case IMAGE       -> typeSegment = "image";
             case TEXT        -> typeSegment = "text";
-            case ARCHIVE     -> typeSegment = "archive";
+            case ARCHIVE     -> typeSegment = "compressed";
             case AUDIO       -> typeSegment = "audio";
             case VIDEO       -> typeSegment = "video";
             case PDF         -> typeSegment = "pdf";

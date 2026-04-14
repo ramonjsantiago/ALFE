@@ -1,0 +1,7 @@
+HOTFIX201 / Phase 4P.9DC — Details View Navigation-Epoch Isolation, Stale Async Icon Result Suppression, and Sort/Refresh Paint Stability Parity
+
+Implemented in this phase:
+- Added a controller-level Details async binding epoch advanced on directory-scope changes, Details refresh passes, and sort-policy transitions.
+- Reworked the Details Name-column cell to rebind on `TableRow.itemProperty()` churn so row reuse during sort/refresh cannot keep an old icon binding alive when the visible text is unchanged.
+- Tightened async icon/thumbnail publish guards to require epoch + row + FileItem + path + display text + identity parity before painting.
+- Prevented thumbnail wins from being overwritten by slower async icon completions and upgraded folder fallback placeholders to retain folder identity parity.

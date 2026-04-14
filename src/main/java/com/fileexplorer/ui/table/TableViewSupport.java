@@ -8,6 +8,7 @@ import com.fileexplorer.service.icon.AsyncThumbnailService;
 import com.fileexplorer.util.IconLoader;
 import com.fileexplorer.util.ImageSupport;
 import javafx.application.Platform;
+import javafx.beans.value.ChangeListener;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
@@ -18,6 +19,7 @@ import javafx.scene.control.TableView;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 
@@ -55,42 +57,134 @@ public final class TableViewSupport {
 
         // Phase 4A.2: visibility-driven thumbnailing to avoid wasted decode during fast scroll.
         final VisibleThumbnailManager thumbMgr = ensureThumbManager(fileTable, ctx);
+        final DetailsViewRefreshCoordinator refreshCoordinator = ensureRefreshCoordinator(fileTable);
+        installRefreshObservation(fileTable, refreshCoordinator);
 
         if (colName != null) {
             colName.setCellValueFactory(param -> new javafx.beans.property.ReadOnlyObjectWrapper<>(displayNameForTable.apply(param.getValue())));
 
             colName.setCellFactory(_ -> new TableCell<>() {
+                private static final int ICON_PX = 18;
+
                 private final HBox box = new HBox(10.0);
                 private final ImageView iconView = new ImageView();
                 private final Label textLabel = new Label();
 
-                // Guards against stale async completions updating a recycled cell.
-                private String lastIdentity = null;
+                // HOTFIX199: gate every async completion against the exact bound FileItem + row token.
+                private FileItem lastRowItem = null;
                 private Path lastPath = null;
+                private String lastIdentity = null;
+                private String lastDisplayText = null;
+                private String lastTypeKey = null;
+                private boolean lastFolder = false;
+                private boolean thumbnailPublished = false;
 
                 private java.util.concurrent.CompletableFuture<javafx.scene.image.Image> pendingThumb = null;
                 private java.util.concurrent.CompletableFuture<javafx.scene.image.Image> pendingIcon = null;
                 private long bindingStamp = 0L;
 
+                private boolean isEquivalentBinding(FileItem item,
+                                                    Path path,
+                                                    String identity,
+                                                    String displayText,
+                                                    String typeKey,
+                                                    boolean isFolder) {
+                    return lastRowItem == item
+                            && Objects.equals(lastPath, path)
+                            && Objects.equals(lastIdentity, identity)
+                            && Objects.equals(lastDisplayText, displayText)
+                            && Objects.equals(lastTypeKey, typeKey)
+                            && lastFolder == isFolder;
+                }
+
+                private TableRow<FileItem> observedRow = null;
+                private final ChangeListener<FileItem> rowItemListener = (obs, oldItem, newItem) -> {
+                    if (isEmpty() || newItem == null) {
+                        sanitizeCell();
+                        return;
+                    }
+                    String displayText = displayNameForTable.apply(newItem);
+                    if (displayText == null) {
+                        sanitizeCell();
+                        return;
+                    }
+                    rebindForCurrentRow(displayText);
+                };
+
                 {
                     box.setAlignment(Pos.CENTER_LEFT);
                     iconView.setPreserveRatio(true);
                     iconView.setSmooth(true);
+                    iconView.setFitWidth(ICON_PX);
+                    iconView.setFitHeight(ICON_PX);
                     textLabel.setMaxWidth(Double.MAX_VALUE);
+                    HBox.setHgrow(textLabel, Priority.ALWAYS);
                     box.getChildren().addAll(iconView, textLabel);
+
+                    tableRowProperty().addListener((obs, oldRow, newRow) -> {
+                        detachRowListeners(oldRow);
+                        attachRowListeners(newRow);
+                        if (newRow == null) {
+                            sanitizeCell();
+                        } else if (!isEmpty()) {
+                            FileItem rowItem = newRow.getItem();
+                            String displayText = rowItem == null ? getItem() : displayNameForTable.apply(rowItem);
+                            if (displayText == null) {
+                                sanitizeCell();
+                            } else {
+                                rebindForCurrentRow(displayText);
+                            }
+                        }
+                    });
                 }
 
                 @Override
-/**
- * updateItem.
- *
- * @param item TODO
- * @param empty TODO
- */
                 protected void updateItem(String item, boolean empty) {
                     super.updateItem(item, empty);
 
-                    // Cancel any pending thumbnail work for the previous item (cell reuse/virtualization).
+                    if (empty || item == null) {
+                        sanitizeCell();
+                        return;
+                    }
+
+                    rebindForCurrentRow(item);
+                }
+
+                private void attachRowListeners(TableRow<FileItem> row) {
+                    observedRow = row;
+                    if (row == null) {
+                        return;
+                    }
+                    row.itemProperty().addListener(rowItemListener);
+                }
+
+                private void detachRowListeners(TableRow<FileItem> row) {
+                    if (row == null) {
+                        return;
+                    }
+                    row.itemProperty().removeListener(rowItemListener);
+                    if (observedRow == row) {
+                        observedRow = null;
+                    }
+                }
+
+                private void sanitizeCell() {
+                    cancelPendingWork();
+                    bindingStamp++;
+                    lastRowItem = null;
+                    lastPath = null;
+                    lastIdentity = null;
+                    lastDisplayText = null;
+                    lastTypeKey = null;
+                    lastFolder = false;
+                    thumbnailPublished = false;
+                    iconView.setImage(null);
+                    textLabel.setText(null);
+                    setText(null);
+                    setGraphic(null);
+                }
+
+                private void cancelPendingWork() {
                     if (pendingThumb != null) {
                         pendingThumb.cancel(false);
                         pendingThumb = null;
@@ -99,61 +193,74 @@ public final class TableViewSupport {
                         pendingIcon.cancel(false);
                         pendingIcon = null;
                     }
-                    bindingStamp++;
+                    thumbMgr.unregister(this);
+                }
 
-                    if (empty || item == null) {
-                        lastIdentity = null;
-                        lastPath = null;
-                        thumbMgr.unregister(this);
-                        setText(null);
-                        setGraphic(null);
+                private void rebindForCurrentRow(String displayText) {
+                    FileItem fi = currentRowItem();
+                    if (fi == null) {
+                        sanitizeCell();
                         return;
                     }
 
-                    FileItem fi = getTableRow() != null ? (FileItem) getTableRow().getItem() : null;
-                    Path p = (fi != null) ? fi.path() : null;
-
+                    final Path p = fi.path();
                     final boolean dark = ctx.themeService().isDarkPreferred();
-                    final int iconPx = 18;
+                    final boolean isFolder = isFolder(fi);
+                    final String identity = resolveIdentity(fi, isFolder);
+                    final String typeKey = computeTypeKey(fi, isFolder, identity);
 
-                    // Set placeholder immediately (cheap).
-                    final boolean isFolder = (fi != null) && "Folder".equalsIgnoreCase(Objects.requireNonNullElse(fi.type(), ""));
-                    Image placeholder = IconLoader.load(isFolder ? IconLoader.IconType.FOLDER : IconLoader.IconType.FILE, dark, iconPx);
+                    if (isEquivalentBinding(fi, p, identity, displayText, typeKey, isFolder)) {
+                        textLabel.setText(displayText);
+                        setText(null);
+                        if (iconView.getImage() == null) {
+                            iconView.setImage(resolvePlaceholderImage(p, dark, identity, isFolder));
+                        }
+                        if (getGraphic() != box) {
+                            setGraphic(box);
+                        }
+                        return;
+                    }
 
-                    iconView.setFitWidth(iconPx);
-                    iconView.setFitHeight(iconPx);
+                    cancelPendingWork();
+                    bindingStamp++;
+
+                    final long capturedStamp = bindingStamp;
+                    final FileItem boundItem = fi;
+                    final Image placeholder = resolvePlaceholderImage(p, dark, identity, isFolder);
+
+                    lastRowItem = boundItem;
+                    lastPath = p;
+                    lastIdentity = identity;
+                    lastDisplayText = displayText;
+                    lastTypeKey = typeKey;
+                    lastFolder = isFolder;
+                    thumbnailPublished = false;
+
                     iconView.setImage(placeholder);
-
-                    textLabel.setText(item);
+                    textLabel.setText(displayText);
                     setText(null);
                     setGraphic(box);
 
-                    // Compute identity without I/O: directories from FileItem.type, otherwise by extension.
-                    final String identity = computeIdentityNoIo(p, isFolder);
-
-                    lastIdentity = identity;
-                    lastPath = p;
-
-                    final long capturedStamp = bindingStamp;
-                    pendingIcon = AsyncIconService.getInstance()
-                            .request(identity, dark, iconPx);
+                    pendingIcon = AsyncIconService.getInstance().request(identity, dark, ICON_PX, AsyncIconService.RequestPriority.VISIBLE);
                     pendingIcon.thenAccept(img -> Platform.runLater(() -> {
-                        // Ignore stale completions (cell reused).
-                        if (capturedStamp != bindingStamp) return;
-                        if (!Objects.equals(lastIdentity, identity)) return;
-                        if (!Objects.equals(lastPath, p)) return;
-                        if (getTableRow() == null || getTableRow().getItem() != fi) return;
-                        if (img == null) return;
+                        if (!isCurrentBinding(capturedStamp, boundItem, p, identity, displayText, typeKey, isFolder)) {
+                            return;
+                        }
+                        if (img == null || thumbnailPublished) {
+                            return;
+                        }
                         iconView.setImage(img);
                     }));
 
-                    // If this is a supported thumbnail candidate, lazily replace the placeholder with a generated thumbnail.
                     if (!isFolder && p != null && ImageSupport.isThumbCandidate(p)) {
-                        // Register with the viewport-aware manager; it will request only after scroll-idle.
-                        thumbMgr.register(this, p, iconPx, identity, img -> {
-                            if (capturedStamp != bindingStamp) return;
-                            if (!Objects.equals(lastPath, p)) return;
-                            if (getTableRow() == null || getTableRow().getItem() != fi) return;
+                        thumbMgr.register(this, p, ICON_PX, identity, img -> {
+                            if (!isCurrentBinding(capturedStamp, boundItem, p, identity, displayText, typeKey, false)) {
+                                return;
+                            }
+                            if (img == null) {
+                                return;
+                            }
+                            thumbnailPublished = true;
                             iconView.setImage(img);
                         });
                     } else {
@@ -161,27 +268,161 @@ public final class TableViewSupport {
                     }
                 }
 
-/**
- * computeIdentityNoIo.
- *
- * @param p TODO
- * @param isFolder TODO
- * @return TODO
- */
+                private boolean isCurrentBinding(long capturedStamp,
+                                                 FileItem boundItem,
+                                                 Path path,
+                                                 String identity,
+                                                 String displayText,
+                                                 String typeKey,
+                                                 boolean isFolder) {
+                    if (capturedStamp != bindingStamp) {
+                        return false;
+                    }
+                    if (observedRow != null && getTableRow() != observedRow) {
+                        return false;
+                    }
+                    if (lastRowItem != boundItem) {
+                        return false;
+                    }
+                    if (!Objects.equals(lastPath, path)) {
+                        return false;
+                    }
+                    if (!Objects.equals(lastIdentity, identity)) {
+                        return false;
+                    }
+                    if (!Objects.equals(lastDisplayText, displayText)) {
+                        return false;
+                    }
+                    if (!Objects.equals(lastTypeKey, typeKey)) {
+                        return false;
+                    }
+                    if (lastFolder != isFolder) {
+                        return false;
+                    }
+
+                    FileItem current = currentRowItem();
+                    if (current == null || current != boundItem) {
+                        return false;
+                    }
+                    if (!Objects.equals(current.path(), path)) {
+                        return false;
+                    }
+
+                    boolean currentIsFolder = isFolder(current);
+                    if (currentIsFolder != isFolder) {
+                        return false;
+                    }
+                    String currentIdentity = resolveIdentity(current, currentIsFolder);
+                    String currentTypeKey = computeTypeKey(current, currentIsFolder, currentIdentity);
+                    if (!Objects.equals(currentIdentity, identity)) {
+                        return false;
+                    }
+                    if (!Objects.equals(currentTypeKey, typeKey)) {
+                        return false;
+                    }
+
+                    String currentDisplayText = displayNameForTable.apply(current);
+                    if (!Objects.equals(currentDisplayText, displayText)) {
+                        return false;
+                    }
+
+                    TableRow<FileItem> row = getTableRow();
+                    return row != null && row.getItem() == current;
+                }
+
+                private FileItem currentRowItem() {
+                    TableRow<FileItem> row = getTableRow();
+                    return row == null ? null : row.getItem();
+                }
+
+                private boolean isFolder(FileItem item) {
+                    return item != null && "Folder".equalsIgnoreCase(Objects.requireNonNullElse(item.type(), ""));
+                }
+
+                private String computeTypeKey(FileItem item, boolean isFolder, String identity) {
+                    if (item == null) {
+                        return identity;
+                    }
+                    return (isFolder ? "folder:" : "file:")
+                            + Objects.requireNonNullElse(item.type(), "")
+                            + "|"
+                            + identity;
+                }
+
+                private String resolveIdentity(FileItem item, boolean isFolder) {
+                    Path p = item == null ? null : item.path();
+                    if (isFolder) {
+                        return folderIdentityNoIo(p);
+                    }
+                    if (p != null) {
+                        try {
+                            String identity = ctx.fileMetadataService().iconIdentity(p);
+                            if (identity != null && !identity.isBlank()) {
+                                return identity;
+                            }
+                        } catch (Exception ignored) {
+                        }
+                    }
+                    return computeIdentityNoIo(p, false);
+                }
+
+                private Image resolvePlaceholderImage(Path path, boolean dark, String identity, boolean isFolder) {
+                    try {
+                        return IconLoader.loadForIdentity(identity, dark, ICON_PX);
+                    } catch (Exception ignored) {
+                    }
+                    try {
+                        return IconLoader.placeholderForPath(path, dark, ICON_PX);
+                    } catch (Exception ignored) {
+                    }
+                    return IconLoader.load(isFolder ? IconLoader.IconType.FOLDER : IconLoader.IconType.FILE, dark, ICON_PX);
+                }
+
+                private String folderIdentityNoIo(Path p) {
+                    if (p == null) {
+                        return "type:" + IconLoader.IconType.FOLDER.name();
+                    }
+                    try {
+                        Path normalized = p.toAbsolutePath().normalize();
+                        String raw = normalized.toString();
+                        Path root = normalized.getRoot();
+                        if (raw.startsWith("\\") || raw.startsWith("//")) {
+                            return "special:networkdrive";
+                        }
+                        if (root != null && normalized.equals(root.normalize())) {
+                            return "special:localdisk";
+                        }
+                    } catch (Exception ignored) {
+                    }
+                    return "type:" + IconLoader.IconType.FOLDER.name();
+                }
+
                 private String computeIdentityNoIo(Path p, boolean isFolder) {
-                    if (isFolder) return "type:" + IconLoader.IconType.FOLDER.name();
-                    if (p == null) return "type:" + IconLoader.IconType.FILE.name();
+                    if (isFolder) {
+                        return folderIdentityNoIo(p);
+                    }
+                    if (p == null) {
+                        return "type:" + IconLoader.IconType.FILE.name();
+                    }
 
                     String name = p.getFileName() != null ? p.getFileName().toString() : p.toString();
                     int dot = name.lastIndexOf('.');
                     if (dot > 0 && dot < name.length() - 1) {
                         String ext = name.substring(dot + 1).toLowerCase(java.util.Locale.ROOT);
-                        if (!ext.isBlank()) return "ext:" + ext;
+                        if (!ext.isBlank()) {
+                            return switch (ext) {
+                                case "mp4", "mkv", "mov", "avi", "wmv", "webm", "m4v" -> "kind:video";
+                                case "mp3", "wav", "flac", "m4a", "ogg", "aac", "wma" -> "kind:audio";
+                                case "png", "jpg", "jpeg", "gif", "bmp", "webp", "avif", "heif", "heic", "tif", "tiff", "svg" -> "kind:image";
+                                case "zip", "7z", "rar", "tar", "gz", "bz2", "xz", "zst" -> "kind:archive";
+                                case "md", "log", "rtf", "cfg", "conf", "tsv", "json", "xml", "yaml", "yml", "properties" -> "kind:text";
+                                default -> "ext:" + ext;
+                            };
+                        }
                     }
                     return "type:" + IconLoader.IconType.FILE.name();
                 }
             });
-
         }
 
         if (colStatus != null) {
@@ -354,6 +595,85 @@ syncTint();
         if (bytes < 0) return -1L;
         if (bytes > Long.MAX_VALUE) return Long.MAX_VALUE;
         return (long) bytes;
+    }
+
+    private static final String DETAILS_REFRESH_COORDINATOR_KEY = TableViewSupport.class.getName() + ".detailsRefreshCoordinator";
+    private static final String DETAILS_REFRESH_OBSERVATION_KEY = TableViewSupport.class.getName() + ".detailsRefreshObservationInstalled";
+
+    private static DetailsViewRefreshCoordinator ensureRefreshCoordinator(TableView<FileItem> fileTable) {
+        Object existing = fileTable.getProperties().get(DETAILS_REFRESH_COORDINATOR_KEY);
+        if (existing instanceof DetailsViewRefreshCoordinator coordinator) {
+            return coordinator;
+        }
+        DetailsViewRefreshCoordinator coordinator = new DetailsViewRefreshCoordinator(fileTable);
+        fileTable.getProperties().put(DETAILS_REFRESH_COORDINATOR_KEY, coordinator);
+        return coordinator;
+    }
+
+    private static void installRefreshObservation(TableView<FileItem> fileTable, DetailsViewRefreshCoordinator coordinator) {
+        if (Boolean.TRUE.equals(fileTable.getProperties().get(DETAILS_REFRESH_OBSERVATION_KEY))) {
+            return;
+        }
+        fileTable.getProperties().put(DETAILS_REFRESH_OBSERVATION_KEY, Boolean.TRUE);
+
+        javafx.collections.ListChangeListener<FileItem> itemsListener = change -> {
+            java.util.LinkedHashSet<Path> changedPaths = new java.util.LinkedHashSet<>();
+            boolean structural = false;
+            while (change.next()) {
+                if (change.wasPermutated() || change.wasUpdated()) {
+                    structural = true;
+                }
+                if (change.wasRemoved()) {
+                    for (FileItem item : change.getRemoved()) {
+                        if (item != null && item.path() != null) {
+                            changedPaths.add(item.path());
+                        }
+                    }
+                }
+                if (change.wasAdded()) {
+                    for (FileItem item : change.getAddedSubList()) {
+                        if (item != null && item.path() != null) {
+                            changedPaths.add(item.path());
+                        }
+                    }
+                }
+            }
+            if (!changedPaths.isEmpty()) {
+                TableHeaderContextMenuInstaller.resetEphemeralHeaderState(fileTable);
+                coordinator.requestRefresh(changedPaths, structural ? "details-items-structural" : "details-items-delta");
+            } else if (structural) {
+                TableHeaderContextMenuInstaller.resetEphemeralHeaderState(fileTable);
+                coordinator.requestVisibleRefresh("details-items-structure");
+            }
+        };
+
+        fileTable.itemsProperty().addListener((obs, oldList, newList) -> {
+            if (oldList != null) {
+                oldList.removeListener(itemsListener);
+            }
+            if (newList != null) {
+                newList.addListener(itemsListener);
+            }
+            TableHeaderContextMenuInstaller.resetEphemeralHeaderState(fileTable);
+            coordinator.requestVisibleRefresh("details-items-source");
+        });
+        if (fileTable.getItems() != null) {
+            fileTable.getItems().addListener(itemsListener);
+        }
+
+        fileTable.comparatorProperty().addListener((obs, oldValue, newValue) -> {
+            TableHeaderContextMenuInstaller.resetEphemeralHeaderState(fileTable);
+            coordinator.requestVisibleRefresh("details-comparator");
+        });
+        fileTable.getSortOrder().addListener((javafx.collections.ListChangeListener<TableColumn<FileItem, ?>>) change -> {
+            TableHeaderContextMenuInstaller.resetEphemeralHeaderState(fileTable);
+            coordinator.requestVisibleRefresh("details-sort-order");
+        });
+        fileTable.visibleProperty().addListener((obs, wasVisible, isVisible) -> {
+            if (Boolean.TRUE.equals(isVisible)) {
+                coordinator.requestVisibleRefresh("details-visible");
+            }
+        });
     }
 
     public static VisibleThumbnailManager visibleThumbnailManager(TableView<FileItem> table, ExplorerContext ctx) {

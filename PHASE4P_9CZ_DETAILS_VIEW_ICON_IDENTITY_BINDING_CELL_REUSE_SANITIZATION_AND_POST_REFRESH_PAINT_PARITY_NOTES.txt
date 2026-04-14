@@ -1,0 +1,22 @@
+HOTFIX198 / Phase 4P.9CZ — Details View Icon Identity Binding, Cell Reuse Sanitization, and Post-Refresh Paint Parity
+
+Scope
+- Harden Details view Name-column cells so async icon and thumbnail completions cannot paint into a recycled row.
+- Rebind icon state when a virtualized TableRow swaps to a new FileItem even when the display text is unchanged.
+- Keep post-refresh / post-sort / post-rename icon paint aligned to the current row identity.
+
+Implementation summary
+1. Added row-item listeners inside the Details Name cell factory so a row-item swap triggers immediate rebinding.
+2. Added a sanitization path that cancels pending icon/thumbnail work, unregisters viewport thumbnails, clears graphic/text state, and bumps the binding stamp.
+3. Added stronger async commit guards that require all of the following to still match before painting:
+   - binding stamp
+   - bound path
+   - icon identity
+   - current display text
+   - file/folder type key
+4. Preserved the existing placeholder-first icon flow and viewport-driven thumbnail registration model.
+
+Expected result
+- Details view rows no longer inherit stale icons from previously recycled cells.
+- Refresh / sort / rename churn should no longer leave the wrong icon painted on a row after the model is replaced.
+- Late async thumbnail/icon completions should harmlessly drop when the row binding has changed.

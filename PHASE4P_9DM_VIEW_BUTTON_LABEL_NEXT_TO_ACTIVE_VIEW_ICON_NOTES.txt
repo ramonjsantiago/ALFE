@@ -1,0 +1,11 @@
+HOTFIX211 / Phase 4P.9DM — View Button Label Next to Active View Icon
+
+Summary
+- Restored the visible View label next to the command-bar View icon while preserving active-view icon tracking.
+
+Implementation
+- Rebuilt the structured View button content during icon refresh instead of replacing it with an icon-only graphic.
+- Updated the structured View icon builder to resolve the packaged icon for the active view mode before falling back to the legacy vector glyph.
+
+Files
+- src/main/java/com/fileexplorer/controller/MainController.java

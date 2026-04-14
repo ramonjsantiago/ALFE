@@ -1,0 +1,12 @@
+HOTFIX200 / Phase 4P.9DB — Details View Icon Refresh Coalescing, Watcher-Burst Deduplication, and Selection-Stable Repaint Parity
+
+Implemented in this package:
+- Added ui/table/DetailsViewRefreshCoordinator.java
+- Updated ui/table/TableViewSupport.java
+- Updated ui/table/VisibleThumbnailManager.java
+
+Summary:
+1. Coalesced Details-table refreshes triggered by item-source replacement, comparator changes, sort-order churn, and bursty row deltas.
+2. Restored selection/focus by path after the coalesced refresh pass to keep repaint parity stable.
+3. Avoided rebinding/cancelling icon work in the Details name cell when the effective binding identity is unchanged.
+4. Deduplicated same-binding visible thumbnail registrations so watcher bursts do not repeatedly rearm the same thumbnail work.

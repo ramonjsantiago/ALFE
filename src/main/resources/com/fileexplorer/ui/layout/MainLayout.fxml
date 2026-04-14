@@ -231,7 +231,13 @@
                         <!-- View menu -->
                                                 <MenuButton fx:id="viewMenuButton" text="View" focusTraversable="false">
                             <tooltip><Tooltip text="View"/></tooltip>
-                            <graphic><Label text="&#xE8A7;" styleClass="fluent-icon"/></graphic>
+                            <graphic>
+                                <ImageView fitWidth="18.0" fitHeight="18.0" preserveRatio="true" smooth="true" pickOnBounds="true">
+                                    <image>
+                                        <Image url="@/icons/view.details.png"/>
+                                    </image>
+                                </ImageView>
+                            </graphic>
                         </MenuButton>
 
                                                                                                 <MenuButton fx:id="seeMoreMenuButton" focusTraversable="false" styleClass="commandbar-icon-button, command-trailing-overflow">

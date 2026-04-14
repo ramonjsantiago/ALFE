@@ -1,0 +1,7 @@
+HOTFIX212 / Phase 4P.9DN
+
+Scope:
+- Revert H209 lazy Details mount and startup placeholder path.
+- Restore eager Details initialization/configuration.
+- Keep H210/H211 View button icon+label parity.
+- Keep the H210 lazy-selection null guard.

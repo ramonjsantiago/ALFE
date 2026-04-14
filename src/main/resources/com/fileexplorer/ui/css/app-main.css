@@ -612,6 +612,19 @@
     -fx-max-width: 24px;
 }
 
+.label.view-menu-icon {
+    -fx-text-fill: white;
+    -fx-opacity: 1;
+}
+
+.view-menu-text {
+    -fx-text-fill: white;
+}
+
+.view-menu-submenu > .right-container > .arrow {
+    -fx-background-color: white;
+}
+
 
 /* See More menu spacing */
 .see-more-menuitem {
@@ -651,6 +664,7 @@
     -fx-font-family: "Segoe UI Variable Text";
     -fx-font-size: 13px;
     -fx-font-weight: normal;
+    -fx-text-fill: white;
     -fx-opacity: 1;
 }
 

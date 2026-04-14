@@ -1,0 +1,7 @@
+HOTFIX202 / Phase 4P.9DD — Details View Directory-Scope Publish Fencing, Same-Name Row-Reuse Finalization, and Selection/Focus Continuity Parity
+
+Implemented in this phase:
+- Added a controller-level visible directory scope and threaded that scope through Details Name-column binding equivalence/current-binding checks.
+- Tightened late async icon/thumbnail publish guards so commits must still match the active directory surface in addition to epoch + row + FileItem + path + display text + identity.
+- Limited viewport continuity capture/restore to paths that still belong to the active directory scope, preventing cross-folder selection/focus replay.
+- Cleared presentation-only selection/focus carryover on true directory-scope transitions when continuity should not be preserved.

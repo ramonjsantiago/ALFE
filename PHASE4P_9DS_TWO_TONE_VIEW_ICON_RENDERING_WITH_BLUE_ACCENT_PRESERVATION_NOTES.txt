@@ -1,0 +1,12 @@
+HOTFIX217 / Phase 4P.9DS — Two-Tone View Icon Rendering with Blue Accent Preservation
+
+Summary
+- Replaced the flat all-white View icon mask with a two-tone conversion pass.
+- Preserved blue accent pixels in view-pane/navigation icons while recoloring the neutral strokes to white.
+- Applied the same treatment to the command-bar View button active icon and the View flyout rows.
+
+Primary code change
+- src/main/java/com/fileexplorer/controller/MainController.java
+  - loadMenuIconImage(...): switched forced icon treatment cache key from white-mask to two-tone white+blue accent preservation.
+  - createTwoToneWhiteBlueAccentImage(...): preserves blue accent pixels and whitens non-blue raster content.
+  - isBlueAccentPixel(...): identifies the Explorer accent-blue range so blue details survive menu tinting.

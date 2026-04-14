@@ -1,0 +1,11 @@
+HOTFIX210 / Phase 4P.9DL
+
+Scope:
+- default/startup Details view parity
+- active view icon parity on the command-bar View button
+- null-safe lazy-selection access during early top-chrome refresh
+
+Implementation summary:
+1. Added dynamic View-button graphic selection in MainController based on the active ViewMode.
+2. Updated MainLayout.fxml so the initial View button graphic is the packaged Details icon.
+3. Guarded getPrimarySelection() against null fileTable / selection-model access before lazy Details mount completes.

@@ -1,0 +1,4 @@
+HOTFIX216 / Phase 4P.9DR
+- Added a white-mask-capable structured command-bar raster icon helper.
+- Routed the command-bar View button active-view icon through the white-mask path.
+- Preserved H215 white-tinted View flyout icons and H211 visible View label parity.

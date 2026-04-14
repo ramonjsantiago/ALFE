@@ -166,6 +166,12 @@ public final class AsyncThumbnailService {
     /** Short-lived cooldown for PDFs that recently timed out during thumbnail rendering. */
     private static final Map<String, PdfCooldownState> PDF_TIMEOUT_COOLDOWN_UNTIL_MS = new ConcurrentHashMap<>();
 
+    /** Short-lived cooldown for Office-family documents that recently failed thumbnail rendering. */
+    private static final Map<String, DocumentCooldownState> DOCUMENT_FAILURE_COOLDOWN_UNTIL_MS = new ConcurrentHashMap<>();
+
+    /** Deduplicates recurring Office-family document thumbnail failure diagnostics. */
+    private static final Set<String> LOGGED_DOCUMENT_FAILURE_SIGNATURES = ConcurrentHashMap.newKeySet();
+
     /** Rolling PDF render-history snapshots used for adaptive timeout and recovery planning. */
     private static final Map<String, PdfRenderHistory> PDF_RENDER_HISTORY = new ConcurrentHashMap<>();
 
@@ -235,6 +241,26 @@ public final class AsyncThumbnailService {
     private static final int PDF_MAX_ACTIVE_HIGH_TIER_PROMOTIONS =
             intProp("fileexplorer.thumb.pdf.maxActiveHighTierPromotions", 1, 1, 8);
 
+    /** Enable low-first/high-later planning for Office-family document thumbnails. */
+    private static final boolean ENABLE_OFFICE_PROGRESSIVE_UPGRADE =
+            boolProp("fileexplorer.thumb.doc.progressiveUpgrade.enabled", true);
+
+    /** Maximum preview edge used for first-pass Office-family thumbnails before visible promotion. */
+    private static final int OFFICE_PROGRESSIVE_LOW_TIER_MAX_SIZE_PX =
+            intProp("fileexplorer.thumb.doc.progressiveLowTierMaxSizePx", 128, 32, 512);
+
+    /** Delay before a visible Office-family thumbnail is promoted to the requested resolution. */
+    private static final long OFFICE_PROGRESSIVE_PROMOTION_DELAY_MS =
+            longProp("fileexplorer.thumb.doc.progressivePromotionDelayMs", 220L, 25L, 10_000L);
+
+    /** Cap concurrent high-tier Office-family promotions so they never starve visible low-tier renders. */
+    private static final int OFFICE_MAX_ACTIVE_HIGH_TIER_PROMOTIONS =
+            intProp("fileexplorer.thumb.doc.maxActiveHighTierPromotions", 1, 1, 8);
+
+    /** Cooldown after a document-backend failure so repeated paints do not hammer Office renderers. */
+    private static final long DOCUMENT_FAILURE_COOLDOWN_MS =
+            longProp("fileexplorer.thumb.doc.failureCooldownMs", 20_000L, 1_000L, 3_600_000L);
+
     /** Per-document high-tier fairness guard. */
     private static final int PDF_MAX_ACTIVE_HIGH_TIER_PER_DOCUMENT =
             intProp("fileexplorer.thumb.pdf.maxActiveHighTierPerDocument", 1, 1, 2);
@@ -300,7 +326,7 @@ public final class AsyncThumbnailService {
     private static final AsyncThumbnailService INSTANCE = new AsyncThumbnailService();
 
     private static final Set<String> THUMBNAILS4J_EXTENSIONS = Set.of(
-            "doc", "docx", "pdf", "pptx", "xls", "xlsx"
+            "doc", "docx", "pptx", "xls", "xlsx"
     );
 
     public static AsyncThumbnailService getInstance() {
@@ -336,8 +362,21 @@ public final class AsyncThumbnailService {
         HIGH
     }
 
+    private enum DocumentBackend {
+        NONE,
+        PDFBOX,
+        THUMBNAILS4J
+    }
+
+    private enum DocumentRenderTier {
+        LOW,
+        HIGH
+    }
+
     private enum RenderQuality {
         STANDARD,
+        DOC_LOW,
+        DOC_HIGH,
         PDF_LOW,
         PDF_HIGH
     }
@@ -354,6 +393,15 @@ public final class AsyncThumbnailService {
                                 long generation) {
     }
 
+    private record OfficeRenderKey(String ext,
+                                   String path,
+                                   int sizePx,
+                                   long lastModifiedMs,
+                                   long fileSizeBytes,
+                                   long viewportScope,
+                                   long generation) {
+    }
+
     private record PdfViewportState(int firstVisiblePage,
                                     int lastVisiblePage,
                                     int anchorPage,
@@ -367,6 +415,14 @@ public final class AsyncThumbnailService {
     private record PdfCooldownState(long lastModifiedMs, long fileSizeBytes, long untilMs) {
         boolean matches(long otherLastModifiedMs, long otherFileSizeBytes) {
             return lastModifiedMs == otherLastModifiedMs && fileSizeBytes == otherFileSizeBytes;
+        }
+    }
+
+    private record DocumentCooldownState(String ext, long lastModifiedMs, long fileSizeBytes, long untilMs) {
+        boolean matches(String otherExt, long otherLastModifiedMs, long otherFileSizeBytes) {
+            return Objects.equals(ext, otherExt)
+                    && lastModifiedMs == otherLastModifiedMs
+                    && fileSizeBytes == otherFileSizeBytes;
         }
     }
 
@@ -409,8 +465,16 @@ public final class AsyncThumbnailService {
             return image != null;
         }
 
+        boolean isLowQualityPreview() {
+            return quality == RenderQuality.PDF_LOW || quality == RenderQuality.DOC_LOW;
+        }
+
         boolean isLowQualityPdf() {
             return quality == RenderQuality.PDF_LOW;
+        }
+
+        boolean isLowQualityOfficeDocument() {
+            return quality == RenderQuality.DOC_LOW;
         }
 
         boolean isPromotablePdf() {
@@ -435,6 +499,10 @@ public final class AsyncThumbnailService {
 
         boolean isLowQualityPdf() {
             return quality == RenderQuality.PDF_LOW;
+        }
+
+        boolean isLowQualityPreview() {
+            return quality == RenderQuality.PDF_LOW || quality == RenderQuality.DOC_LOW;
         }
     }
 
@@ -525,6 +593,10 @@ public final class AsyncThumbnailService {
     private final ConcurrentHashMap<String, ScheduledFuture<?>> pdfPromotionPending = new ConcurrentHashMap<>();
     private final Set<String> pdfPromotionRunning = ConcurrentHashMap.newKeySet();
     private final AtomicInteger pdfActiveHighTierPromotions = new AtomicInteger(0);
+    private final ConcurrentHashMap<String, OfficeRenderKey> officePromotionRequests = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ScheduledFuture<?>> officePromotionPending = new ConcurrentHashMap<>();
+    private final Set<String> officePromotionRunning = ConcurrentHashMap.newKeySet();
+    private final AtomicInteger officeActiveHighTierPromotions = new AtomicInteger(0);
     private final ConcurrentHashMap<String, AtomicInteger> pdfActiveDocumentRenders = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicInteger> pdfActiveDocumentHighTierRenders = new ConcurrentHashMap<>();
 
@@ -607,9 +679,15 @@ public final class AsyncThumbnailService {
     private final LongAdder pdfLargeDocFallbacks = new LongAdder();
     private final LongAdder pdfLowTierRendered = new LongAdder();
     private final LongAdder pdfHighTierRendered = new LongAdder();
+    private final LongAdder officeLowTierRendered = new LongAdder();
+    private final LongAdder officeHighTierRendered = new LongAdder();
+    private final LongAdder documentFailureCooldownSkips = new LongAdder();
     private final LongAdder pdfPromotionQueuedCount = new LongAdder();
     private final LongAdder pdfPromotionCompleted = new LongAdder();
     private final LongAdder pdfPromotionSkipped = new LongAdder();
+    private final LongAdder officePromotionQueuedCount = new LongAdder();
+    private final LongAdder officePromotionCompleted = new LongAdder();
+    private final LongAdder officePromotionSkipped = new LongAdder();
     private final LongAdder viewportPrunedPending = new LongAdder();
     private final LongAdder viewportPrunedQueued = new LongAdder();
     private final AtomicBoolean imageSupportInitialized = new AtomicBoolean(false);
@@ -1009,6 +1087,7 @@ public final class AsyncThumbnailService {
                     bucketReuse.increment();
                 }
                 maybeTrackAndPromotePdfVisibleRequest(abs, ext, key, pr, cached.quality, lastMod, fileSizeBytes, viewportScopeFor(pr));
+                maybeTrackAndPromoteOfficeVisibleRequest(abs, ext, key, pr, cached.quality, lastMod, fileSizeBytes, viewportScopeFor(pr));
                 return CompletableFuture.completedFuture(cached.image);
             }
             cache.remove(key);
@@ -1022,15 +1101,17 @@ public final class AsyncThumbnailService {
             hit.increment();
             bucketReuse.increment();
             maybeTrackAndPromotePdfVisibleRequest(abs, ext, key, pr, larger.quality, lastMod, fileSizeBytes, viewportScopeFor(pr));
+            maybeTrackAndPromoteOfficeVisibleRequest(abs, ext, key, pr, larger.quality, lastMod, fileSizeBytes, viewportScopeFor(pr));
             return CompletableFuture.completedFuture(larger.image);
         }
 
         Image diskCached = readDiskCachedThumbnail(abs, ext, sizeBucketPx, lastMod, fileSizeBytes, providerFor(ext));
         if (diskCached != null) {
             hit.increment();
-            RenderQuality diskQuality = isPdfExtension(ext) ? RenderQuality.PDF_HIGH : RenderQuality.STANDARD;
+            RenderQuality diskQuality = defaultDiskCacheRenderQuality(ext);
             cache.put(key, new CachedThumb(lastMod, fileSizeBytes, diskCached, approxBytes(diskCached), diskQuality));
             maybeTrackAndPromotePdfVisibleRequest(abs, ext, key, pr, diskQuality, lastMod, fileSizeBytes, viewportScopeFor(pr));
+            maybeTrackAndPromoteOfficeVisibleRequest(abs, ext, key, pr, diskQuality, lastMod, fileSizeBytes, viewportScopeFor(pr));
             return CompletableFuture.completedFuture(diskCached);
         }
 
@@ -1069,7 +1150,9 @@ public final class AsyncThumbnailService {
 
         final long viewportScope = viewportScopeFor(pr);
         final PdfRenderTier pdfTier = requestedPdfTierFor(ext, pr);
+        final DocumentRenderTier documentTier = requestedDocumentTierFor(ext, pr, sizeBucketPx);
         maybeTrackAndPromotePdfVisibleRequest(abs, ext, key, pr, null, lastMod, fileSizeBytes, viewportScope);
+        maybeTrackAndPromoteOfficeVisibleRequest(abs, ext, key, pr, null, lastMod, fileSizeBytes, viewportScope);
 
         // Another request already has this key queued or actively decoding.
         if (!created[0]) {
@@ -1078,13 +1161,13 @@ public final class AsyncThumbnailService {
             }
             if (pending.containsKey(key)) {
                 if (shouldReschedulePendingWork(key, pr, viewportScope)) {
-                    scheduleQueuedDecode(key, abs, ext, sizeBucketPx, pr, lastMod, fileSizeBytes, generation.get(), viewportScope, pdfTier);
+                    scheduleQueuedDecode(key, abs, ext, sizeBucketPx, pr, lastMod, fileSizeBytes, generation.get(), viewportScope, pdfTier, documentTier);
                 }
                 return detached;
             }
         }
 
-        scheduleQueuedDecode(key, abs, ext, sizeBucketPx, pr, lastMod, fileSizeBytes, generation.get(), viewportScope, pdfTier);
+        scheduleQueuedDecode(key, abs, ext, sizeBucketPx, pr, lastMod, fileSizeBytes, generation.get(), viewportScope, pdfTier, documentTier);
         return detached;
     }
 
@@ -1096,6 +1179,19 @@ public final class AsyncThumbnailService {
             return PdfRenderTier.HIGH;
         }
         return PdfRenderTier.LOW;
+    }
+
+    private DocumentRenderTier requestedDocumentTierFor(String ext, RequestPriority pr, int requestedSizePx) {
+        if (!isOfficeDocumentExtension(ext)) {
+            return DocumentRenderTier.HIGH;
+        }
+        if (!ENABLE_OFFICE_PROGRESSIVE_UPGRADE || pr == RequestPriority.USER_ACTION) {
+            return DocumentRenderTier.HIGH;
+        }
+        int safeRequestedSizePx = Math.max(12, requestedSizePx);
+        return safeRequestedSizePx > OFFICE_PROGRESSIVE_LOW_TIER_MAX_SIZE_PX
+                ? DocumentRenderTier.LOW
+                : DocumentRenderTier.HIGH;
     }
 
     private void maybeTrackAndPromotePdfVisibleRequest(Path abs,
@@ -1128,6 +1224,35 @@ public final class AsyncThumbnailService {
             return;
         }
         schedulePdfPromotion(safePath(abs), abs, key.sizePx(), lastMod, fileSizeBytes, viewportScope, generation.get(), true);
+    }
+
+    private void maybeTrackAndPromoteOfficeVisibleRequest(Path abs,
+                                                          String ext,
+                                                          ThumbKey key,
+                                                          RequestPriority pr,
+                                                          RenderQuality quality,
+                                                          long lastMod,
+                                                          long fileSizeBytes,
+                                                          long viewportScope) {
+        if (!ENABLE_OFFICE_PROGRESSIVE_UPGRADE || abs == null || !isOfficeDocumentExtension(ext) || pr != RequestPriority.VISIBLE) {
+            return;
+        }
+        if (quality == RenderQuality.DOC_LOW) {
+            scheduleOfficePromotion(abs, ext, key.sizePx(), lastMod, fileSizeBytes, viewportScope, generation.get(), true);
+        }
+    }
+
+    private void maybeScheduleOfficePromotionAfterLowTier(Path abs,
+                                                          String ext,
+                                                          ThumbKey key,
+                                                          RequestPriority pr,
+                                                          long lastMod,
+                                                          long fileSizeBytes,
+                                                          long viewportScope) {
+        if (!ENABLE_OFFICE_PROGRESSIVE_UPGRADE || abs == null || !isOfficeDocumentExtension(ext) || pr != RequestPriority.VISIBLE) {
+            return;
+        }
+        scheduleOfficePromotion(abs, ext, key.sizePx(), lastMod, fileSizeBytes, viewportScope, generation.get(), true);
     }
 
     private void scheduleCurrentViewportPdfPromotions() {
@@ -1223,7 +1348,7 @@ public final class AsyncThumbnailService {
         }
         decodeExecutor.execute(new PrioritizedRunnable(RequestPriority.BACKGROUND, seq.incrementAndGet(), renderKey.viewportScope(), key, new CompletableFuture<>(), () -> {
             try {
-                LoadResult result = loadThumbnail(abs, "pdf", renderKey.sizePx(), PdfRenderTier.HIGH);
+                LoadResult result = loadThumbnail(abs, "pdf", renderKey.sizePx(), PdfRenderTier.HIGH, DocumentRenderTier.HIGH);
                 if (result == null || !result.hasImage()) {
                     pdfPromotionSkipped.increment();
                     return;
@@ -1244,6 +1369,101 @@ public final class AsyncThumbnailService {
             } finally {
                 pdfActiveHighTierPromotions.decrementAndGet();
                 pdfPromotionRunning.remove(target);
+            }
+        }));
+    }
+
+    private void scheduleOfficePromotion(Path abs,
+                                       String ext,
+                                       int sizePx,
+                                       long lastMod,
+                                       long fileSizeBytes,
+                                       long viewportScope,
+                                       long generationAtRequest,
+                                       boolean fromLowTierRequest) {
+        if (!ENABLE_OFFICE_PROGRESSIVE_UPGRADE || abs == null || !isOfficeDocumentExtension(ext)) {
+            return;
+        }
+        String target = safePath(abs);
+        OfficeRenderKey renderKey = new OfficeRenderKey(ext, target, Math.max(12, Math.min(512, sizePx)), lastMod, fileSizeBytes, viewportScope, generationAtRequest);
+        officePromotionRequests.put(target, renderKey);
+        ScheduledFuture<?> prior = officePromotionPending.remove(target);
+        if (prior != null) {
+            prior.cancel(false);
+        }
+        long delayMs = Math.max(25L, OFFICE_PROGRESSIVE_PROMOTION_DELAY_MS + ((fromLowTierRequest || isViewportMoving()) ? VIEWPORT_SETTLE_MS : 0L));
+        ScheduledFuture<?> future = scheduler.schedule(() -> runOfficePromotion(abs, renderKey), delayMs, TimeUnit.MILLISECONDS);
+        officePromotionPending.put(target, future);
+        officePromotionQueuedCount.increment();
+    }
+
+    private void runOfficePromotion(Path abs, OfficeRenderKey renderKey) {
+        if (renderKey == null || abs == null) {
+            officePromotionSkipped.increment();
+            return;
+        }
+        String target = renderKey.path();
+        ScheduledFuture<?> currentFuture = officePromotionPending.remove(target);
+        if (currentFuture != null && currentFuture.isCancelled()) {
+            officePromotionSkipped.increment();
+            return;
+        }
+        if (!ENABLE_OFFICE_PROGRESSIVE_UPGRADE || generation.get() != renderKey.generation()) {
+            officePromotionSkipped.increment();
+            return;
+        }
+        if (renderKey.viewportScope() != viewportScopeGeneration.get()) {
+            officePromotionSkipped.increment();
+            return;
+        }
+        if (isViewportMoving()) {
+            scheduleOfficePromotion(abs, renderKey.ext(), renderKey.sizePx(), renderKey.lastModifiedMs(), renderKey.fileSizeBytes(), renderKey.viewportScope(), renderKey.generation(), false);
+            return;
+        }
+        if (!isFileVersionCurrent(abs, renderKey.lastModifiedMs(), renderKey.fileSizeBytes())) {
+            officePromotionSkipped.increment();
+            return;
+        }
+        ThumbKey key = new ThumbKey(target, renderKey.sizePx(), renderKey.lastModifiedMs(), renderKey.fileSizeBytes());
+        CachedThumb cached = cache.get(key);
+        if (cached != null && cached.image != null && !cached.isLowQualityPreview()) {
+            officePromotionSkipped.increment();
+            return;
+        }
+        if (!officePromotionRunning.add(target)) {
+            officePromotionSkipped.increment();
+            return;
+        }
+        if (officeActiveHighTierPromotions.incrementAndGet() > OFFICE_MAX_ACTIVE_HIGH_TIER_PROMOTIONS) {
+            officeActiveHighTierPromotions.decrementAndGet();
+            officePromotionRunning.remove(target);
+            scheduleOfficePromotion(abs, renderKey.ext(), renderKey.sizePx(), renderKey.lastModifiedMs(), renderKey.fileSizeBytes(), renderKey.viewportScope(), renderKey.generation(), false);
+            return;
+        }
+        decodeExecutor.execute(new PrioritizedRunnable(RequestPriority.BACKGROUND, seq.incrementAndGet(), renderKey.viewportScope(), key, new CompletableFuture<>(), () -> {
+            try {
+                LoadResult result = loadThumbnail(abs, renderKey.ext(), renderKey.sizePx(), null, DocumentRenderTier.HIGH);
+                if (result == null || !result.hasImage()) {
+                    officePromotionSkipped.increment();
+                    return;
+                }
+                if (generation.get() != renderKey.generation() || renderKey.viewportScope() != viewportScopeGeneration.get()) {
+                    officePromotionSkipped.increment();
+                    return;
+                }
+                if (!isFileVersionCurrent(abs, renderKey.lastModifiedMs(), renderKey.fileSizeBytes())) {
+                    officePromotionSkipped.increment();
+                    return;
+                }
+                cache.put(key, new CachedThumb(renderKey.lastModifiedMs(), renderKey.fileSizeBytes(), result.image(), approxBytes(result.image()), result.quality()));
+                if (!result.isLowQualityPreview()) {
+                    persistDiskCachedThumbnail(abs, renderKey.ext(), renderKey.sizePx(), renderKey.lastModifiedMs(), renderKey.fileSizeBytes(), result.provider(), result.image());
+                }
+                officeHighTierRendered.increment();
+                officePromotionCompleted.increment();
+            } finally {
+                officeActiveHighTierPromotions.decrementAndGet();
+                officePromotionRunning.remove(target);
             }
         }));
     }
@@ -1295,14 +1515,15 @@ public final class AsyncThumbnailService {
                                       long fileSizeBytes,
                                       long genAtSchedule,
                                       long viewportScope,
-                                      PdfRenderTier pdfTier) {
+                                      PdfRenderTier pdfTier,
+                                      DocumentRenderTier documentTier) {
         ScheduledFuture<?> prev = pending.get(key);
         if (prev != null) {
             prev.cancel(false);
         }
         final long seqNo = seq.incrementAndGet();
         ScheduledFuture<?> scheduled = scheduler.schedule(() ->
-                startQueuedDecode(key, abs, ext, sizePx, pr, lastMod, fileSizeBytes, genAtSchedule, seqNo, viewportScope, pdfTier),
+                startQueuedDecode(key, abs, ext, sizePx, pr, lastMod, fileSizeBytes, genAtSchedule, seqNo, viewportScope, pdfTier, documentTier),
                 computeScheduleDelayMs(pr), TimeUnit.MILLISECONDS);
 
         pending.put(key, scheduled);
@@ -1320,7 +1541,8 @@ public final class AsyncThumbnailService {
                                    long genAtSchedule,
                                    long seqNo,
                                    long viewportScope,
-                                   PdfRenderTier pdfTier) {
+                                   PdfRenderTier pdfTier,
+                                   DocumentRenderTier documentTier) {
         // If preempted, drop.
         if (generation.get() != genAtSchedule) {
             staleGenerationDrops.increment();
@@ -1344,7 +1566,7 @@ public final class AsyncThumbnailService {
                 && queuedCountAtOrAbove(RequestPriority.VISIBLE.p) >= MOVING_VISIBLE_BACKLOG_LIMIT) {
             movingBackgroundDeferrals.increment();
             ScheduledFuture<?> retry = scheduler.schedule(
-                    () -> startQueuedDecode(key, abs, ext, sizePx, pr, lastMod, fileSizeBytes, genAtSchedule, seq.incrementAndGet(), viewportScope, pdfTier),
+                    () -> startQueuedDecode(key, abs, ext, sizePx, pr, lastMod, fileSizeBytes, genAtSchedule, seq.incrementAndGet(), viewportScope, pdfTier, documentTier),
                     MOVING_BACKGROUND_EXTRA_DELAY_MS,
                     TimeUnit.MILLISECONDS
             );
@@ -1365,7 +1587,7 @@ public final class AsyncThumbnailService {
         if (!tryAcquireStartSlot(pr)) {
             throttleDeferrals.increment();
             ScheduledFuture<?> retry = scheduler.schedule(
-                    () -> startQueuedDecode(key, abs, ext, sizePx, pr, lastMod, fileSizeBytes, genAtSchedule, seq.incrementAndGet(), viewportScope, pdfTier),
+                    () -> startQueuedDecode(key, abs, ext, sizePx, pr, lastMod, fileSizeBytes, genAtSchedule, seq.incrementAndGet(), viewportScope, pdfTier, documentTier),
                     THROTTLE_RETRY_MS,
                     TimeUnit.MILLISECONDS
             );
@@ -1397,9 +1619,9 @@ public final class AsyncThumbnailService {
                     return;
                 }
 
-                result = loadThumbnail(abs, ext, sizePx, pdfTier);
+                result = loadThumbnail(abs, ext, sizePx, pdfTier, documentTier);
             } catch (Throwable ignored) {
-                result = new LoadResult(null, providerFor(ext), renderQualityFor(ext, pdfTier));
+                result = new LoadResult(null, providerFor(ext), renderQualityFor(ext, pdfTier, documentTier));
             } finally {
                 try {
                     long dur = System.nanoTime() - startNanos;
@@ -1431,7 +1653,7 @@ public final class AsyncThumbnailService {
                     if (result != null && result.hasImage()) {
                         long approxBytes = approxBytes(result.image());
                         cache.put(key, new CachedThumb(lastMod, fileSizeBytes, result.image(), approxBytes, result.quality()));
-                        if (!result.isLowQualityPdf()) {
+                        if (!result.isLowQualityPreview()) {
                             persistDiskCachedThumbnail(abs, ext, sizePx, lastMod, fileSizeBytes, result.provider(), result.image());
                         }
                         if (result.quality() == RenderQuality.PDF_LOW) {
@@ -1439,6 +1661,11 @@ public final class AsyncThumbnailService {
                             maybeSchedulePdfPromotionAfterLowTier(abs, ext, key, pr, lastMod, fileSizeBytes, viewportScope);
                         } else if (result.quality() == RenderQuality.PDF_HIGH) {
                             pdfHighTierRendered.increment();
+                        } else if (result.quality() == RenderQuality.DOC_LOW) {
+                            officeLowTierRendered.increment();
+                            maybeScheduleOfficePromotionAfterLowTier(abs, ext, key, pr, lastMod, fileSizeBytes, viewportScope);
+                        } else if (result.quality() == RenderQuality.DOC_HIGH) {
+                            officeHighTierRendered.increment();
                         }
                         rendered.increment();
                         incrementProviderCounter(result.provider());
@@ -1479,6 +1706,7 @@ public final class AsyncThumbnailService {
         prunePendingViewportScopedWork(currentScope);
         pruneQueuedViewportScopedWork(currentScope);
         prunePdfPromotionState(currentScope);
+        pruneOfficePromotionState(currentScope);
     }
 
     private void prunePendingViewportScopedWork(long currentScope) {
@@ -1546,6 +1774,19 @@ public final class AsyncThumbnailService {
             pdfViewportStates.remove(target, state);
             pdfPromotionRequests.remove(target);
             ScheduledFuture<?> future = pdfPromotionPending.remove(target);
+            if (future != null) {
+                future.cancel(false);
+            }
+        });
+    }
+
+    private void pruneOfficePromotionState(long currentScope) {
+        officePromotionRequests.forEach((target, request) -> {
+            if (request != null && request.viewportScope() == currentScope) {
+                return;
+            }
+            officePromotionRequests.remove(target, request);
+            ScheduledFuture<?> future = officePromotionPending.remove(target);
             if (future != null) {
                 future.cancel(false);
             }
@@ -1725,7 +1966,7 @@ public final class AsyncThumbnailService {
         }
     }
 
-    private LoadResult loadThumbnail(Path path, String ext, int sizePx, PdfRenderTier pdfTier) {
+    private LoadResult loadThumbnail(Path path, String ext, int sizePx, PdfRenderTier pdfTier, DocumentRenderTier documentTier) {
         try {
             if (!Files.isRegularFile(path)) {
                 return new LoadResult(null, ThumbnailProvider.UNSUPPORTED, RenderQuality.STANDARD);
@@ -1738,20 +1979,33 @@ public final class AsyncThumbnailService {
         try {
             return switch (provider) {
                 case JAVAFX_NATIVE -> new LoadResult(loadJavaFxNativeThumbnail(path, sizePx), provider, RenderQuality.STANDARD);
-                case THUMBNAILS4J_DOCUMENT -> new LoadResult(loadDocumentThumbnail(path, ext, sizePx, pdfTier), provider, renderQualityFor(ext, pdfTier));
+                case THUMBNAILS4J_DOCUMENT -> new LoadResult(loadDocumentThumbnail(path, ext, sizePx, pdfTier, documentTier), provider, renderQualityFor(ext, pdfTier, documentTier));
                 case IMAGEIO -> new LoadResult(loadImageIoThumbnail(path, sizePx), provider, RenderQuality.STANDARD);
-                case DISABLED, UNSUPPORTED -> new LoadResult(null, provider, renderQualityFor(ext, pdfTier));
+                case DISABLED, UNSUPPORTED -> new LoadResult(null, provider, renderQualityFor(ext, pdfTier, documentTier));
             };
         } catch (Throwable ignored) {
-            return new LoadResult(null, provider, renderQualityFor(ext, pdfTier));
+            return new LoadResult(null, provider, renderQualityFor(ext, pdfTier, documentTier));
         }
     }
 
-    private RenderQuality renderQualityFor(String ext, PdfRenderTier pdfTier) {
-        if (!isPdfExtension(ext)) {
-            return RenderQuality.STANDARD;
+    private RenderQuality renderQualityFor(String ext, PdfRenderTier pdfTier, DocumentRenderTier documentTier) {
+        if (isPdfExtension(ext)) {
+            return pdfTier == PdfRenderTier.HIGH ? RenderQuality.PDF_HIGH : RenderQuality.PDF_LOW;
         }
-        return pdfTier == PdfRenderTier.HIGH ? RenderQuality.PDF_HIGH : RenderQuality.PDF_LOW;
+        if (isOfficeDocumentExtension(ext)) {
+            return documentTier == DocumentRenderTier.LOW ? RenderQuality.DOC_LOW : RenderQuality.DOC_HIGH;
+        }
+        return RenderQuality.STANDARD;
+    }
+
+    private RenderQuality defaultDiskCacheRenderQuality(String ext) {
+        if (isPdfExtension(ext)) {
+            return RenderQuality.PDF_HIGH;
+        }
+        if (isOfficeDocumentExtension(ext)) {
+            return RenderQuality.DOC_HIGH;
+        }
+        return RenderQuality.STANDARD;
     }
 
     private Image loadJavaFxNativeThumbnail(Path path, int sizePx) {
@@ -1777,7 +2031,7 @@ public final class AsyncThumbnailService {
         return SwingFXUtils.toFXImage(scaled, null);
     }
 
-    private Image loadDocumentThumbnail(Path path, String ext, int sizePx, PdfRenderTier pdfTier) {
+    private Image loadDocumentThumbnail(Path path, String ext, int sizePx, PdfRenderTier pdfTier, DocumentRenderTier documentTier) {
         Future<BufferedImage> future = null;
         long lastMod = safeLastModifiedMs(path);
         long fileSizeBytes = safeFileSizeBytes(path);
@@ -1789,11 +2043,21 @@ public final class AsyncThumbnailService {
             if (isPdfExtension(ext) && shouldFallbackLargePdf(path, lastMod, fileSizeBytes)) {
                 return null;
             }
+            if (isOfficeDocumentExtension(ext) && isDocumentInFailureCooldown(path, ext, lastMod, fileSizeBytes)) {
+                documentFailureCooldownSkips.increment();
+                return null;
+            }
 
-            future = documentExecutorFor(ext).submit(() -> renderDocumentThumbnail(path, ext, sizePx, timeoutBudgetMs, pdfTier));
+            future = documentExecutorFor(ext).submit(() -> renderDocumentThumbnail(path, ext, sizePx, timeoutBudgetMs, pdfTier, documentTier));
             BufferedImage bi = future.get(waitBudgetMs, TimeUnit.MILLISECONDS);
             if (bi == null) {
+                if (isOfficeDocumentExtension(ext)) {
+                    markDocumentFailureCooldown(path, ext, lastMod, fileSizeBytes, null);
+                }
                 return null;
+            }
+            if (isOfficeDocumentExtension(ext)) {
+                clearDocumentFailureCooldown(path, ext, lastMod, fileSizeBytes);
             }
             return SwingFXUtils.toFXImage(bi, null);
         } catch (TimeoutException te) {
@@ -1802,6 +2066,8 @@ public final class AsyncThumbnailService {
                 recordPdfRenderTimeout(path, lastMod, fileSizeBytes, timeoutBudgetMs);
                 markPdfTimeoutCooldown(path, lastMod, fileSizeBytes);
                 logPdfTimeout(path, te, lastMod, fileSizeBytes, timeoutBudgetMs);
+            } else if (isOfficeDocumentExtension(ext)) {
+                markDocumentFailureCooldown(path, ext, lastMod, fileSizeBytes, te);
             }
             if (future != null) {
                 try {
@@ -1816,6 +2082,8 @@ public final class AsyncThumbnailService {
                 markPdfTimeoutCooldown(path, lastMod, fileSizeBytes);
                 logPdfInterrupt(path, t, lastMod, fileSizeBytes);
                 clearThreadInterruptFlag();
+            } else if (isOfficeDocumentExtension(ext)) {
+                markDocumentFailureCooldown(path, ext, lastMod, fileSizeBytes, t);
             }
             if (future != null) {
                 try {
@@ -1827,19 +2095,24 @@ public final class AsyncThumbnailService {
         }
     }
 
-    private BufferedImage renderDocumentThumbnail(Path path, String ext, int sizePx, long timeoutBudgetMs, PdfRenderTier pdfTier) {
+    private BufferedImage renderDocumentThumbnail(Path path, String ext, int sizePx, long timeoutBudgetMs, PdfRenderTier pdfTier, DocumentRenderTier documentTier) {
         try {
-            if (isPdfExtension(ext)) {
+            DocumentBackend backend = documentBackendFor(ext);
+            if (backend == DocumentBackend.PDFBOX) {
                 return renderPdfThumbnail(path, sizePx, timeoutBudgetMs, pdfTier);
+            }
+            if (backend != DocumentBackend.THUMBNAILS4J) {
+                return null;
             }
 
             Thumbnailer thumbnailer = newDocumentThumbnailer(ext);
             if (thumbnailer == null) {
                 return null;
             }
+            int backendRequestSizePx = computeOfficeBackendRequestSizePx(sizePx, documentTier);
             java.util.List<?> thumbs = thumbnailer.getThumbnails(
                     path.toFile(),
-                    java.util.List.of(new Dimensions(sizePx, sizePx))
+                    java.util.List.of(new Dimensions(backendRequestSizePx, backendRequestSizePx))
             );
             if (thumbs == null || thumbs.isEmpty()) {
                 return null;
@@ -2676,15 +2949,87 @@ public final class AsyncThumbnailService {
         return category + "|" + safePath(path) + "|" + lastMod + "|" + fileSizeBytes;
     }
 
+    private String documentLogSignature(String ext, Path path, long lastMod, long fileSizeBytes) {
+        String normalizedExt = ext == null ? "" : ext.toLowerCase(Locale.ROOT);
+        return normalizedExt + "|" + safePath(path) + "|" + lastMod + "|" + fileSizeBytes;
+    }
+
+    private String documentCooldownKey(String ext, Path path) {
+        String normalizedExt = ext == null ? "" : ext.toLowerCase(Locale.ROOT);
+        return normalizedExt + "|" + safePath(path);
+    }
+
+    private boolean isOfficeDocumentExtension(String ext) {
+        return documentBackendFor(ext) == DocumentBackend.THUMBNAILS4J;
+    }
+
+    private DocumentBackend documentBackendFor(String ext) {
+        if (ext == null || ext.isBlank()) {
+            return DocumentBackend.NONE;
+        }
+        String normalized = ext.toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "pdf" -> isDocumentExtensionEnabled(normalized) ? DocumentBackend.PDFBOX : DocumentBackend.NONE;
+            case "doc", "docx", "pptx", "xls", "xlsx" -> isDocumentExtensionEnabled(normalized) ? DocumentBackend.THUMBNAILS4J : DocumentBackend.NONE;
+            default -> DocumentBackend.NONE;
+        };
+    }
+
+    private boolean isDocumentInFailureCooldown(Path path, String ext, long lastMod, long fileSizeBytes) {
+        String key = documentCooldownKey(ext, path);
+        DocumentCooldownState state = DOCUMENT_FAILURE_COOLDOWN_UNTIL_MS.get(key);
+        if (state == null) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        if (!state.matches(ext == null ? null : ext.toLowerCase(Locale.ROOT), lastMod, fileSizeBytes) || state.untilMs() <= now) {
+            DOCUMENT_FAILURE_COOLDOWN_UNTIL_MS.remove(key, state);
+            return false;
+        }
+        return true;
+    }
+
+    private void clearDocumentFailureCooldown(Path path, String ext, long lastMod, long fileSizeBytes) {
+        String key = documentCooldownKey(ext, path);
+        DocumentCooldownState state = DOCUMENT_FAILURE_COOLDOWN_UNTIL_MS.get(key);
+        if (state != null && state.matches(ext == null ? null : ext.toLowerCase(Locale.ROOT), lastMod, fileSizeBytes)) {
+            DOCUMENT_FAILURE_COOLDOWN_UNTIL_MS.remove(key, state);
+        }
+    }
+
+    private void markDocumentFailureCooldown(Path path, String ext, long lastMod, long fileSizeBytes, Throwable cause) {
+        if (!isOfficeDocumentExtension(ext)) {
+            return;
+        }
+        String normalizedExt = ext == null ? "" : ext.toLowerCase(Locale.ROOT);
+        String key = documentCooldownKey(normalizedExt, path);
+        long untilMs = System.currentTimeMillis() + DOCUMENT_FAILURE_COOLDOWN_MS;
+        DOCUMENT_FAILURE_COOLDOWN_UNTIL_MS.put(key, new DocumentCooldownState(normalizedExt, lastMod, fileSizeBytes, untilMs));
+        String signature = documentLogSignature(normalizedExt, path, lastMod, fileSizeBytes);
+        if (LOGGED_DOCUMENT_FAILURE_SIGNATURES.add(signature)) {
+            String reason = cause == null ? "backend returned no thumbnail" : cause.getClass().getSimpleName();
+            LOG.warning(() -> "[Thumbs] Backing off document thumbnail retries for ." + normalizedExt
+                    + " via " + documentBackendFor(normalizedExt)
+                    + " for " + safePath(path)
+                    + " | cooldownMs=" + DOCUMENT_FAILURE_COOLDOWN_MS
+                    + " | cause=" + reason);
+        }
+    }
+
+    private int computeOfficeBackendRequestSizePx(int requestedSizePx, DocumentRenderTier documentTier) {
+        int safeRequestedSizePx = Math.max(12, Math.min(512, requestedSizePx));
+        if (!ENABLE_OFFICE_PROGRESSIVE_UPGRADE || documentTier != DocumentRenderTier.LOW) {
+            return safeRequestedSizePx;
+        }
+        return Math.min(safeRequestedSizePx, Math.max(32, OFFICE_PROGRESSIVE_LOW_TIER_MAX_SIZE_PX));
+    }
+
     private Thumbnailer newDocumentThumbnailer(String ext) {
         if (ext == null) {
             return null;
         }
         String normalized = ext.toLowerCase(Locale.ROOT);
-        if (!THUMBNAILS4J_EXTENSIONS.contains(normalized)) {
-            return null;
-        }
-        if (!isDocumentExtensionEnabled(normalized)) {
+        if (documentBackendFor(normalized) != DocumentBackend.THUMBNAILS4J) {
             return null;
         }
         return switch (normalized) {
@@ -2706,7 +3051,7 @@ public final class AsyncThumbnailService {
             return ThumbnailProvider.JAVAFX_NATIVE;
         }
         if (ImageSupport.isDocumentThumbnailExtension(normalized)) {
-            return isDocumentExtensionEnabled(normalized)
+            return documentBackendFor(normalized) != DocumentBackend.NONE
                     ? ThumbnailProvider.THUMBNAILS4J_DOCUMENT
                     : ThumbnailProvider.DISABLED;
         }

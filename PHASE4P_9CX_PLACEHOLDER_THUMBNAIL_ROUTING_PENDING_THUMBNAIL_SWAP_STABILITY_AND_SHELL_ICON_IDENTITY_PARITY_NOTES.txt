@@ -1,0 +1,13 @@
+HOTFIX196 / Phase 4P.9CX
+
+Scope:
+- Canonical shell/icon identity routing for placeholder-first surfaces
+- Stable placeholder-to-thumbnail swap guards
+- Preview placeholder parity for thumb candidates
+
+Key implementation points:
+- Added IconLoader.identityForPath(...) as the shared path->identity resolver
+- Added grouped kind identities for video/audio/image/archive/text placeholder families
+- Delegated FileMetadataService.iconIdentity(...) to IconLoader.identityForPath(...)
+- Updated tree root/folder icon resolution to use the centralized identity pipeline
+- Bound preview and icon-view thumbnail commits to both path and identity before swapping in the resolved image

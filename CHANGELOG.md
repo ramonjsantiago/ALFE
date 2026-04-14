@@ -1,4 +1,40 @@
+# Changelog
+
+## HOTFIX217 / Phase 4P.9DS — Two-Tone View Icon Rendering with Blue Accent Preservation
+- Replaced the flat all-white View icon masking path with a two-tone conversion that preserves original blue accent pixels while recoloring neutral icon strokes to white.
+- Applied the same two-tone treatment to the top-level View button active icon and to the View flyout raster icons so command-bar and menu rendering stay visually aligned.
+- Kept the H215/H216 white-on-dark readability improvements without flattening pane and navigation icon accent details.
+
+## HOTFIX209 / Phase 4P.9DK — Main-UI First-Render Critical-Path Decomposition and Lazy Details Mount
+- Removed the eager Details-view module load from `MainController.initialize(...)` so the main layout can finish loading without synchronously materializing `DetailsView.fxml` during `FXMLLoader.load()`.
+- Added a lightweight `viewHost` startup placeholder plus a deferred lazy-details mount path that loads/configures the Details surface after the main UI root is already attached.
+- Added new `StartupTrace` markers for `MainController.initialize(...)`, `initializeWithContext(...)`, and the lazy-details schedule/mount/configure phases so first-render regressions are easier to attribute.
+
+## HOTFIX204 / Phase 4P.9DF — Details Header Dropdown Ownership, Right-Edge Menu Parity, and Column-Snapshot Correctness
+- Rebound the Details header right-edge dropdown and full header popup to per-open column snapshots so actions and menu contents no longer drift when header interactions overlap.
+- Restored the compact right-edge dropdown to the currently visible Details columns, preserving the checkbox + icon + label row structure and canonical Explorer column order.
+- Added attached-header menu realignment after show and cleared active header dropdown state whenever row/background context menus take ownership.
+
+## HOTFIX201 / Phase 4P.9DC — Details View Navigation-Epoch Isolation, Stale Async Icon Result Suppression, and Sort/Refresh Paint Stability Parity
+- Added a controller-owned Details async binding epoch so navigation, Details refresh passes, and Details sort transitions invalidate older icon publishes before they can repaint reused rows.
+- Reworked `MainController.ExplorerNameTableCell` to rebind from the active `TableRow` item so row reuse cannot preserve a stale icon binding when the visible name string is unchanged.
+- Tightened Details async icon and thumbnail commit guards to require epoch, row, `FileItem`, path, display text, and resolved identity parity before painting.
+- Preserved thumbnail wins over slower icon completions and upgraded folder fallback placeholders to retain folder/file identity correctness during refresh churn.
+
+## HOTFIX200 / Phase 4P.9DB — Details View Icon Refresh Coalescing, Watcher-Burst Deduplication, and Selection-Stable Repaint Parity
+- Added a dedicated `DetailsViewRefreshCoordinator` for Details view so bursty item-source, sort, and comparator changes collapse into a single coalesced `TableView.refresh()` pass.
+- Preserved selection and focus by file path across the coalesced refresh so Details repaint stays visually stable under watcher and refresh churn.
+- Updated `TableViewSupport` and `VisibleThumbnailManager` to skip duplicate same-binding icon/thumbnail re-registration, reducing redundant icon work during bursty refresh cycles.
+
+## HOTFIX198 / Phase 4P.9CZ — Details View Icon Identity Binding, Cell Reuse Sanitization, and Post-Refresh Paint Parity
+- Reworked the Details Name-column cell binding so async icon/thumbnail paint is validated against the current row identity, path, type key, and display text instead of only the cell text snapshot.
+- Added explicit cell sanitization on reuse/unbind paths, cancelling pending icon and thumbnail work, unregistering viewport thumbnail bindings, and clearing stale graphic/text state before rebinding.
+- Added row-item listeners so virtualized Details rows rebind their icon immediately after refresh/sort/rename churn even when the display text stays the same.
+
 ## HOTFIX195 / Phase 4P.9CW — Command Bar Template Fidelity, Segment Spacing, and Right-Rail Action Parity
+
+- HOTFIX195 follow-up: integrated the supplied `.bin` file artwork as the dedicated BIN thumbnail/icon resource under `src/main/resources/com/fileexplorer/ui/icons/{light,dark}` and routed `ext:bin` through `IconLoader` override resolution.
+- HOTFIX195 follow-up: guarded responsive virtual-icon prefWidth writes when the list/grid views are already width-bound, then requested layout refresh instead of setting a bound value.
 
 - HOTFIX195 crash follow-up: added controller-disposal guards, stopped pending metadata/search debounces during dispose(), and routed IO/hover background dispatch through safe executor wrappers so shutdown cannot throw `RejectedExecutionException` on the JavaFX thread.
 
@@ -172,3 +208,91 @@
 - Corrective pass: raised structured New / Sort / View command-bar menu content an additional 2 px for closer vertical baseline parity.
 
 - HOTFIX195 follow-up: pinned dark top-chrome / command-bar labels, glyph icons, vector icons, and chevrons to white for stronger Windows Explorer parity.
+
+- HOTFIX195 follow-up: added dedicated `.iso` thumbnail/icon resources in both light and dark theme resource trees and routed `ext:iso` through `IconLoader`.
+
+- H195: updated dedicated `.ini` thumbnail/icon resources from supplied artwork in light/dark resource folders.
+- H195: Added dedicated .reg thumbnail/icon resources (light/dark, 16-256) and routed .reg extension lookup through IconLoader override resources.
+HOTFIX195: integrated dedicated Home icon resources and wired Home UI surfaces to use them.
+- H195 asset update: replaced the Undo menu icon resource with the supplied artwork under `src/main/resources/icons/see_more_undo.png` (and mirrored `see.more.undo.png`).
+
+
+- H195 asset update: added dedicated disk icon resources and routed filesystem root drives through `special:disk` so disk/root-drive thumbnails use the supplied artwork.
+
+- H195 asset update: added dedicated network-drive icon resources and routed network-drive roots through `special:networkdrive` so network drive thumbnails use the supplied artwork.
+
+- H195 asset update: added dedicated local-disk icon resources and routed non-network root drives through `special:localdisk` so local disk thumbnails/icons use the supplied artwork.
+
+- H195 asset update: added dedicated video file placeholder icon resources under `src/main/resources/com/fileexplorer/ui/icons/{light,dark}/` so video files use the supplied artwork until actual thumbnails resolve.
+
+- H195: Replaced generic video placeholder thumbnail artwork with updated supplied icon resources.
+
+- H195: added dedicated `.ico` placeholder thumbnail resources and `IconLoader` override routing for icon files.
+
+- H195 resource update: added dedicated This PC icon resources and wired the navigation tree root to `special:thispc`.
+
+- HOTFIX196 / Phase 4P.9CX: centralized placeholder icon identity routing in `IconLoader.identityForPath(...)` so tree, preview, and file-surface placeholder binding use the same shell identity model.
+- HOTFIX196 / Phase 4P.9CX: added grouped `kind:` placeholder identities for video/audio/image/archive/text families while preserving dedicated special/ext overrides.
+- HOTFIX196 / Phase 4P.9CX: preview pane now keeps the correct placeholder icon visible for thumbnail candidates while the resolved thumbnail is pending.
+- HOTFIX196 / Phase 4P.9CX: tightened async thumbnail swap guards by binding both target path and identity before publishing the decoded image.
+
+- HOTFIX197 / Phase 4P.9CY: centralized document thumbnail backend selection so PDFs route explicitly to PDFBox and Office-family document types route explicitly to thumbnails4j.
+- HOTFIX197 / Phase 4P.9CY: added Office-family document failure cooldown/backoff to suppress repeated backend churn on every repaint/scroll after a thumbnail failure.
+- HOTFIX197 / Phase 4P.9CY: added low-tier/high-tier Office-family document thumbnail promotion so visible large-icon requests can render a fast first-pass preview before promoting to the requested resolution.
+- HOTFIX197 / Phase 4P.9CY: prevented low-tier document previews from being persisted into the disk cache so only stable promoted document thumbnails are written.
+
+- HOTFIX197 compile fix: restored missing IconPathTreeCell imports for FileSystemView and Locale.
+
+## HOTFIX199 / Phase 4P.9DA
+- Tightened Details name-cell async icon commit gating so late completions must still match the exact bound `FileItem`, row, path, display text, and resolved identity before painting.
+- Rebound Details icon state immediately on row-item replacement so refresh/sort/rename model churn invalidates older icon work instead of letting stale completions publish.
+- Promoted the initial Details placeholder to identity-aware fallback selection (`ext:*`, `kind:*`, `special:*`, folder) for better shell/file-type parity while async work is settling.
+- Prevented late async icon completions from overwriting a thumbnail that already won the placeholder → thumbnail promotion path.
+
+## HOTFIX202 / Phase 4P.9DD
+- Added a controller-owned visible directory scope so Details async icon and thumbnail publishes are fenced to the active folder surface as well as the current binding epoch.
+- Finalized same-name row-reuse handling by threading the active directory scope through Details Name-cell binding equivalence/current-binding checks.
+- Scoped viewport continuity capture/restore to the active directory and cleared stale presentation-only selection/focus carryover on true folder-scope transitions.
+
+## HOTFIX203 / Phase 4P.9DE
+- Added a generation-based Details refresh/sort commit barrier so refresh + selection/focus replay only commit after the active model/sort state settles for the current directory scope.
+- Published Details directory-scope, anchor-path, and lead-path state from `MainController` into the refresh coordinator for same-directory refresh and rename-resort continuity.
+- Isolated header preset/context-menu actions to the clicked column snapshot for each menu instance and reset ephemeral header/dropdown state on Details model churn.
+- Added a final stable-pulse Details refresh after commit to reduce transient wrong-row paint during fast refresh + resort bursts.
+
+- HOTFIX204 compile fix: removed an erroneous primitive dereference in `DetailsViewRefreshCoordinator` selection replay so the project compiles again.
+
+## HOTFIX208 / Phase 4P.9DJ
+- Corrected archive placeholder resource routing in `IconLoader` so `IconType.ARCHIVE` resolves to the packaged `compressed-*.png` resources instead of a non-existent `archive-*.png` path.
+- Expanded archive identity overrides to cover `kind:archive` plus `zip`, `7z`, `rar`, `tar`, `gz`, `bz2`, `xz`, and `zst` extension identities so compressed files consistently show the packaged compressed icon while thumbnails are pending or unavailable.
+
+## HOTFIX210 / Phase 4P.9DL
+- Kept the startup/default explorer view aligned to Details and set the View command-bar button to show the active view icon, starting with the Details icon on first render and updating as the user switches modes.
+- Added a null-safe primary-selection fallback so top-chrome and context-menu state refreshes no longer throw when the lazy Details surface has not mounted yet.
+
+
+## HOTFIX211 / Phase 4P.9DM
+- Kept the command-bar View label visible next to the active view icon by rebuilding the structured View button content during icon refresh instead of replacing it with an icon-only graphic.
+- Updated the structured View button icon builder so the visible View button continues to track the current active view mode while preserving the label text.
+
+
+## HOTFIX212 / Phase 4P.9DN
+- Backed out the H209 lazy Details mount / startup placeholder path and restored eager Details initialization plus eager `configureTable()` so the Details surface is ready on the original startup path again.
+- Kept the H210/H211 View-button behavior: the command-bar View button still shows the active view icon with the visible `View` label, and the null-safe `getPrimarySelection()` guard remains in place.
+
+## HOTFIX213 / Phase 4P.9DO
+- Coalesced selection-driven command-bar, file-ops, and background-context-menu refresh work behind a short FX debounce and shared explorer-command-state snapshots so Details selection churn does not repeatedly recompute shell state during scroll/viewport movement.
+- Added no-op short-circuiting for explorer command-state refreshes and lightweight chrome hitch logging so slow top-chrome or selection-command recomputations are easier to spot in future traces.
+- Stabilized the command-bar View button refresh path by caching the active view icon/label signature and skipping redundant structured-button rebuilds when the visible View presentation is unchanged.
+
+## HOTFIX214 / Phase 4P.9DP
+- Updated the View flyout styling so glyph-based View-menu icons, View-menu row labels, and the Show submenu label/chevron all render in white for stronger contrast and consistent menu presentation.
+- Kept the existing View button active-icon tracking behavior unchanged; this hotfix is CSS-only and does not alter Java view-selection logic.
+
+## HOTFIX215 / Phase 4P.9DQ
+- Fixed the real View-menu contrast issue by tinting the actual image-based View graphics to solid white at render time instead of only changing text color.
+- Applied the white graphic treatment to the command-bar View button active-view icon, all image-backed View-mode rows, pane-toggle rows, and the Navigation pane entry in the Show submenu so menu graphics now match the white label styling.
+
+## HOTFIX216 / Phase 4P.9DR
+- Finished the white-icon treatment by routing the structured command-bar View button active-view raster icon through the same white alpha-mask path used by the View flyout graphics.
+- Kept the visible `View` label next to the active icon unchanged while making the top-level View button icon visually match the now-white View menu icons.

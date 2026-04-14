@@ -1,0 +1,18 @@
+HOTFIX199 / Phase 4P.9DA
+
+Scope
+- Add Details-view async icon token gating keyed to the exact bound row item.
+- Reconcile icon binding across refresh / rename row replacement.
+- Keep shell/file-type fallback placeholders stable until the correct winner publishes.
+
+Implemented
+- Reworked the Details `Name` cell in `TableViewSupport` to store the exact bound `FileItem`, path, identity, type signature, folder flag, and binding stamp.
+- Tightened `isCurrentBinding(...)` so late async completions are rejected when the row instance, row item instance, display text, or resolved identity no longer matches.
+- Switched the placeholder path to `IconLoader.loadForIdentity(...)` first so file-type/special placeholders remain correct during async churn.
+- Added a thumbnail-published guard so late icon completions cannot downgrade an already committed thumbnail.
+- Added a folder/root no-I/O identity fallback so drive/network-root placeholders stay consistent during refresh and virtualization reuse.
+
+Validation intent
+- Refreshing, sorting, or renaming in Details view should not cause the wrong icon to appear in a recycled row.
+- Thumbnail candidates should keep the resolved thumbnail once it wins, even if an older icon future completes later.
+- Extension/special fallback icons should remain visually consistent while async work is still settling.

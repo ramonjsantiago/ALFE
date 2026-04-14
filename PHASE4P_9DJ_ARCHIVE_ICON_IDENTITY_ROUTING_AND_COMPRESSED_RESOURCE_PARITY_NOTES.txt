@@ -1,0 +1,15 @@
+HOTFIX208 / Phase 4P.9DJ
+Archive Icon Identity Routing and Compressed Resource Parity
+
+Summary
+- Corrected `IconLoader` archive resource routing so `IconType.ARCHIVE` resolves to the packaged `compressed-*.png` icon set.
+- Added explicit archive identity override coverage for `kind:archive` and compressed-file extensions `zip`, `7z`, `rar`, `tar`, `gz`, `bz2`, `xz`, and `zst`.
+- Eliminated fallback-to-generic behavior for compressed files caused by the old `archive-*.png` lookup path.
+
+Files changed
+- src/main/java/com/fileexplorer/util/IconLoader.java
+- docs/README_HOTFIX208.md
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE_LABEL.txt
+- PHASE4P_9DJ_ARCHIVE_ICON_IDENTITY_ROUTING_AND_COMPRESSED_RESOURCE_PARITY_NOTES.txt

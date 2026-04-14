@@ -132,25 +132,29 @@ public final class TableHeaderContextMenuInstaller {
                 if (!isHeaderEvent(evt)) return;
                 if (!isHeaderMenuTriggerZone(evt)) return;
 
-                currentClickedColumn.value = findClickedColumn(evt);
-                if (currentClickedColumn.value == null) {
+                TableColumn<?, ?> clickedColumnSnapshot = findClickedColumn(evt);
+                currentClickedColumn.value = clickedColumnSnapshot;
+                if (clickedColumnSnapshot == null) {
                     return;
                 }
 
                 hideExistingMenus(table);
 
+                Map<String, TableColumn<?, ?>> currentColumnsSnapshot = snapshotDetailsColumns(detailsColumnsSupplier.get());
                 final ContextMenu presetMenu = buildCompactVisibleColumnsMenu(
                         table,
-                        currentClickedColumn,
-                        detailsColumnsSupplier,
+                        clickedColumnSnapshot,
+                        currentColumnsSnapshot,
                         visibilityStateResolver
                 );
                 table.getProperties().put(PROP_HEADER_PRESET_MENU, presetMenu);
 
                 Bounds headerBounds = findHeaderBounds(evt);
-                double showX = headerBounds != null ? Math.max(headerBounds.getMinX(), headerBounds.getMaxX() - 4.0) : evt.getScreenX();
-                double showY = headerBounds != null ? Math.max(headerBounds.getMinY(), headerBounds.getMaxY() - 1.0) : evt.getScreenY();
-                presetMenu.show(table, showX, showY);
+                if (headerBounds != null) {
+                    showMenuAttachedToHeader(presetMenu, table, headerBounds, true);
+                } else {
+                    presetMenu.show(table, evt.getScreenX(), evt.getScreenY());
+                }
 
                 evt.consume();
             });
@@ -160,16 +164,16 @@ public final class TableHeaderContextMenuInstaller {
             table.addEventFilter(ContextMenuEvent.CONTEXT_MENU_REQUESTED, evt -> {
                 if (!isHeaderEvent(evt)) return;
 
-                // Remember which column header was clicked for "Size Column to Fit".
-                currentClickedColumn.value = findClickedColumn(evt);
+                TableColumn<?, ?> clickedColumnSnapshot = findClickedColumn(evt);
+                currentClickedColumn.value = clickedColumnSnapshot;
 
                 hideExistingMenus(table);
 
-                Map<String, TableColumn<?, ?>> currentColumns = detailsColumnsSupplier.get();
+                Map<String, TableColumn<?, ?>> currentColumnsSnapshot = snapshotDetailsColumns(detailsColumnsSupplier.get());
                 final ContextMenu headerMenu = buildMenu(
                         table,
-                        currentClickedColumn,
-                        currentColumns,
+                        clickedColumnSnapshot,
+                        currentColumnsSnapshot,
                         visibilityStateResolver,
                         visibilityApplier,
                         restoreDefaultColumns,
@@ -195,45 +199,48 @@ public final class TableHeaderContextMenuInstaller {
 
     private static ContextMenu buildCompactVisibleColumnsMenu(
             TableView<?> table,
-            Holder<TableColumn<?, ?>> currentClickedColumn,
-            Supplier<Map<String, TableColumn<?, ?>>> detailsColumnsSupplier,
+            TableColumn<?, ?> clickedColumn,
+            Map<String, TableColumn<?, ?>> detailsColumns,
             Function<String, Boolean> visibilityStateResolver
     ) {
         ContextMenu menu = new ContextMenu();
         menu.setAutoHide(true);
         menu.getStyleClass().addAll("explorer-header-details-menu", "explorer-header-details-preset-menu");
-        rebuildCompactVisibleColumnsMenu(menu, table, currentClickedColumn, detailsColumnsSupplier, visibilityStateResolver);
-        menu.setOnShowing(evt -> rebuildCompactVisibleColumnsMenu(menu, table, currentClickedColumn, detailsColumnsSupplier, visibilityStateResolver));
+        rebuildCompactVisibleColumnsMenu(menu, table, clickedColumn, detailsColumns, visibilityStateResolver);
         return menu;
     }
 
     private static void rebuildCompactVisibleColumnsMenu(
             ContextMenu menu,
             TableView<?> table,
-            Holder<TableColumn<?, ?>> currentClickedColumn,
-            Supplier<Map<String, TableColumn<?, ?>>> detailsColumnsSupplier,
+            TableColumn<?, ?> clickedColumn,
+            Map<String, TableColumn<?, ?>> detailsColumns,
             Function<String, Boolean> visibilityStateResolver
     ) {
         menu.getItems().clear();
-        Map<String, TableColumn<?, ?>> detailsColumns = detailsColumnsSupplier.get();
         if (detailsColumns == null || detailsColumns.isEmpty()) {
             return;
         }
 
-        List<PresetDefinition> presetDefinitions = resolvePresetDefinitions(currentClickedColumn.value);
-        Map<String, ExplorerPresetRow> presetRows = new LinkedHashMap<>();
-        for (PresetDefinition preset : presetDefinitions) {
-            ExplorerPresetRow row = buildPresetRow(table, currentClickedColumn, menu, preset);
-            presetRows.put(preset.key(), row);
+        List<VisibleColumnSnapshot> visibleColumns = resolveVisibleColumnSnapshots(detailsColumns, visibilityStateResolver, clickedColumn);
+        for (VisibleColumnSnapshot visibleColumn : visibleColumns) {
+            ExplorerPresetRow row = new ExplorerPresetRow(visibleColumn.label(), visibleColumn.iconText());
+            row.setSelected(true);
+            if (visibleColumn.active()) {
+                row.text.getStyleClass().add("explorer-menu-active-column-text");
+            }
+            row.item.setOnAction(ae -> {
+                applyPrimarySort(table, visibleColumn.column(), TableColumn.SortType.ASCENDING);
+                menu.hide();
+            });
             menu.getItems().add(row.item);
         }
-        syncPresetSelection(table, currentClickedColumn.value, presetDefinitions, presetRows);
     }
 
 
     private static ContextMenu buildMenu(
             TableView<?> table,
-            Holder<TableColumn<?, ?>> currentClickedColumn,
+            TableColumn<?, ?> clickedColumn,
             Map<String, TableColumn<?, ?>> detailsColumns,
             Function<String, Boolean> visibilityStateResolver,
             BiConsumer<String, Boolean> visibilityApplier,
@@ -245,9 +252,8 @@ public final class TableHeaderContextMenuInstaller {
         menu.getStyleClass().add("explorer-header-details-menu");
 
         CustomMenuItem sizeCol = buildAlignedActionItem("Size Column to Fit", () -> {
-            TableColumn<?, ?> col = currentClickedColumn.value;
-            if (col != null) {
-                ColumnAutoFitUtil.sizeToFit(table, col);
+            if (clickedColumn != null) {
+                ColumnAutoFitUtil.sizeToFit(table, clickedColumn);
             }
             menu.hide();
         });
@@ -300,17 +306,7 @@ public final class TableHeaderContextMenuInstaller {
         });
         menu.getItems().add(more);
 
-        menu.setOnShowing(evt -> {
-            TableColumn<?, ?> clicked = currentClickedColumn.value;
-            sizeCol.setDisable(clicked == null);
-            for (Map.Entry<String, ExplorerCheckRow> e : checkRows.entrySet()) {
-                if ("Name".equals(e.getKey())) {
-                    e.getValue().setSelected(true);
-                } else {
-                    e.getValue().setSelected(Boolean.TRUE.equals(visibilityStateResolver.apply(e.getKey())));
-                }
-            }
-        });
+        sizeCol.setDisable(clickedColumn == null);
 
         return menu;
     }
@@ -325,6 +321,97 @@ public final class TableHeaderContextMenuInstaller {
         }
         String lastVisibleLabel = visibleDetailLabels.get(visibleDetailLabels.size() - 1);
         return !visibleDetailLabels.contains("Title") && label.equals(lastVisibleLabel);
+    }
+
+
+    private record VisibleColumnSnapshot(
+            String label,
+            String iconText,
+            TableColumn<?, ?> column,
+            boolean active
+    ) {}
+
+    private static List<VisibleColumnSnapshot> resolveVisibleColumnSnapshots(
+            Map<String, TableColumn<?, ?>> detailsColumns,
+            Function<String, Boolean> visibilityStateResolver,
+            TableColumn<?, ?> clickedColumn
+    ) {
+        List<VisibleColumnSnapshot> visibleColumns = new ArrayList<>();
+        if (detailsColumns == null || detailsColumns.isEmpty()) {
+            return visibleColumns;
+        }
+        for (Map.Entry<String, TableColumn<?, ?>> entry : detailsColumns.entrySet()) {
+            String label = entry.getKey();
+            TableColumn<?, ?> column = entry.getValue();
+            if (label == null || column == null) {
+                continue;
+            }
+            boolean visible = "Name".equals(label) || Boolean.TRUE.equals(visibilityStateResolver.apply(label));
+            if (!visible) {
+                continue;
+            }
+            visibleColumns.add(new VisibleColumnSnapshot(
+                    label,
+                    resolveVisibleColumnIconText(label),
+                    column,
+                    Objects.equals(clickedColumn, column)
+            ));
+        }
+        return visibleColumns;
+    }
+
+    private static String resolveVisibleColumnIconText(String label) {
+        if (label == null || label.isBlank()) {
+            return "•";
+        }
+        return switch (label.trim().toLowerCase()) {
+            case "name" -> "A";
+            case "date modified" -> "D";
+            case "type" -> "T";
+            case "size" -> "S";
+            case "date created" -> "C";
+            case "authors" -> "A";
+            case "tags" -> "#";
+            case "title" -> "T";
+            default -> label.substring(0, 1).toUpperCase();
+        };
+    }
+
+    private static Map<String, TableColumn<?, ?>> snapshotDetailsColumns(Map<String, TableColumn<?, ?>> detailsColumns) {
+        Map<String, TableColumn<?, ?>> snapshot = new LinkedHashMap<>();
+        if (detailsColumns == null || detailsColumns.isEmpty()) {
+            return snapshot;
+        }
+        for (Map.Entry<String, TableColumn<?, ?>> entry : detailsColumns.entrySet()) {
+            if (entry.getKey() != null && entry.getValue() != null) {
+                snapshot.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return snapshot;
+    }
+
+    private static void showMenuAttachedToHeader(ContextMenu menu, TableView<?> table, Bounds headerBounds, boolean rightEdgeAligned) {
+        if (menu == null || table == null || headerBounds == null) {
+            return;
+        }
+        double initialX = rightEdgeAligned ? headerBounds.getMaxX() - 2.0 : headerBounds.getMinX();
+        double initialY = headerBounds.getMaxY() - 1.0;
+        menu.setOnShown(evt -> alignMenuToHeader(menu, headerBounds, rightEdgeAligned));
+        menu.show(table, initialX, initialY);
+    }
+
+    private static void alignMenuToHeader(ContextMenu menu, Bounds headerBounds, boolean rightEdgeAligned) {
+        if (menu == null || headerBounds == null || menu.getScene() == null || menu.getScene().getWindow() == null) {
+            return;
+        }
+        Window window = menu.getScene().getWindow();
+        double width = window.getWidth();
+        double x = rightEdgeAligned
+                ? Math.round(headerBounds.getMaxX() - Math.max(0.0, width) + 2.0)
+                : Math.round(headerBounds.getMinX());
+        double y = Math.round(headerBounds.getMaxY() - 1.0);
+        window.setX(x);
+        window.setY(y);
     }
 
     private static void addMenuItem(ContextMenu menu, MenuItem item, boolean separatorAfter) {
@@ -437,6 +524,15 @@ public final class TableHeaderContextMenuInstaller {
         }
     }
 
+
+    public static void resetEphemeralHeaderState(TableView<?> table) {
+        if (table == null) {
+            return;
+        }
+        hideExistingMenus(table);
+        clearAllHeaderHotzoneState(table);
+    }
+
     private static boolean isHeaderEvent(MouseEvent evt) {
         return findHeaderNode(evt) != null;
     }
@@ -500,14 +596,14 @@ public final class TableHeaderContextMenuInstaller {
 
     private static ExplorerPresetRow buildPresetRow(
             TableView<?> table,
-            Holder<TableColumn<?, ?>> currentClickedColumn,
+            TableColumn<?, ?> clickedColumn,
             ContextMenu menu,
             PresetDefinition preset
     ) {
         ExplorerPresetRow row = new ExplorerPresetRow(preset.label(), preset.iconText());
         row.item.setOnAction(ae -> {
-            rememberSelectedPreset(table, currentClickedColumn.value, preset.key());
-            applyPrimarySort(table, currentClickedColumn.value, preset.sortType());
+            rememberSelectedPreset(table, clickedColumn, preset.key());
+            applyPrimarySort(table, clickedColumn, preset.sortType());
             menu.hide();
         });
         return row;

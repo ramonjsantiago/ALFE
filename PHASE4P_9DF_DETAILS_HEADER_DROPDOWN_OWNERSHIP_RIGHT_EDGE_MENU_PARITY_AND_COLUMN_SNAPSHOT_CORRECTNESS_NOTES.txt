@@ -1,0 +1,19 @@
+HOTFIX204 / Phase 4P.9DF
+Details Header Dropdown Ownership, Right-Edge Menu Parity, and Column-Snapshot Correctness
+
+Summary
+- Corrected a compile regression in DetailsViewRefreshCoordinator caused by dereferencing the primitive lead restore index during selection replay.
+- Bound each Details header dropdown open to an immutable clicked-column plus visible-columns snapshot.
+- Restored the compact right-edge menu to visible-only Details entries with aligned checkbox, icon, and string rows.
+- Re-anchored the compact menu to the clicked header edge after show so it stays visually attached.
+- Cleared compact header dropdown state when file-row or background context menus take ownership.
+
+Files changed
+- src/main/java/com/fileexplorer/ui/table/TableHeaderContextMenuInstaller.java
+- src/main/java/com/fileexplorer/controller/MainController.java
+- src/main/resources/com/fileexplorer/ui/css/explorer-base.css
+- docs/README_HOTFIX204.md
+- CHANGELOG.md
+- CHANGED_FILES.txt
+- PHASE_LABEL.txt
+- PHASE4P_9DF_DETAILS_HEADER_DROPDOWN_OWNERSHIP_RIGHT_EDGE_MENU_PARITY_AND_COLUMN_SNAPSHOT_CORRECTNESS_NOTES.txt

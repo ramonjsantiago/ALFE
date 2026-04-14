@@ -309,3 +309,7 @@
     -fx-pref-width: 16;
     -fx-max-width: 16;
 }
+
+.context-menu.explorer-header-details-preset-menu .explorer-menu-active-column-text {
+    -fx-font-weight: 600;
+}

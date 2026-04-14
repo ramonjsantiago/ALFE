@@ -102,11 +102,15 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.image.PixelReader;
+import javafx.scene.image.PixelWriter;
+import javafx.scene.image.WritableImage;
 import javafx.scene.control.TableRow;
 import javafx.scene.input.MouseButton;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollBar;
@@ -141,6 +145,7 @@ import com.fileexplorer.service.icon.AsyncThumbnailService;
 import com.fileexplorer.service.icon.IconCacheService;
 import com.fileexplorer.ui.table.TableViewSupport;
 import com.fileexplorer.ui.table.TableHeaderContextMenuInstaller;
+import com.fileexplorer.ui.table.DetailsViewRefreshCoordinator;
 import com.fileexplorer.ui.table.VisibleThumbnailManager;
 import com.fileexplorer.ui.table.DetailColumnCatalog;
 import com.fileexplorer.ui.dialog.ChooseDetailsDialog;
@@ -213,6 +218,10 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
     private static final long SCROLL_HITCH_LOG_THRESHOLD_MS = Long.getLong("fileexplorer.scroll.hitchLogThresholdMs", 28L);
     private static final boolean LOG_SCROLL_TELEMETRY = Boolean.getBoolean("fileexplorer.scroll.telemetry");
     private static final boolean LOG_REALIZATION_TELEMETRY = Boolean.getBoolean("fileexplorer.realization.telemetry");
+    private static final boolean LOG_CHROME_TELEMETRY = Boolean.getBoolean("fileexplorer.chrome.telemetry");
+    private static final long CHROME_HITCH_LOG_THRESHOLD_MS = Long.getLong("fileexplorer.chrome.hitchLogThresholdMs", 18L);
+    private static final String VIEW_MENU_BUTTON_GRAPHIC_SIGNATURE_KEY = "explorer.viewMenuButtonGraphicSignature";
+    private static final Map<String, Image> VIEW_MENU_WHITE_ICON_CACHE = new ConcurrentHashMap<>();
     private static final long VIEWPORT_SETTLE_PASS_DELAY_MS = Long.getLong("fileexplorer.realization.settlePassDelayMs", 135L);
     private static final long VIEWPORT_FRAME_BUDGET_NANOS = Long.getLong("fileexplorer.realization.frameBudgetNanos", 6_000_000L);
     private static final long VIEWPORT_SCROLL_STOP_QUIET_MS = Long.getLong("fileexplorer.realization.scrollStopQuietMs", 120L);
@@ -250,6 +259,65 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
         ScrollVelocityBucket(double leadingMultiplier, double trailingMultiplier) {
             this.leadingMultiplier = leadingMultiplier;
             this.trailingMultiplier = trailingMultiplier;
+        }
+    }
+
+    private static final class ExplorerCommandStateSnapshot {
+        private final int selectionCount;
+        private final Path primarySelection;
+        private final boolean homeActive;
+        private final boolean canPaste;
+        private final boolean hasDirectory;
+        private final boolean hasVisibleItems;
+        private final boolean canUndo;
+        private final String undoMenuLabel;
+        private final boolean singleDirectorySelection;
+        private final boolean pinnedDirectorySelection;
+        private final ViewMode viewMode;
+        private final SortKey sortKey;
+
+        private ExplorerCommandStateSnapshot(int selectionCount,
+                                             Path primarySelection,
+                                             boolean homeActive,
+                                             boolean canPaste,
+                                             boolean hasDirectory,
+                                             boolean hasVisibleItems,
+                                             boolean canUndo,
+                                             String undoMenuLabel,
+                                             boolean singleDirectorySelection,
+                                             boolean pinnedDirectorySelection,
+                                             ViewMode viewMode,
+                                             SortKey sortKey) {
+            this.selectionCount = selectionCount;
+            this.primarySelection = primarySelection;
+            this.homeActive = homeActive;
+            this.canPaste = canPaste;
+            this.hasDirectory = hasDirectory;
+            this.hasVisibleItems = hasVisibleItems;
+            this.canUndo = canUndo;
+            this.undoMenuLabel = undoMenuLabel;
+            this.singleDirectorySelection = singleDirectorySelection;
+            this.pinnedDirectorySelection = pinnedDirectorySelection;
+            this.viewMode = viewMode;
+            this.sortKey = sortKey;
+        }
+
+        private boolean semanticallyEquals(ExplorerCommandStateSnapshot other) {
+            if (other == null) {
+                return false;
+            }
+            return selectionCount == other.selectionCount
+                    && homeActive == other.homeActive
+                    && canPaste == other.canPaste
+                    && hasDirectory == other.hasDirectory
+                    && hasVisibleItems == other.hasVisibleItems
+                    && canUndo == other.canUndo
+                    && singleDirectorySelection == other.singleDirectorySelection
+                    && pinnedDirectorySelection == other.pinnedDirectorySelection
+                    && viewMode == other.viewMode
+                    && sortKey == other.sortKey
+                    && Objects.equals(primarySelection, other.primarySelection)
+                    && Objects.equals(undoMenuLabel, other.undoMenuLabel);
         }
     }
 
@@ -608,6 +676,7 @@ private volatile long hugeFolderScannedTotal = 0L;
     private javafx.animation.PauseTransition viewportRealizationDebounce;
     private final java.util.concurrent.atomic.AtomicLong realizationViewportGeneration = new java.util.concurrent.atomic.AtomicLong(0L);
     private final java.util.concurrent.atomic.AtomicLong realizationDirectoryGeneration = new java.util.concurrent.atomic.AtomicLong(0L);
+    private final java.util.concurrent.atomic.AtomicLong detailsAsyncBindingEpoch = new java.util.concurrent.atomic.AtomicLong(0L);
     private final java.util.concurrent.atomic.AtomicLong realizationScrollDirection = new java.util.concurrent.atomic.AtomicLong(1L);
     private final java.util.concurrent.atomic.AtomicLong scrollTelemetryLastMotionNanos = new java.util.concurrent.atomic.AtomicLong(0L);
     private final java.util.concurrent.atomic.AtomicLong scrollTelemetryBurstStartNanos = new java.util.concurrent.atomic.AtomicLong(0L);
@@ -666,6 +735,7 @@ private volatile long hugeFolderScannedTotal = 0L;
     private boolean zoomShortcutsInstalled;
     private boolean explorerShortcutsInstalled;
     private volatile Path currentDirectory;
+    private volatile Path visibleDirectoryScope;
     private final java.util.concurrent.atomic.AtomicBoolean startupTreeSkeletonMarked = new java.util.concurrent.atomic.AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicBoolean startupTreeRootVisibleMarked = new java.util.concurrent.atomic.AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicBoolean startupInitialDirectoryLoadStarted = new java.util.concurrent.atomic.AtomicBoolean(false);
@@ -738,6 +808,11 @@ private final ExecutorService hoverPrefetchExecutor;
             javafx.util.Duration.millis(Long.getLong("fileexplorer.chrome.compactionDebounceMs", 70L))
     );
     private volatile double pendingCommandBarWidth = -1.0;
+    private final javafx.animation.PauseTransition selectionChromeDebounce = new javafx.animation.PauseTransition(
+            javafx.util.Duration.millis(Long.getLong("fileexplorer.chrome.selectionDebounceMs", 32L))
+    );
+    private final java.util.concurrent.atomic.AtomicBoolean selectionChromeRefreshQueued = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private volatile ExplorerCommandStateSnapshot lastExplorerCommandStateSnapshot;
     // Phase 4I: keep details/status updates immediate, but debounce heavier preview thumbnail work.
     private final javafx.animation.PauseTransition previewLoadDebounce = new javafx.animation.PauseTransition(
             javafx.util.Duration.millis(Long.getLong("fileexplorer.preview.selectionDebounceMs", 60L))
@@ -818,6 +893,10 @@ private boolean hoverPrefetchEnabled;
         this.metadataFlushDebounce.setOnFinished(_ -> flushPendingMetadataUpdates());
         this.detailsColumnsPersistDebounce.setOnFinished(_ -> persistDetailsColumnsState());
         this.commandBarCompactionDebounce.setOnFinished(_ -> applyCommandBarCompactionNow(pendingCommandBarWidth));
+        this.selectionChromeDebounce.setOnFinished(_ -> {
+            selectionChromeRefreshQueued.set(false);
+            applySelectionCommandStateNow(false);
+        });
         this.previewLoadDebounce.setOnFinished(_ -> loadPreviewThumbnailNow(previewLoadSeq.get(), pendingPreviewPath));
         this.folderThumbnailWarmupDebounce.setOnFinished(_ -> warmCurrentFolderThumbnailsNow(folderThumbnailWarmupSeq.get()));
         this.startupThumbnailGateDebounce.setOnFinished(_ -> openStartupThumbnailWarmupGate());
@@ -835,6 +914,7 @@ private boolean hoverPrefetchEnabled;
             }
             try {
                 if (fileTable.isVisible()) {
+                    advanceDetailsAsyncBindingEpoch();
                     fileTable.refresh();
                 }
             } catch (Exception ignored) {
@@ -1295,6 +1375,11 @@ public void attach(ExplorerContext context) {
     }
 
     private Node createStructuredCommandBarRasterIcon(String resourcePath, double fitWidth, double fitHeight) {
+        return createStructuredCommandBarRasterIcon(resourcePath, fitWidth, fitHeight, false);
+    }
+
+    private Node createStructuredCommandBarRasterIcon(String resourcePath, double fitWidth, double fitHeight,
+            boolean forceWhiteMask) {
         if (resourcePath == null || resourcePath.isBlank()) {
             return null;
         }
@@ -1302,8 +1387,13 @@ public void attach(ExplorerContext context) {
         if (resourceUrl == null) {
             return null;
         }
-        Image image = new Image(resourceUrl.toExternalForm(), fitWidth, fitHeight, true, true, true);
-        if (image.isError()) {
+        Image image;
+        if (forceWhiteMask) {
+            image = loadMenuIconImage(resourceUrl, true);
+        } else {
+            image = new Image(resourceUrl.toExternalForm(), fitWidth, fitHeight, true, true, true);
+        }
+        if (image == null || image.isError()) {
             return null;
         }
         ImageView imageView = new ImageView(image);
@@ -1319,6 +1409,10 @@ public void attach(ExplorerContext context) {
     }
 
     private Node buildStructuredCommandBarViewVectorIcon() {
+        Node rasterIcon = createStructuredCommandBarRasterIcon(viewModeIconResource(viewMode), 18.0, 18.0, true);
+        if (rasterIcon != null) {
+            return rasterIcon;
+        }
         StackPane root = createStructuredCommandBarVectorIconRoot();
         root.getChildren().addAll(
                 createStructuredCommandBarStrokePath("M 2.75 3 H 6.5 V 6.75 H 2.75 Z"),
@@ -1522,6 +1616,10 @@ private Node createMenuGlyph(String glyph, String... styleClasses) {
 }
 
 private ImageView createMenuImageIcon(String resourcePath, double size) {
+    return createMenuImageIcon(resourcePath, size, false);
+}
+
+private ImageView createMenuImageIcon(String resourcePath, double size, boolean forceWhiteMask) {
     if (resourcePath == null || resourcePath.isBlank()) {
         return null;
     }
@@ -1529,7 +1627,11 @@ private ImageView createMenuImageIcon(String resourcePath, double size) {
     if (url == null) {
         return null;
     }
-    ImageView view = new ImageView(new Image(url.toExternalForm()));
+    Image image = loadMenuIconImage(url, forceWhiteMask);
+    if (image == null) {
+        return null;
+    }
+    ImageView view = new ImageView(image);
     view.setFitWidth(size);
     view.setFitHeight(size);
     view.setPreserveRatio(true);
@@ -1537,6 +1639,136 @@ private ImageView createMenuImageIcon(String resourcePath, double size) {
     view.setPickOnBounds(true);
     view.getStyleClass().add("view-menu-icon");
     return view;
+}
+
+private Image loadMenuIconImage(URL url, boolean forceWhiteMask) {
+    if (url == null) {
+        return null;
+    }
+    String key = (forceWhiteMask ? "twoToneWhite:" : "plain:") + url.toExternalForm();
+    return VIEW_MENU_WHITE_ICON_CACHE.computeIfAbsent(key, unused -> {
+        Image source = new Image(url.toExternalForm(), false);
+        if (!forceWhiteMask) {
+            return source;
+        }
+        return createTwoToneWhiteBlueAccentImage(source);
+    });
+}
+
+private Image createTwoToneWhiteBlueAccentImage(Image source) {
+    if (source == null) {
+        return null;
+    }
+    PixelReader reader = source.getPixelReader();
+    int width = Math.max(1, (int) Math.round(source.getWidth()));
+    int height = Math.max(1, (int) Math.round(source.getHeight()));
+    if (reader == null || width <= 0 || height <= 0) {
+        return source;
+    }
+    WritableImage tinted = new WritableImage(width, height);
+    PixelWriter writer = tinted.getPixelWriter();
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            int argb = reader.getArgb(x, y);
+            int alpha = (argb >>> 24) & 0xFF;
+            if (alpha == 0) {
+                writer.setArgb(x, y, argb);
+                continue;
+            }
+            int red = (argb >>> 16) & 0xFF;
+            int green = (argb >>> 8) & 0xFF;
+            int blue = argb & 0xFF;
+            if (isBlueAccentPixel(red, green, blue)) {
+                writer.setArgb(x, y, argb);
+            } else {
+                writer.setArgb(x, y, (alpha << 24) | 0x00FFFFFF);
+            }
+        }
+    }
+    return tinted;
+}
+
+private boolean isBlueAccentPixel(int red, int green, int blue) {
+    if (blue < red + 12 || blue < green + 8) {
+        return false;
+    }
+    Color color = Color.rgb(red, green, blue);
+    double hue = color.getHue();
+    double saturation = color.getSaturation();
+    double brightness = color.getBrightness();
+    return hue >= 185.0 && hue <= 235.0 && saturation >= 0.30 && brightness >= 0.18;
+}
+
+private String viewModeIconResource(ViewMode mode) {
+    ViewMode effectiveMode = mode == null ? ViewMode.DETAILS : mode;
+    return switch (effectiveMode) {
+        case EXTRA_LARGE_ICONS -> "/icons/view.extra.large.png";
+        case LARGE_ICONS -> "/icons/view.large.png";
+        case MEDIUM_ICONS -> "/icons/view.medium.png";
+        case SMALL_ICONS -> "/icons/view.small.png";
+        case LIST -> "/icons/view.list.png";
+        case DETAILS -> "/icons/view.details.png";
+        case TILES -> "/icons/view.tiles.png";
+        case CONTENT -> "/icons/view.content.png";
+    };
+}
+
+private void updateViewMenuButtonGraphic() {
+    if (viewMenuButton == null) {
+        return;
+    }
+    ViewMode effectiveMode = viewMode == null ? ViewMode.DETAILS : viewMode;
+    boolean structured = viewMenuButton.getStyleClass().contains("command-bar-structured-menu-button");
+    String labelText = "View";
+    if (structured) {
+        Object storedText = viewMenuButton.getProperties().get("commandBarOriginalText");
+        if (storedText instanceof String storedLabel && !storedLabel.isBlank()) {
+            labelText = storedLabel.trim();
+        }
+        if ((labelText == null || labelText.isBlank()) && viewMenuButton.getAccessibleText() != null) {
+            labelText = viewMenuButton.getAccessibleText().trim();
+        }
+        if ((labelText == null || labelText.isBlank()) && viewMenuButton.getTooltip() != null) {
+            labelText = viewMenuButton.getTooltip().getText();
+        }
+        if (labelText == null || labelText.isBlank()) {
+            labelText = "View";
+        }
+    }
+    String signature = effectiveMode.name() + "|" + (structured ? "structured" : "plain") + "|" + labelText;
+    Object previousSignature = viewMenuButton.getProperties().get(VIEW_MENU_BUTTON_GRAPHIC_SIGNATURE_KEY);
+    if (Objects.equals(previousSignature, signature)) {
+        return;
+    }
+
+    String resourcePath = viewModeIconResource(effectiveMode);
+    Node graphic = createMenuImageIcon(resourcePath, 18.0, true);
+    if (graphic == null && !Objects.equals(resourcePath, "/icons/view.details.png")) {
+        graphic = createMenuImageIcon("/icons/view.details.png", 18.0, true);
+    }
+    if (graphic == null) {
+        graphic = createMenuGlyph("\uE8A7", "fluent-icon");
+    }
+
+    if (structured) {
+        Node content = buildStructuredCommandBarMenuContent(viewMenuButton, graphic, labelText);
+        if (content != null) {
+            content.setMouseTransparent(true);
+            content.setTranslateY(-4.5);
+            viewMenuButton.setGraphic(content);
+            viewMenuButton.setText("");
+            viewMenuButton.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+            viewMenuButton.setGraphicTextGap(0.0);
+            viewMenuButton.getProperties().put(VIEW_MENU_BUTTON_GRAPHIC_SIGNATURE_KEY, signature);
+            return;
+        }
+    }
+
+    viewMenuButton.setText("View");
+    viewMenuButton.setGraphic(graphic);
+    viewMenuButton.setContentDisplay(ContentDisplay.LEFT);
+    viewMenuButton.setGraphicTextGap(6.0);
+    viewMenuButton.getProperties().put(VIEW_MENU_BUTTON_GRAPHIC_SIGNATURE_KEY, signature);
 }
 
 private HBox createViewMenuRow(Node selector, Node icon, String labelText) {
@@ -1566,7 +1798,7 @@ private CustomMenuItem createViewModeMenuItem(ViewMode mode, String labelText, S
     radio.setToggleGroup(viewModeToggleGroup);
     radio.setUserData(mode.name());
     radio.setSelected(selected);
-    CustomMenuItem item = new CustomMenuItem(createViewMenuRow(radio, createMenuImageIcon(resourcePath, 18.0), labelText), true);
+    CustomMenuItem item = new CustomMenuItem(createViewMenuRow(radio, createMenuImageIcon(resourcePath, 18.0, true), labelText), true);
     item.setUserData(mode.name());
     item.getProperties().put("viewRadio", radio);
     item.setOnAction(this::onViewModeRowAction);
@@ -1578,7 +1810,7 @@ private CustomMenuItem createPaneToggleMenuItem(String labelText, String resourc
     radio.setFocusTraversable(false);
     radio.getStyleClass().add("view-menu-radio");
     radio.setSelected(selected);
-    CustomMenuItem item = new CustomMenuItem(createViewMenuRow(radio, createMenuImageIcon(resourcePath, 18.0), labelText), false);
+    CustomMenuItem item = new CustomMenuItem(createViewMenuRow(radio, createMenuImageIcon(resourcePath, 18.0, true), labelText), false);
     item.getProperties().put("paneRadio", radio);
     return item;
 }
@@ -1609,7 +1841,7 @@ private javafx.scene.control.Menu createShowSubMenu() {
     graphic.getChildren().addAll(phantomCheck, placeholder);
     menu.setGraphic(graphic);
 
-    CustomMenuItem navigationItem = createCheckToggleMenuItem("Navigation pane", createMenuImageIcon("/icons/view.navigation.pane.png", 18.0), showNavigationPane);
+    CustomMenuItem navigationItem = createCheckToggleMenuItem("Navigation pane", createMenuImageIcon("/icons/view.navigation.pane.png", 18.0, true), showNavigationPane);
     showNavigationPaneMenuItem = (CheckBox) navigationItem.getProperties().get("viewCheckBox");
 
     CustomMenuItem compactItem = createCheckToggleMenuItem("Compact view", createMenuGlyph("\uE7D8", "mdl2-icon", "view-menu-icon"), compactView);
@@ -1909,8 +2141,10 @@ private void installDeferredOperationQueueBindings() {
  */
 public void initialize(URL location, ResourceBundle resources) {
     LogSupport.enter(LOG, "initialize");
+    StartupTrace.mark("MainController.initialize enter");
     this.fxmlInitialized = true;
     initializeFileViewModules();
+    updateViewMenuButtonGraphic();
     // Phase 3.6.3: Operations pane visibility (managed+visible) bound to toggle
     if (operationsBox != null && operationsToggle != null) {
         operationsBox.visibleProperty().bind(operationsToggle.selectedProperty());
@@ -1921,9 +2155,11 @@ public void initialize(URL location, ResourceBundle resources) {
     // Phase 3.4.4: ExplorerContext is injected by MainApp via Lifecycle.attach(context) AFTER FXMLLoader construction.
     // JavaFX calls initialize() during load, so we must defer initialization that depends on context/services until attach().
     if (this.context == null) {
+        StartupTrace.mark("MainController.initialize exit (awaiting context)");
         return;
     }
     initializeWithContext();
+    StartupTrace.mark("MainController.initialize exit");
 }
 /**
  * initializeWithContext.
@@ -1931,7 +2167,9 @@ public void initialize(URL location, ResourceBundle resources) {
  */
 private void initializeWithContext() {
         LogSupport.enter(LOG, "initializeWithContext");
+        StartupTrace.mark("MainController.initializeWithContext enter");
         if (contextInitialized) {
+            StartupTrace.mark("MainController.initializeWithContext skip (already initialized)");
             return;
         }
         contextInitialized = true;
@@ -1962,6 +2200,7 @@ private void initializeWithContext() {
             if (lastRequestedDirectory != null && !lastRequestedDirectory.equals(e.directory())) return;
             handleDirectoryListingFailed(e.directory(), e.error());
         }));
+        StartupTrace.mark("MainController.initializeWithContext exit");
         if (!SAFE_MODE) {
             Platform.runLater(() -> {
                 try {
@@ -2500,6 +2739,7 @@ private void initializeWithContext() {
         // Ensure TableView refreshes after a toolbar-driven resort.
         if (fileTable != null) {
             try {
+                advanceDetailsAsyncBindingEpoch();
                 fileTable.sort();
                 fileTable.refresh();
             } catch (Exception ignore) {
@@ -4032,7 +4272,7 @@ colType.setCellValueFactory(param -> {
         fileTable.getSelectionModel().selectedItemProperty().addListener((_, oldSel, newSel) -> {
             Path p = newSel != null ? newSel.path() : null;
             updateSelectionDetails(p);
-            updateSelectionCommandState();
+            scheduleSelectionCommandStateRefresh();
             if (!isExplorerSelectionPresentationTransactionActive()) {
                 syncIconPresentationSelectedPathsFromTableSelection();
             }
@@ -4047,14 +4287,23 @@ colType.setCellValueFactory(param -> {
                 clearInlineRenameTargets();
                 Platform.runLater(() -> restoreFocusToTablePath(restorePath));
             }
+            publishDetailsRefreshContext();
         });
         fileTable.getSelectionModel().getSelectedItems().addListener((ListChangeListener<FileItem>) change -> {
+            scheduleSelectionCommandStateRefresh();
             if (!isExplorerSelectionPresentationTransactionActive()) {
                 syncIconPresentationSelectedPathsFromTableSelection();
             }
             refreshVisibleIconTileSelectionState();
             refreshVisibleDetailsSelectionPresentation();
+            publishDetailsRefreshContext();
         });
+        if (fileTable.getFocusModel() != null) {
+            fileTable.getFocusModel().focusedItemProperty().addListener((_, __, ___) -> publishDetailsRefreshContext());
+        }
+        fileTable.comparatorProperty().addListener((_, __, ___) -> publishDetailsRefreshContext());
+        fileTable.getSortOrder().addListener((ListChangeListener<TableColumn<FileItem, ?>>) change -> publishDetailsRefreshContext());
+        publishDetailsRefreshContext();
 
         // Phase 4B.2 (lowest CPU): metadata for Size/Modified is lazy. Without this,
         // those columns stay blank until a row is clicked (USER priority). We request
@@ -4106,6 +4355,7 @@ colType.setCellValueFactory(param -> {
             return;
         }
         fileTable.setSortPolicy(table -> {
+            advanceDetailsAsyncBindingEpoch();
             sortedTableItems.setComparator(buildExplorerTableComparator(table));
             syncDetailsSortHeaderState();
             return true;
@@ -4983,11 +5233,33 @@ colType.setCellValueFactory(param -> {
         private final Label textLabel = new Label();
         private final TextField renameField = new TextField();
         private final InvalidationListener rowStateSync = obs -> syncTextFill();
+        private final javafx.beans.value.ChangeListener<FileItem> rowItemListener = (obs, oldItem, newItem) -> {
+            if (newItem == null) {
+                sanitizeCell();
+                return;
+            }
+            if (isEmpty()) {
+                return;
+            }
+            String displayText = resolveDisplayText(newItem, getItem());
+            if (displayText == null) {
+                sanitizeCell();
+                return;
+            }
+            rebindForCurrentRow(displayText);
+        };
         private boolean suppressFocusCommit;
         private String lastIdentity;
         private Path lastPath;
+        private Path lastDirectoryScope;
+        private FileItem lastRowItem;
+        private String lastDisplayText;
+        private boolean lastFolder;
+        private boolean thumbnailPublished;
         private java.util.concurrent.CompletableFuture<Image> pendingIcon;
         private long bindingStamp;
+        private long lastDetailsAsyncEpoch = -1L;
+        private TableRow<FileItem> observedRow;
 
         private ExplorerNameTableCell() {
             box.setAlignment(Pos.CENTER_LEFT);
@@ -5017,18 +5289,44 @@ colType.setCellValueFactory(param -> {
             });
             renameField.addEventFilter(KeyEvent.KEY_TYPED, e -> captureExplicitFullNameEditIntent(resolveEditingPath(), renameField, e.getCharacter()));
             tableRowProperty().addListener((obs, oldR, newR) -> {
-                if (oldR != null) {
-                    oldR.selectedProperty().removeListener(rowStateSync);
-                }
-                if (newR != null) {
-                    newR.selectedProperty().addListener(rowStateSync);
-                }
+                detachRowListeners(oldR);
+                attachRowListeners(newR);
                 syncTextFill();
+                if (newR == null) {
+                    sanitizeCell();
+                } else if (!isEmpty()) {
+                    String displayText = resolveDisplayText(newR.getItem(), getItem());
+                    if (displayText == null) {
+                        sanitizeCell();
+                    } else {
+                        rebindForCurrentRow(displayText);
+                    }
+                }
             });
         }
 
+        private void attachRowListeners(TableRow<FileItem> row) {
+            observedRow = row;
+            if (row == null) {
+                return;
+            }
+            row.selectedProperty().addListener(rowStateSync);
+            row.itemProperty().addListener(rowItemListener);
+        }
+
+        private void detachRowListeners(TableRow<FileItem> row) {
+            if (row == null) {
+                return;
+            }
+            row.selectedProperty().removeListener(rowStateSync);
+            row.itemProperty().removeListener(rowItemListener);
+            if (observedRow == row) {
+                observedRow = null;
+            }
+        }
+
         private Path resolveEditingPath() {
-            FileItem fi = getTableRow() != null ? getTableRow().getItem() : null;
+            FileItem fi = currentRowItem();
             return fi != null ? fi.path() : null;
         }
 
@@ -5044,6 +5342,11 @@ colType.setCellValueFactory(param -> {
             return TableViewSupport.visibleThumbnailManager(fileTable, context);
         }
 
+        private FileItem currentRowItem() {
+            TableRow<FileItem> row = getTableRow();
+            return row == null ? null : row.getItem();
+        }
+
         private void syncTextFill() {
             textLabel.setTextFill(resolveExplorerTableTextFill(getTableRow()));
         }
@@ -5051,102 +5354,279 @@ colType.setCellValueFactory(param -> {
         @Override
         protected void updateItem(String item, boolean empty) {
             super.updateItem(item, empty);
+            if (empty || item == null) {
+                sanitizeCell();
+                return;
+            }
+            rebindForCurrentRow(item);
+        }
 
+        private void sanitizeCell() {
+            cancelPendingWork();
+            bindingStamp++;
+            lastIdentity = null;
+            lastPath = null;
+            lastDirectoryScope = null;
+            lastRowItem = null;
+            lastDisplayText = null;
+            lastFolder = false;
+            thumbnailPublished = false;
+            lastDetailsAsyncEpoch = -1L;
+            iconView.setImage(null);
+            textLabel.setText(null);
+            renameField.clear();
+            setText(null);
+            setGraphic(null);
+            setMouseTransparent(true);
+        }
+
+        private void cancelPendingWork() {
             if (pendingIcon != null) {
                 pendingIcon.cancel(false);
                 pendingIcon = null;
             }
-            bindingStamp++;
-
             VisibleThumbnailManager thumbMgr = thumbManager();
-            if (empty) {
-                lastIdentity = null;
-                lastPath = null;
-                if (thumbMgr != null) {
-                    thumbMgr.unregister(this);
-                }
-                setText(null);
-                setGraphic(null);
-                setMouseTransparent(true);
+            if (thumbMgr != null) {
+                thumbMgr.unregister(this);
+            }
+        }
+
+        private void rebindForCurrentRow(String displayText) {
+            FileItem fi = currentRowItem();
+            if (fi == null) {
+                sanitizeCell();
                 return;
             }
 
-            FileItem fi = (getTableRow() != null) ? getTableRow().getItem() : null;
-            Path p = (fi != null) ? fi.path() : null;
-            final boolean dark = themeService != null && themeService.isDarkPreferred();
-            final int iconPx = (int) Math.round(clamp(uiFontSizePx + 4.0, 16.0, 24.0));
-            final String identity = resolveDetailsCellIdentity(p);
+            Path p = fi.path();
+            boolean dark = themeService != null && themeService.isDarkPreferred();
+            boolean isFolder = isFolder(fi, p);
+            int iconPx = (int) Math.round(clamp(uiFontSizePx + 4.0, 16.0, 24.0));
+            String identity = resolveDetailsCellIdentity(fi, p, isFolder);
+            Path bindingDirectoryScope = currentVisibleDirectoryScope();
+            long bindingEpoch = currentDetailsAsyncBindingEpoch();
+            iconView.setFitWidth(iconPx);
+            iconView.setFitHeight(iconPx);
+
+            if (isEquivalentBinding(fi, p, identity, displayText, isFolder, bindingDirectoryScope, bindingEpoch)) {
+                if (iconView.getImage() == null) {
+                    iconView.setImage(resolveDetailsPlaceholderImage(p, dark, identity, isFolder, iconPx));
+                }
+                showBoundContent(p, displayText);
+                return;
+            }
+
+            cancelPendingWork();
+            bindingStamp++;
+
+            final long capturedStamp = bindingStamp;
+            final long capturedEpoch = bindingEpoch;
+            final FileItem boundItem = fi;
 
             lastIdentity = identity;
             lastPath = p;
+            lastDirectoryScope = bindingDirectoryScope;
+            lastRowItem = boundItem;
+            lastDisplayText = displayText;
+            lastFolder = isFolder;
+            lastDetailsAsyncEpoch = capturedEpoch;
+            thumbnailPublished = false;
 
             iconView.setFitWidth(iconPx);
             iconView.setFitHeight(iconPx);
-            iconView.setImage(IconLoader.loadForIdentity(identity, dark, iconPx));
-            syncTextFill();
-            setText(null);
+            iconView.setImage(resolveDetailsPlaceholderImage(p, dark, identity, isFolder, iconPx));
+            if (isEditingTarget()) {
+                suppressFocusCommit = false;
+                renameField.setText(resolveInlineRenameInitialText(p, displayText));
+            }
+            showBoundContent(p, displayText);
 
-            final long capturedStamp = bindingStamp;
             pendingIcon = AsyncIconService.getInstance().request(
                     identity,
                     dark,
                     iconPx,
                     AsyncIconService.RequestPriority.VISIBLE);
             pendingIcon.thenAccept(img -> Platform.runLater(() -> {
-                if (capturedStamp != bindingStamp) return;
-                if (!Objects.equals(lastIdentity, identity)) return;
-                if (!Objects.equals(lastPath, p)) return;
-                if (getTableRow() == null || getTableRow().getItem() != fi) return;
-                if (img == null) return;
+                if (!isCurrentBinding(capturedStamp, capturedEpoch, boundItem, p, identity, displayText, isFolder, bindingDirectoryScope)) {
+                    return;
+                }
+                if (img == null || thumbnailPublished) {
+                    return;
+                }
                 iconView.setImage(img);
             }));
 
-            if (thumbMgr != null && p != null && ImageSupport.isThumbCandidate(p)) {
+            VisibleThumbnailManager thumbMgr = thumbManager();
+            if (thumbMgr != null && p != null && !isFolder && ImageSupport.isThumbCandidate(p)) {
                 thumbMgr.register(this, p, iconPx, identity, img -> {
-                    if (capturedStamp != bindingStamp) return;
-                    if (!Objects.equals(lastPath, p)) return;
-                    if (!Objects.equals(lastIdentity, identity)) return;
-                    if (getTableRow() == null || getTableRow().getItem() != fi) return;
-                    if (img == null) return;
+                    if (!isCurrentBinding(capturedStamp, capturedEpoch, boundItem, p, identity, displayText, false, bindingDirectoryScope)) {
+                        return;
+                    }
+                    if (img == null) {
+                        return;
+                    }
+                    thumbnailPublished = true;
                     iconView.setImage(img);
                 });
             } else if (thumbMgr != null) {
                 thumbMgr.unregister(this);
             }
+        }
 
+        private boolean isEquivalentBinding(FileItem rowItem,
+                                            Path path,
+                                            String identity,
+                                            String displayText,
+                                            boolean isFolder,
+                                            Path directoryScope,
+                                            long bindingEpoch) {
+            return lastRowItem == rowItem
+                    && Objects.equals(lastPath, path)
+                    && Objects.equals(lastIdentity, identity)
+                    && Objects.equals(lastDisplayText, displayText)
+                    && lastFolder == isFolder
+                    && Objects.equals(lastDirectoryScope, directoryScope)
+                    && lastDetailsAsyncEpoch == bindingEpoch;
+        }
+
+        private boolean isCurrentBinding(long capturedStamp,
+                                         long capturedEpoch,
+                                         FileItem boundItem,
+                                         Path path,
+                                         String identity,
+                                         String displayText,
+                                         boolean isFolder,
+                                         Path directoryScope) {
+            if (capturedStamp != bindingStamp) {
+                return false;
+            }
+            if (capturedEpoch != currentDetailsAsyncBindingEpoch()) {
+                return false;
+            }
+            if (lastDetailsAsyncEpoch != capturedEpoch) {
+                return false;
+            }
+            if (observedRow != null && getTableRow() != observedRow) {
+                return false;
+            }
+            if (lastRowItem != boundItem) {
+                return false;
+            }
+            if (!Objects.equals(lastDirectoryScope, directoryScope)) {
+                return false;
+            }
+            if (!Objects.equals(lastPath, path)) {
+                return false;
+            }
+            if (!Objects.equals(lastIdentity, identity)) {
+                return false;
+            }
+            if (!Objects.equals(lastDisplayText, displayText)) {
+                return false;
+            }
+            if (lastFolder != isFolder) {
+                return false;
+            }
+            Path activeDirectoryScope = currentVisibleDirectoryScope();
+            if (!Objects.equals(activeDirectoryScope, directoryScope)) {
+                return false;
+            }
+            if (!isPathWithinDirectoryScope(path, directoryScope)) {
+                return false;
+            }
+
+            FileItem current = currentRowItem();
+            if (current == null || current != boundItem) {
+                return false;
+            }
+            if (!Objects.equals(current.path(), path)) {
+                return false;
+            }
+            if (!isPathWithinDirectoryScope(current.path(), directoryScope)) {
+                return false;
+            }
+
+            boolean currentIsFolder = isFolder(current, path);
+            if (currentIsFolder != isFolder) {
+                return false;
+            }
+            String currentIdentity = resolveDetailsCellIdentity(current, current.path(), currentIsFolder);
+            if (!Objects.equals(currentIdentity, identity)) {
+                return false;
+            }
+            String currentDisplayText = resolveDisplayText(current, getItem());
+            if (!Objects.equals(currentDisplayText, displayText)) {
+                return false;
+            }
+
+            TableRow<FileItem> row = getTableRow();
+            return row != null && row.getItem() == current && !isEmpty();
+        }
+
+        private void showBoundContent(Path path, String displayText) {
+            syncTextFill();
+            setText(null);
             if (isEditingTarget()) {
-                suppressFocusCommit = false;
-                renameField.setText(resolveInlineRenameInitialText(p, item));
                 box.getChildren().setAll(iconView, renameField);
                 setGraphic(box);
                 setMouseTransparent(false);
                 Platform.runLater(() -> {
                     renameField.requestFocus();
-                    applyInlineRenameSelection(renameField, p, shouldSelectAllInlineRenameText(p));
+                    applyInlineRenameSelection(renameField, path, shouldSelectAllInlineRenameText(path));
                 });
             } else {
-                textLabel.setText(item);
+                textLabel.setText(displayText);
                 box.getChildren().setAll(iconView, textLabel);
                 setGraphic(box);
                 setMouseTransparent(true);
             }
         }
 
-        private String resolveDetailsCellIdentity(Path p) {
+        private String resolveDisplayText(FileItem item, String fallback) {
+            if (item != null && item.name() != null) {
+                return item.name();
+            }
+            return fallback;
+        }
+
+        private boolean isFolder(FileItem item, Path path) {
+            if (item != null && "Folder".equalsIgnoreCase(Objects.requireNonNullElse(item.type(), ""))) {
+                return true;
+            }
             try {
-                if (fileMetadataService != null) {
-                    String identity = fileMetadataService.iconIdentity(p);
+                return path != null && Files.isDirectory(path);
+            } catch (Exception ignored) {
+                return false;
+            }
+        }
+
+        private String resolveDetailsCellIdentity(FileItem item, Path path, boolean isFolder) {
+            try {
+                if (fileMetadataService != null && path != null) {
+                    String identity = fileMetadataService.iconIdentity(path);
                     if (identity != null && !identity.isBlank()) {
                         return identity;
                     }
                 }
             } catch (Exception ignored) {
             }
-            return "type:" + IconLoader.IconType.FILE.name();
+            return "type:" + (isFolder ? IconLoader.IconType.FOLDER.name() : IconLoader.IconType.FILE.name());
+        }
+
+        private Image resolveDetailsPlaceholderImage(Path path, boolean dark, String identity, boolean isFolder, int iconPx) {
+            try {
+                return IconLoader.loadForIdentity(identity, dark, iconPx);
+            } catch (Exception ignored) {
+            }
+            try {
+                return IconLoader.placeholderForPath(path, dark, iconPx);
+            } catch (Exception ignored) {
+            }
+            return IconLoader.load(isFolder ? IconLoader.IconType.FOLDER : IconLoader.IconType.FILE, dark, iconPx);
         }
 
         private void commitInlineRename() {
-            FileItem fi = getTableRow() != null ? getTableRow().getItem() : null;
+            FileItem fi = currentRowItem();
             Path p = fi != null ? fi.path() : null;
             suppressFocusCommit = false;
             MainController.this.commitInlineRename(p, renameField.getText());
@@ -6439,10 +6919,7 @@ colType.setCellValueFactory(param -> {
             fileViewBackgroundMenu.hide();
         }
         if (fileTable != null) {
-            Object header = fileTable.getProperties().get(com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.PROP_HEADER_MENU);
-            if (header instanceof javafx.scene.control.ContextMenu cm) {
-                cm.hide();
-            }
+            com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.resetEphemeralHeaderState(fileTable);
         }
     }
 
@@ -6514,8 +6991,7 @@ colType.setCellValueFactory(param -> {
             fileOpsMenu.setOnShowing(e -> syncFileOpsMenuState());
             fileTable.getProperties().put(com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.PROP_FILEOPS_MENU, fileOpsMenu);
         }
-        Object header = fileTable.getProperties().get(com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.PROP_HEADER_MENU);
-        if (header instanceof javafx.scene.control.ContextMenu cm) cm.hide();
+        com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.resetEphemeralHeaderState(fileTable);
         if (fileViewBackgroundMenu != null) {
             fileViewBackgroundMenu.hide();
         }
@@ -6717,26 +7193,25 @@ colType.setCellValueFactory(param -> {
     }
 
     private void syncFileOpsMenuState() {
-        int selectionCount = fileTable != null && fileTable.getSelectionModel() != null
-                ? fileTable.getSelectionModel().getSelectedItems().size()
-                : 0;
-        boolean hasSelection = selectionCount > 0;
-        boolean singleSelection = selectionCount == 1;
-        Path primarySelection = getPrimarySelection();
-        boolean singleDirectorySelection = singleSelection && isDirectoryPath(primarySelection);
-        boolean pinnedDirectorySelection = singleDirectorySelection && isPathPinnedToQuickAccess(primarySelection);
+        syncFileOpsMenuState(captureExplorerCommandStateSnapshot());
+    }
+
+    private void syncFileOpsMenuState(ExplorerCommandStateSnapshot snapshot) {
+        ExplorerCommandStateSnapshot effectiveSnapshot = snapshot == null ? captureExplorerCommandStateSnapshot() : snapshot;
+        boolean hasSelection = effectiveSnapshot.selectionCount > 0;
+        boolean singleSelection = effectiveSnapshot.selectionCount == 1;
         if (fileOpsOpenItem != null) {
             setExplorerMenuItemLabel(fileOpsOpenItem, "Open");
             fileOpsOpenItem.setDisable(!hasSelection);
         }
         if (fileOpsOpenInNewTabItem != null) {
             setExplorerMenuItemLabel(fileOpsOpenInNewTabItem, "Open in new tab");
-            fileOpsOpenInNewTabItem.setDisable(!singleDirectorySelection);
+            fileOpsOpenInNewTabItem.setDisable(!effectiveSnapshot.singleDirectorySelection);
         }
         if (fileOpsPinToQuickAccessItem != null) {
             setExplorerMenuItemLabel(fileOpsPinToQuickAccessItem,
-                    pinnedDirectorySelection ? "Unpin from Quick access" : "Pin to Quick access");
-            fileOpsPinToQuickAccessItem.setDisable(!singleDirectorySelection);
+                    effectiveSnapshot.pinnedDirectorySelection ? "Unpin from Quick access" : "Pin to Quick access");
+            fileOpsPinToQuickAccessItem.setDisable(!effectiveSnapshot.singleDirectorySelection);
         }
         if (fileOpsCopyItem != null) {
             setExplorerMenuItemLabel(fileOpsCopyItem, "Copy");
@@ -6748,7 +7223,7 @@ colType.setCellValueFactory(param -> {
         }
         if (fileOpsPasteItem != null) {
             setExplorerMenuItemLabel(fileOpsPasteItem, "Paste");
-            fileOpsPasteItem.setDisable(!canPasteIntoCurrentDirectory());
+            fileOpsPasteItem.setDisable(!effectiveSnapshot.canPaste);
         }
         if (fileOpsRenameItem != null) {
             setExplorerMenuItemLabel(fileOpsRenameItem, "Rename");
@@ -6765,8 +7240,12 @@ colType.setCellValueFactory(param -> {
     }
 
     private void syncExplorerContextMenuShellState() {
-        syncFileOpsMenuState();
-        syncFileViewBackgroundMenuState();
+        syncExplorerContextMenuShellState(captureExplorerCommandStateSnapshot());
+    }
+
+    private void syncExplorerContextMenuShellState(ExplorerCommandStateSnapshot snapshot) {
+        syncFileOpsMenuState(snapshot);
+        syncFileViewBackgroundMenuState(snapshot);
     }
 
     private Node resolveExplorerContextMenuAnchor(Node requestedAnchor) {
@@ -7023,7 +7502,7 @@ colType.setCellValueFactory(param -> {
         if (fileTable != null && fileTable.getFocusModel() != null) {
             fileTable.getFocusModel().focus(-1);
         }
-        iconSelectionAnchorPath = null;
+        setExplorerSelectionAnchorPath(null);
         replaceDetailsPresentationSelectedPaths(java.util.Collections.emptySet());
         replaceIconPresentationSelectedPaths(java.util.Collections.emptySet());
         refreshActiveSelectionPresentation();
@@ -7649,21 +8128,18 @@ colType.setCellValueFactory(param -> {
     }
 
     private void syncFileViewBackgroundMenuState() {
-        boolean hasDirectory = resolveActiveDirectoryForShellCommands() != null;
-        boolean hasVisibleItems = fileTable != null && fileTable.getItems() != null && !fileTable.getItems().isEmpty();
-        boolean canUndo = false;
-        try {
-            canUndo = context != null && context.commandManager() != null && context.commandManager().canUndo();
-        } catch (Exception ex) {
-            canUndo = false;
-        }
+        syncFileViewBackgroundMenuState(captureExplorerCommandStateSnapshot());
+    }
+
+    private void syncFileViewBackgroundMenuState(ExplorerCommandStateSnapshot snapshot) {
+        ExplorerCommandStateSnapshot effectiveSnapshot = snapshot == null ? captureExplorerCommandStateSnapshot() : snapshot;
         if (fileViewBackgroundUndoItem != null) {
-            setExplorerMenuItemLabel(fileViewBackgroundUndoItem, formatUndoMenuLabel());
-            fileViewBackgroundUndoItem.setDisable(!canUndo);
+            setExplorerMenuItemLabel(fileViewBackgroundUndoItem, effectiveSnapshot.undoMenuLabel);
+            fileViewBackgroundUndoItem.setDisable(!effectiveSnapshot.canUndo);
         }
         if (fileViewBackgroundPasteItem != null) {
             setExplorerMenuItemLabel(fileViewBackgroundPasteItem, "Paste");
-            fileViewBackgroundPasteItem.setDisable(!canPasteIntoCurrentDirectory());
+            fileViewBackgroundPasteItem.setDisable(!effectiveSnapshot.canPaste);
         }
         if (fileViewBackgroundPasteShortcutItem != null) {
             setExplorerMenuItemLabel(fileViewBackgroundPasteShortcutItem, "Paste shortcut");
@@ -7671,11 +8147,11 @@ colType.setCellValueFactory(param -> {
         }
         if (fileViewBackgroundNewFolderItem != null) {
             setExplorerMenuItemLabel(fileViewBackgroundNewFolderItem, "Folder");
-            fileViewBackgroundNewFolderItem.setDisable(!hasDirectory);
+            fileViewBackgroundNewFolderItem.setDisable(!effectiveSnapshot.hasDirectory);
         }
         if (fileViewBackgroundNewTextDocumentItem != null) {
             setExplorerMenuItemLabel(fileViewBackgroundNewTextDocumentItem, "Text Document");
-            fileViewBackgroundNewTextDocumentItem.setDisable(!hasDirectory);
+            fileViewBackgroundNewTextDocumentItem.setDisable(!effectiveSnapshot.hasDirectory);
         }
         if (fileViewBackgroundNewUnsupportedItem != null) {
             setExplorerMenuItemLabel(fileViewBackgroundNewUnsupportedItem, "Bitmap image");
@@ -7683,24 +8159,24 @@ colType.setCellValueFactory(param -> {
         }
         if (fileViewBackgroundSelectAllItem != null) {
             setExplorerMenuItemLabel(fileViewBackgroundSelectAllItem, "Select all");
-            fileViewBackgroundSelectAllItem.setDisable(!hasVisibleItems);
+            fileViewBackgroundSelectAllItem.setDisable(!effectiveSnapshot.hasVisibleItems);
         }
         if (fileViewBackgroundRefreshItem != null) {
             setExplorerMenuItemLabel(fileViewBackgroundRefreshItem, "Refresh");
-            fileViewBackgroundRefreshItem.setDisable(!hasDirectory);
+            fileViewBackgroundRefreshItem.setDisable(!effectiveSnapshot.hasDirectory);
         }
         if (fileViewBackgroundPropertiesItem != null) {
             setExplorerMenuItemLabel(fileViewBackgroundPropertiesItem, "Properties");
-            fileViewBackgroundPropertiesItem.setDisable(!hasDirectory);
+            fileViewBackgroundPropertiesItem.setDisable(!effectiveSnapshot.hasDirectory);
         }
         if (fileViewBackgroundViewModeItems != null) {
             for (java.util.Map.Entry<ViewMode, javafx.scene.control.RadioMenuItem> entry : fileViewBackgroundViewModeItems.entrySet()) {
-                entry.getValue().setSelected(entry.getKey() == viewMode);
+                entry.getValue().setSelected(entry.getKey() == effectiveSnapshot.viewMode);
             }
         }
         if (fileViewBackgroundSortItems != null) {
             for (java.util.Map.Entry<SortKey, javafx.scene.control.RadioMenuItem> entry : fileViewBackgroundSortItems.entrySet()) {
-                entry.getValue().setSelected(entry.getKey() == currentSortKey);
+                entry.getValue().setSelected(entry.getKey() == effectiveSnapshot.sortKey);
             }
         }
         if (fileViewBackgroundGroupMenu != null) {
@@ -7764,10 +8240,7 @@ colType.setCellValueFactory(param -> {
             fileOpsMenu.hide();
         }
         if (fileTable != null) {
-            Object header = fileTable.getProperties().get(com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.PROP_HEADER_MENU);
-            if (header instanceof javafx.scene.control.ContextMenu cm) {
-                cm.hide();
-            }
+            com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.resetEphemeralHeaderState(fileTable);
         }
         fileViewBackgroundMenu.hide();
         fileViewBackgroundMenu.show(anchor, screenX, screenY);
@@ -8151,11 +8624,108 @@ StringBuilder sb = new StringBuilder();
 
     private void noteDirectoryRealizationScopeChanged() {
         realizationDirectoryGeneration.incrementAndGet();
+        advanceDetailsAsyncBindingEpoch();
         try {
             AsyncIconService.getInstance().cancelAll();
         } catch (Exception ignored) {
         }
         scheduleViewportScopedRealizationRefresh();
+    }
+
+    private long currentDetailsAsyncBindingEpoch() {
+        return detailsAsyncBindingEpoch.get();
+    }
+
+    private long advanceDetailsAsyncBindingEpoch() {
+        return detailsAsyncBindingEpoch.incrementAndGet();
+    }
+
+    private Path normalizeDirectoryScope(Path directory) {
+        return directory == null ? null : directory.normalize();
+    }
+
+    private Path currentVisibleDirectoryScope() {
+        return normalizeDirectoryScope(visibleDirectoryScope);
+    }
+
+    private void setVisibleDirectoryScope(Path directory) {
+        visibleDirectoryScope = normalizeDirectoryScope(directory);
+        publishDetailsRefreshContext();
+    }
+
+    private void publishDetailsRefreshContext() {
+        if (fileTable == null) {
+            return;
+        }
+        Path directoryScope = currentVisibleDirectoryScope();
+        Path anchorPath = currentSelectionAnchorPathForRefresh();
+        Path leadPath = currentSelectionLeadPathForRefresh();
+        DetailsViewRefreshCoordinator.publishTableState(fileTable, directoryScope, anchorPath, leadPath);
+    }
+
+    private Path currentSelectionAnchorPathForRefresh() {
+        Path directoryScope = currentVisibleDirectoryScope();
+        Path anchorPath = iconSelectionAnchorPath;
+        return isPathWithinDirectoryScope(anchorPath, directoryScope) ? anchorPath : null;
+    }
+
+    private Path currentSelectionLeadPathForRefresh() {
+        if (fileTable == null || fileTable.getItems() == null) {
+            return null;
+        }
+        Path directoryScope = currentVisibleDirectoryScope();
+        Path leadPath = null;
+        if (fileTable.getSelectionModel() != null) {
+            int selectedIndex = fileTable.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0 && selectedIndex < fileTable.getItems().size()) {
+                FileItem leadItem = fileTable.getItems().get(selectedIndex);
+                leadPath = leadItem == null ? null : leadItem.path();
+            }
+        }
+        if (!isPathWithinDirectoryScope(leadPath, directoryScope)) {
+            leadPath = getFocusedOrSelectedPath();
+        }
+        return isPathWithinDirectoryScope(leadPath, directoryScope) ? leadPath : null;
+    }
+
+    private void setExplorerSelectionAnchorPath(Path path) {
+        iconSelectionAnchorPath = path;
+        publishDetailsRefreshContext();
+    }
+
+    private boolean isPathWithinDirectoryScope(Path path, Path directoryScope) {
+        Path normalizedScope = normalizeDirectoryScope(directoryScope);
+        if (path == null || normalizedScope == null) {
+            return false;
+        }
+        Path normalizedPath = path.normalize();
+        return java.util.Objects.equals(normalizedPath, normalizedScope)
+                || normalizedPath.startsWith(normalizedScope);
+    }
+
+    private java.util.List<Path> filterPathsToDirectoryScope(java.util.Collection<Path> paths, Path directoryScope) {
+        java.util.ArrayList<Path> filtered = new java.util.ArrayList<>();
+        if (paths == null) {
+            return filtered;
+        }
+        for (Path path : paths) {
+            if (path != null && isPathWithinDirectoryScope(path, directoryScope)) {
+                filtered.add(path);
+            }
+        }
+        return filtered;
+    }
+
+    private void clearExplorerPresentationSelectionState() {
+        replaceDetailsPresentationSelectedPaths(java.util.Collections.emptySet());
+        replaceIconPresentationSelectedPaths(java.util.Collections.emptySet());
+        pendingExplorerMarqueeSelectionPaths.clear();
+        pendingExplorerMarqueeFocusPath = null;
+        if (viewMode == ViewMode.DETAILS) {
+            syncVisibleDetailsHoverRows();
+        } else if (isIconMode(viewMode)) {
+            refreshVisibleIconTileSelectionState();
+        }
     }
 
     private void noteViewportMotion(double deltaY) {
@@ -8626,9 +9196,14 @@ StringBuilder sb = new StringBuilder();
         if (directory == null) {
             return null;
         }
-        java.util.List<Path> selectedPaths = new java.util.ArrayList<>(getSelectedItems());
+        java.util.List<Path> selectedPaths = filterPathsToDirectoryScope(getSelectedItems(), directory);
         Path focusPath = getFocusedOrSelectedPath();
-        Path anchorPath = iconSelectionAnchorPath != null ? iconSelectionAnchorPath : focusPath;
+        if (!isPathWithinDirectoryScope(focusPath, directory)) {
+            focusPath = null;
+        }
+        Path anchorPath = iconSelectionAnchorPath != null && isPathWithinDirectoryScope(iconSelectionAnchorPath, directory)
+                ? iconSelectionAnchorPath
+                : focusPath;
         Path firstVisiblePath = null;
         int firstVisibleIndex = -1;
         double tableScroll = captureVerticalScrollValue(fileTable);
@@ -8656,18 +9231,21 @@ StringBuilder sb = new StringBuilder();
         if (state == null || token != state.token || !java.util.Objects.equals(currentDirectory, state.directory)) {
             return;
         }
-        if (!state.selectedPaths.isEmpty()) {
-            Path focusPath = state.focusPath != null && state.selectedPaths.contains(state.focusPath)
-                    ? state.focusPath
-                    : state.anchorPath != null && state.selectedPaths.contains(state.anchorPath)
-                    ? state.anchorPath
-                    : state.selectedPaths.get(0);
-            applyExplorerPathSelection(state.selectedPaths, focusPath);
-            if (state.anchorPath != null && state.selectedPaths.contains(state.anchorPath)) {
-                iconSelectionAnchorPath = state.anchorPath;
+        java.util.List<Path> scopedSelection = filterPathsToDirectoryScope(state.selectedPaths, state.directory);
+        Path scopedFocusPath = isPathWithinDirectoryScope(state.focusPath, state.directory) ? state.focusPath : null;
+        Path scopedAnchorPath = isPathWithinDirectoryScope(state.anchorPath, state.directory) ? state.anchorPath : null;
+        if (!scopedSelection.isEmpty()) {
+            Path focusPath = scopedFocusPath != null && scopedSelection.contains(scopedFocusPath)
+                    ? scopedFocusPath
+                    : scopedAnchorPath != null && scopedSelection.contains(scopedAnchorPath)
+                    ? scopedAnchorPath
+                    : scopedSelection.get(0);
+            applyExplorerPathSelection(scopedSelection, focusPath);
+            if (scopedAnchorPath != null && scopedSelection.contains(scopedAnchorPath)) {
+                setExplorerSelectionAnchorPath(scopedAnchorPath);
             }
-        } else if (state.focusPath != null) {
-            restoreFocusToTablePath(state.focusPath);
+        } else if (scopedFocusPath != null) {
+            restoreFocusToTablePath(scopedFocusPath);
         }
         if (state.viewMode == ViewMode.DETAILS) {
             if (state.firstVisiblePath != null) {
@@ -9076,6 +9654,7 @@ private String displayNameForTable(Path p) {
     currentDirectory = directory;
         // Track & reflect current directory
         this.currentDirectory = directory;
+        setVisibleDirectoryScope(directory);
         if (breadcrumbBarController != null) {
             breadcrumbBarController.setPath(directory);
         }
@@ -9765,9 +10344,10 @@ private String displayNameForTable(Path p) {
     }
 
     private void updateTopChromeState() {
+        long startedNanos = System.nanoTime();
         updateSearchPrompt(currentDirectory);
         updateSearchChromeState();
-        updateSelectionCommandState();
+        applySelectionCommandStateNow(false);
         syncPaneTogglesFromUiState();
         updateTabStrip();
         double width = 0.0;
@@ -9775,6 +10355,7 @@ private String displayNameForTable(Path p) {
             width = root.getScene().getWidth();
         }
         scheduleCommandBarCompaction(width);
+        logChromePassIfSlow("topChromeState", startedNanos);
     }
 
     private void updateSearchPrompt(Path directory) {
@@ -9819,19 +10400,90 @@ private String displayNameForTable(Path p) {
         }
     }
 
-    private void updateSelectionCommandState() {
+    private void scheduleSelectionCommandStateRefresh() {
+        if (!Platform.isFxApplicationThread()) {
+            Platform.runLater(this::scheduleSelectionCommandStateRefresh);
+            return;
+        }
+        selectionChromeRefreshQueued.set(true);
+        if (selectionChromeDebounce != null) {
+            selectionChromeDebounce.playFromStart();
+        } else {
+            selectionChromeRefreshQueued.set(false);
+            applySelectionCommandStateNow(false);
+        }
+    }
+
+    private boolean canUndoShellCommand() {
+        try {
+            return context != null && context.commandManager() != null && context.commandManager().canUndo();
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    private ExplorerCommandStateSnapshot captureExplorerCommandStateSnapshot() {
         int selectionCount = !homeActive && fileTable != null && fileTable.getSelectionModel() != null
                 ? fileTable.getSelectionModel().getSelectedItems().size()
                 : 0;
-        boolean hasSelection = selectionCount > 0;
-        boolean singleSelection = selectionCount == 1;
+        Path primarySelection = selectionCount > 0 ? getPrimarySelection() : null;
+        boolean canPaste = !homeActive && canPasteIntoCurrentDirectory();
+        boolean hasDirectory = resolveActiveDirectoryForShellCommands() != null;
+        boolean hasVisibleItems = fileTable != null && fileTable.getItems() != null && !fileTable.getItems().isEmpty();
+        boolean canUndo = canUndoShellCommand();
+        String undoMenuLabel = canUndo ? formatUndoMenuLabel() : "Undo";
+        boolean singleDirectorySelection = selectionCount == 1 && isDirectoryPath(primarySelection);
+        boolean pinnedDirectorySelection = singleDirectorySelection && isPathPinnedToQuickAccess(primarySelection);
+        return new ExplorerCommandStateSnapshot(
+                selectionCount,
+                primarySelection,
+                homeActive,
+                canPaste,
+                hasDirectory,
+                hasVisibleItems,
+                canUndo,
+                undoMenuLabel,
+                singleDirectorySelection,
+                pinnedDirectorySelection,
+                viewMode,
+                currentSortKey);
+    }
+
+    private void applySelectionCommandStateNow(boolean force) {
+        long startedNanos = System.nanoTime();
+        ExplorerCommandStateSnapshot snapshot = captureExplorerCommandStateSnapshot();
+        if (!force && snapshot.semanticallyEquals(lastExplorerCommandStateSnapshot)) {
+            return;
+        }
+        lastExplorerCommandStateSnapshot = snapshot;
+        boolean hasSelection = snapshot.selectionCount > 0;
+        boolean singleSelection = snapshot.selectionCount == 1;
         if (cutButton != null) cutButton.setDisable(!hasSelection);
         if (copyButton != null) copyButton.setDisable(!hasSelection);
         if (renameButton != null) renameButton.setDisable(!singleSelection);
         if (deleteButton != null) deleteButton.setDisable(!hasSelection);
         if (shareButton != null) shareButton.setDisable(!singleSelection);
-        if (pasteButton != null) pasteButton.setDisable(homeActive || !canPasteIntoCurrentDirectory());
-        syncExplorerContextMenuShellState();
+        if (pasteButton != null) pasteButton.setDisable(snapshot.homeActive || !snapshot.canPaste);
+        syncExplorerContextMenuShellState(snapshot);
+        logChromePassIfSlow("selectionCommandState", startedNanos);
+    }
+
+    private void updateSelectionCommandState() {
+        applySelectionCommandStateNow(false);
+    }
+
+    private void logChromePassIfSlow(String label, long startedNanos) {
+        long elapsedNanos = System.nanoTime() - startedNanos;
+        long elapsedMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(elapsedNanos);
+        if (!LOG_CHROME_TELEMETRY && elapsedMs < CHROME_HITCH_LOG_THRESHOLD_MS) {
+            return;
+        }
+        LOG.info(() -> "[CHROME] " + label + " tookMs=" + elapsedMs
+                + " queued=" + selectionChromeRefreshQueued.get()
+                + " selectionCount=" + (fileTable != null && fileTable.getSelectionModel() != null
+                ? fileTable.getSelectionModel().getSelectedItems().size()
+                : 0)
+                + " viewMode=" + viewMode);
     }
 
     private void syncPaneTogglesFromUiState() {
@@ -10322,14 +10974,17 @@ private void loadDirectoryIntoTableAsync(Path directory, boolean keepExistingUnt
     // Several downstream helpers (breadcrumb/status/progressive loader) rely on currentDirectory.
     // If callers pass a directory without having updated currentDirectory first, the table would
     // appear empty because the loader runs against the previous directory.
-    cancelSearchSessionForDirectoryChange(directory);
-    currentDirectory = directory;
+    Path normalizedDirectory = normalizeDirectoryScope(directory);
+    Path previousVisibleScope = currentVisibleDirectoryScope();
+    boolean preserveViewportContinuity = java.util.Objects.equals(previousVisibleScope, normalizedDirectory);
+    cancelSearchSessionForDirectoryChange(normalizedDirectory);
+    currentDirectory = normalizedDirectory;
     noteDirectoryRealizationScopeChanged();
     clearExplorerMetadataTextCache();
     hideExplorerMetadataPopup();
     updateNavigationButtonsState();
     // Phase 4B.1: reset huge-folder paging state for this navigation.
-    resetHugeFolderPaging(directory);
+    resetHugeFolderPaging(normalizedDirectory);
 // Phase 4A.2/4A.3: cancel any queued thumbnail work when navigating to a new directory.
     try {
         com.fileexplorer.service.icon.AsyncThumbnailService.getInstance().cancelAll();
@@ -10348,20 +11003,29 @@ private void loadDirectoryIntoTableAsync(Path directory, boolean keepExistingUnt
     directoryLoading = true;
     // Update chrome immediately so the app doesn't look frozen while IO runs.
     if (breadcrumbBarController != null) {
-        breadcrumbBarController.setPath(directory);
+        breadcrumbBarController.setPath(normalizedDirectory);
     }
     if (statusLabel != null) {
         if (keepExistingUntilFirstBatch && !tableItems.isEmpty()) {
-            statusLabel.setText("Refreshing " + fileMetadataService.displayPathForStatus(directory) + " …");
+            statusLabel.setText("Refreshing " + fileMetadataService.displayPathForStatus(normalizedDirectory) + " …");
         } else {
-            statusLabel.setText("Loading " + fileMetadataService.displayPathForStatus(directory) + " …");
+            statusLabel.setText("Loading " + fileMetadataService.displayPathForStatus(normalizedDirectory) + " …");
         }
     }
-    pendingViewportContinuityState = captureViewportContinuityState(directory, token);
+    pendingViewportContinuityState = preserveViewportContinuity
+            ? captureViewportContinuityState(normalizedDirectory, token)
+            : null;
+    setVisibleDirectoryScope(normalizedDirectory);
     // When hydrating over a cached snapshot, keep selection/rows until we have real data.
     if (!keepExistingUntilFirstBatch) {
         if (fileTable != null) {
             fileTable.getSelectionModel().clearSelection();
+            if (fileTable.getFocusModel() != null && !preserveViewportContinuity) {
+                fileTable.getFocusModel().focus(-1);
+            }
+        }
+        if (!preserveViewportContinuity) {
+            clearExplorerPresentationSelectionState();
         }
         tableItems.clear();
         tableIndexByPath.clear();
@@ -10370,7 +11034,7 @@ private void loadDirectoryIntoTableAsync(Path directory, boolean keepExistingUnt
             clearIconTiles();
         }
     }
-    lastRequestedDirectory = directory;
+    lastRequestedDirectory = normalizedDirectory;
     lastRequestedShowHidden = showHiddenItems;
     lastRequestedRequestId = token;
     int batchSize = Integer.getInteger("fileexplorer.dirload.chunkSize", 350);
@@ -10396,7 +11060,7 @@ final java.util.concurrent.atomic.AtomicBoolean scanCancelled = new java.util.co
             keepExistingUntilFirstBatch && hydrationSnapshot != null && !tableItems.isEmpty();
     final java.util.concurrent.atomic.AtomicInteger hydrationOffset = new java.util.concurrent.atomic.AtomicInteger(0);
     directoryLoadManager.loadProgressive(
-            directory,
+            normalizedDirectory,
             showHiddenItems,
             firstBatchSize,
             batchSize,
@@ -10864,9 +11528,13 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (detailsText != null) {
             detailsText.setText(buildDetailsPaneText(selected));
         }
-        // Preview: update lightweight fallback immediately.
+        // Preview: update lightweight fallback immediately and keep the correct placeholder icon
+        // visible while any thumbnail request is still pending.
         if (previewImage != null) {
-            previewImage.setImage(null);
+            previewImage.getProperties().put("previewPath", selected);
+            String previewIdentity = selected == null ? null : resolveIconIdentityForPath(selected);
+            previewImage.getProperties().put("previewIdentity", previewIdentity);
+            previewImage.setImage(resolvePreviewPlaceholderImage(selected));
         }
         if (previewText != null) {
             previewText.setText(buildPreviewFallbackText(selected));
@@ -10914,7 +11582,10 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         }
         final Path captured = selected;
         final long stamp = ticket;
+        final String capturedIdentity = resolveIconIdentityForPath(captured);
         previewImage.getProperties().put("previewStamp", stamp);
+        previewImage.getProperties().put("previewPath", captured);
+        previewImage.getProperties().put("previewIdentity", capturedIdentity);
         AsyncThumbnailService.getInstance()
                 .request(captured, px, AsyncThumbnailService.RequestPriority.USER_ACTION)
                 .thenAccept(img -> Platform.runLater(() -> {
@@ -10922,7 +11593,15 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                         return;
                     }
                     Object s = previewImage.getProperties().get("previewStamp");
+                    Object boundPath = previewImage.getProperties().get("previewPath");
+                    Object boundIdentity = previewImage.getProperties().get("previewIdentity");
                     if (!(s instanceof Long) || ((Long) s) != stamp) {
+                        return;
+                    }
+                    if (!java.util.Objects.equals(boundPath, captured)) {
+                        return;
+                    }
+                    if (!java.util.Objects.equals(boundIdentity, capturedIdentity)) {
                         return;
                     }
                     previewImage.setImage(img);
@@ -10931,6 +11610,51 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                         previewText.setManaged(false);
                     }
                 }));
+    }
+
+    private int currentPreviewPlaceholderSizePx() {
+        int px = 280;
+        try {
+            if (previewImage != null && previewImage.getFitWidth() > 0) {
+                px = (int) Math.round(previewImage.getFitWidth());
+            }
+        } catch (Exception ignored) {
+        }
+        return Math.max(16, px);
+    }
+
+    private String resolveIconIdentityForPath(Path path) {
+        try {
+            if (fileMetadataService != null) {
+                String identity = fileMetadataService.iconIdentity(path);
+                if (identity != null && !identity.isBlank()) {
+                    return identity;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return IconLoader.identityForPath(path);
+    }
+
+    private Image resolvePlaceholderImageForPath(Path path, int px) {
+        try {
+            return IconLoader.loadForIdentity(resolveIconIdentityForPath(path), themeService != null && themeService.isDarkPreferred(), Math.max(16, px));
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private Image resolvePreviewPlaceholderImage(Path selected) {
+        if (selected == null || previewImage == null) {
+            return null;
+        }
+        if (!Files.isRegularFile(selected)) {
+            return null;
+        }
+        if (!ImageSupport.isThumbCandidate(selected)) {
+            return null;
+        }
+        return resolvePlaceholderImageForPath(selected, currentPreviewPlaceholderSizePx());
     }
 
     private void scheduleCurrentFolderThumbnailWarmup() {
@@ -11151,7 +11875,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
     // ---------------------------------------------------------------------
     // View mode (Details vs Large icons)
     // ---------------------------------------------------------------------
-    
+
     private void initializeFileViewModules() {
         if (viewHost == null || modularFileViewHost != null) {
             return;
@@ -11590,11 +12314,17 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             return;
         }
         double snappedWidth = Math.max(1.0, Math.floor(viewportWidth));
-        virtualIconGridView.setPrefWidth(snappedWidth);
+        if (!virtualIconGridView.prefWidthProperty().isBound()) {
+            virtualIconGridView.setPrefWidth(snappedWidth);
+        }
         virtualIconGridView.setMaxWidth(Double.MAX_VALUE);
+        virtualIconGridView.requestLayout();
         if (virtualIconListView != null) {
-            virtualIconListView.setPrefWidth(snappedWidth);
+            if (!virtualIconListView.prefWidthProperty().isBound()) {
+                virtualIconListView.setPrefWidth(snappedWidth);
+            }
             virtualIconListView.setMaxWidth(Double.MAX_VALUE);
+            virtualIconListView.requestLayout();
         }
     }
 
@@ -11955,6 +12685,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
     private void syncViewMenuSelection() {
         LogSupport.enter(LOG, "syncViewMenuSelection");
         if (viewExtraLargeIcons == null) {
+            updateViewMenuButtonGraphic();
             syncStatusViewToggleSelection();
             return;
         }
@@ -12001,6 +12732,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             default:
                 break;
         }
+        updateViewMenuButtonGraphic();
         syncStatusViewToggleSelection();
     }
 
@@ -12688,7 +13420,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                 if (fileTable.getFocusModel() != null) {
                     fileTable.getFocusModel().focus(index);
                 }
-                iconSelectionAnchorPath = path;
+                setExplorerSelectionAnchorPath(path);
                 lastIconActivatedPath = path;
             }
         }
@@ -12741,7 +13473,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (fileTable.getFocusModel() != null) {
             fileTable.getFocusModel().focus(idx);
         }
-        iconSelectionAnchorPath = path;
+        setExplorerSelectionAnchorPath(path);
     }
 
     private void toggleExplorerIconSelection(Path path) {
@@ -12757,7 +13489,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (fileTable.getFocusModel() != null) {
             fileTable.getFocusModel().focus(idx);
         }
-        iconSelectionAnchorPath = path;
+        setExplorerSelectionAnchorPath(path);
     }
 
     private void selectExplorerIconRange(Path targetPath, boolean additive) {
@@ -12869,7 +13601,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             }
         }
         if (focusPath != null && orderedPaths.contains(focusPath)) {
-            iconSelectionAnchorPath = focusPath;
+            setExplorerSelectionAnchorPath(focusPath);
         }
         if (viewMode == ViewMode.DETAILS) {
             replaceDetailsPresentationSelectedPaths(orderedPaths);
@@ -13106,7 +13838,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             }
             replaceIconPresentationSelectedPaths(java.util.Collections.emptySet());
             refreshVisibleIconTileSelectionState();
-            iconSelectionAnchorPath = null;
+            setExplorerSelectionAnchorPath(null);
             resetExplorerFileViewMarquee();
             releaseExplorerIconMarqueeGestureOwnershipSoon();
         } else if (committedMarqueeDragStarted && committedMarqueeMode == ViewMode.DETAILS) {
@@ -13428,21 +14160,9 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (Double.isNaN(effective) || effective <= 0.0) {
             effective = 16.0;
         }
-        String identity;
-        try {
-            identity = fileMetadataService.iconIdentity(p);
-        } catch (Exception ex) {
-            identity = "type:" + IconLoader.IconType.FILE.name();
-        }
+        final String identity = resolveIconIdentityForPath(p);
         final int px = (int) Math.round(effective);
-        // Cheap placeholder immediately.
-        Image placeholder;
-        try {
-            placeholder = IconLoader.loadForIdentity(identity, themeService.isDarkPreferred(), px);
-        } catch (Exception ex) {
-            placeholder = null;
-        }
-        ImageView iv = new ImageView(placeholder);
+        ImageView iv = new ImageView(resolvePlaceholderImageForPath(p, px));
         iv.setPreserveRatio(true);
         boolean intrinsicExtraLarge = viewMode == ViewMode.EXTRA_LARGE_ICONS && effective >= (EXTRA_LARGE_ICON_CELL_PX - 0.5);
         iv.setSmooth(!intrinsicExtraLarge);
@@ -13462,12 +14182,18 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             Path captured = p;
             final long thumbStamp = System.nanoTime();
             iv.getProperties().put("thumbStamp", thumbStamp);
+            iv.getProperties().put("thumbPath", captured);
+            iv.getProperties().put("thumbIdentity", identity);
             AsyncThumbnailService.getInstance()
                     .request(captured, px, AsyncThumbnailService.RequestPriority.VISIBLE)
                     .thenAccept(img -> Platform.runLater(() -> {
                         if (img == null) return;
                         Object s = iv.getProperties().get("thumbStamp");
+                        Object boundPath = iv.getProperties().get("thumbPath");
+                        Object boundIdentity = iv.getProperties().get("thumbIdentity");
                         if (!(s instanceof Long) || ((Long) s) != thumbStamp) return;
+                        if (!java.util.Objects.equals(boundPath, captured)) return;
+                        if (!java.util.Objects.equals(boundIdentity, identity)) return;
                         iv.setImage(img);
                     }));
             return iv;
@@ -13540,6 +14266,26 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                     }
                 }
             }
+            if (id.startsWith("kind:")) {
+                String kind = id.substring("kind:".length()).trim();
+                switch (kind) {
+                    case "archive" -> {
+                        return "";
+                    }
+                    case "audio" -> {
+                        return "";
+                    }
+                    case "image" -> {
+                        return "";
+                    }
+                    case "text", "pdf" -> {
+                        return "";
+                    }
+                    case "video" -> {
+                        return "";
+                    }
+                }
+            }
         }
         try {
             if (p != null && Files.isDirectory(p)) {
@@ -13591,7 +14337,9 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         boolean dark = themeService != null && themeService.isDarkPreferred();
         Image iconImage = iconPath != null
                 ? IconLoader.loadForPath(iconPath, dark, 16)
-                : IconLoader.load(IconLoader.IconType.FOLDER, dark, 16);
+                : (button == homeTabButton
+                    ? IconLoader.loadForIdentity("special:home", dark, 16)
+                    : IconLoader.load(IconLoader.IconType.FOLDER, dark, 16));
         ImageView iconView = new ImageView(iconImage);
         iconView.setFitWidth(16.0);
         iconView.setFitHeight(16.0);
@@ -13951,9 +14699,47 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         button.setFocusTraversable(false);
         button.setMnemonicParsing(false);
         button.getStyleClass().add("explorer-home-pinned-button");
+        applyHomeLocationButtonGraphic(button, label, path);
         button.setTooltip(new javafx.scene.control.Tooltip(path.toString()));
         button.setOnAction(e -> navigateToFolder(path, true));
         homePinnedRow.getChildren().add(button);
+    }
+
+    private void applyHomeLocationButtonGraphic(Button button, String label, Path path) {
+        if (button == null) {
+            return;
+        }
+        boolean dark = themeService != null && themeService.isDarkPreferred();
+        Image icon = isHomeLocation(path, label)
+                ? IconLoader.loadForIdentity("special:home", dark, 16)
+                : IconLoader.loadForPath(path, dark, 16);
+        if (icon == null) {
+            return;
+        }
+        ImageView graphic = new ImageView(icon);
+        graphic.setFitWidth(16.0);
+        graphic.setFitHeight(16.0);
+        graphic.setPreserveRatio(true);
+        graphic.setSmooth(true);
+        graphic.setMouseTransparent(true);
+        button.setGraphic(graphic);
+        button.setContentDisplay(ContentDisplay.LEFT);
+        button.setGraphicTextGap(8.0);
+    }
+
+    private boolean isHomeLocation(Path path, String label) {
+        if (label != null && label.trim().equalsIgnoreCase("Home")) {
+            return true;
+        }
+        if (path == null) {
+            return false;
+        }
+        try {
+            Path userHome = Paths.get(System.getProperty("user.home")).normalize();
+            return path.normalize().equals(userHome);
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private void rebuildRecentLocations() {
@@ -13977,6 +14763,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             button.setMaxWidth(Double.MAX_VALUE);
             button.setAlignment(Pos.CENTER_LEFT);
             button.getStyleClass().add("explorer-home-recent-button");
+            applyHomeLocationButtonGraphic(button, directoryDisplayName(recent), recent);
             button.setTooltip(new javafx.scene.control.Tooltip(recent.toString()));
             button.setOnAction(e -> navigateToFolder(recent, true));
             VBox.setVgrow(button, Priority.NEVER);
@@ -14120,6 +14907,9 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (focused != null) {
             return focused;
         }
+        if (fileTable == null || fileTable.getSelectionModel() == null) {
+            return null;
+        }
         FileItem selItem = fileTable.getSelectionModel().getSelectedItem();
         return (selItem != null) ? selItem.path() : null;
     }
@@ -14145,7 +14935,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (fileTable.getFocusModel() != null) {
             fileTable.getFocusModel().focus(-1);
         }
-        iconSelectionAnchorPath = null;
+        setExplorerSelectionAnchorPath(null);
         refreshActiveSelectionPresentation();
         setStatus("Selection cleared.");
     }
@@ -14175,7 +14965,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         } else {
             refreshVisibleIconSelectionPresentation();
         }
-        updateSelectionCommandState();
+        scheduleSelectionCommandStateRefresh();
     }
 
     private void copyPrimaryPathToClipboard() {
@@ -15831,6 +16621,7 @@ private FolderSnapshotCache.FolderSnapshot captureFolderSnapshot() {
 }
 private void applyFolderSnapshot(Path dir, FolderSnapshotCache.FolderSnapshot snapshot) {
     if (snapshot == null || fileTable == null) return;
+    setVisibleDirectoryScope(dir);
     // Phase 4A.6: track snapshot for in-place hydration diffing.
     activeHydrationSnapshot = snapshot;
     Runnable r = () -> {

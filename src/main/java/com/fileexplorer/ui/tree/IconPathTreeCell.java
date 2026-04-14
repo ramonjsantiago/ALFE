@@ -4,7 +4,9 @@ import com.fileexplorer.service.filesystem.TreeBuildService;
 import com.fileexplorer.service.theme.ThemeService;
 import com.fileexplorer.util.IconLoader;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.function.BiConsumer;
+import javax.swing.filechooser.FileSystemView;
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.css.PseudoClass;
@@ -278,9 +280,32 @@ public class IconPathTreeCell extends TreeCell<Path> {
     private void updateFolderIcon() {
         boolean dark = themeService != null && themeService.isDarkPreferred();
         int px = (int) Math.round(iconView.getFitWidth() > 0 ? iconView.getFitWidth() : 16);
-        Image image = IconLoader.load(IconLoader.IconType.FOLDER, dark, Math.max(16, px));
+        Path item = getItem();
+        TreeItem<Path> treeItem = getTreeItem();
+        String identity = treeItem != null && treeItem.getParent() == null
+                ? "special:thispc"
+                : IconLoader.identityForPath(item);
+        Image image = IconLoader.loadForIdentity(identity, dark, Math.max(16, px));
         iconView.setImage(image);
         inlineRenameIconView.setImage(image);
+    }
+
+    private boolean isNetworkDrivePath(Path path) {
+        if (path == null) {
+            return false;
+        }
+        try {
+            Path normalized = path.toAbsolutePath().normalize();
+            String raw = normalized.toString();
+            if (raw.startsWith("\\") || raw.startsWith("//")) {
+                return true;
+            }
+            FileSystemView fsv = FileSystemView.getFileSystemView();
+            String description = fsv.getSystemTypeDescription(normalized.toFile());
+            return description != null && description.toLowerCase(Locale.ROOT).contains("network");
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     private void showInlineRenameEditor(Path item) {

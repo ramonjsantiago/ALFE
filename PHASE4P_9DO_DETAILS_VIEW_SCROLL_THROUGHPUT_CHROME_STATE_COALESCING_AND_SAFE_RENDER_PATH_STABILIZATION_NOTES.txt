@@ -1,0 +1,8 @@
+HOTFIX213 / Phase 4P.9DO
+
+Scope:
+- Coalesce selection-driven chrome/file-ops/context-menu refresh work on the FX thread.
+- Short-circuit redundant explorer command-state recomputation with cached snapshots.
+- Keep H212 eager Details startup behavior intact.
+- Stabilize the View button active-icon + label refresh path by skipping redundant structured rebuilds.
+- Add lightweight chrome hitch logging for future traceability.

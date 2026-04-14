@@ -1,0 +1,12 @@
+HOTFIX209 / Phase 4P.9DK
+Main-UI First-Render Critical-Path Decomposition and Lazy Details Mount
+
+Scope delivered:
+- defer eager Details-view FXML creation out of MainController.initialize()
+- install a lightweight startup placeholder inside viewHost
+- schedule lazy Details mount one pulse later after context initialization
+- run configureTable() only after the lazy Details surface is loaded
+- add StartupTrace markers for initialize, initializeWithContext, lazy mount scheduling, and lazy mount configuration
+
+Primary changed code path:
+- src/main/java/com/fileexplorer/controller/MainController.java

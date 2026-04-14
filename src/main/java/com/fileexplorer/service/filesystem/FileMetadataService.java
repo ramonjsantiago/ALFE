@@ -2,6 +2,7 @@ package com.fileexplorer.service.filesystem;
 
 import com.fileexplorer.util.IconLoader;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,6 +17,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.logging.Logger;
+import javax.swing.filechooser.FileSystemView;
 import com.fileexplorer.util.LogSupport;
 
 /**
@@ -354,25 +356,41 @@ private boolean isHiddenSafe(Path p) {
      */
     public String iconIdentity(Path p) {
         LogSupport.enter(LOG, "iconIdentity");
-        if (p == null) {
-            return "type:" + IconLoader.IconType.FILE.name();
-        }
+        return IconLoader.identityForPath(p);
+    }
 
-        if (safeIsDirectory(p)) {
-            LogSupport.enter(LOG, "safeIsDirectory");
-            return "type:" + IconLoader.IconType.FOLDER.name();
-        }
 
-        String ext = extensionLower(p);
-        if (!ext.isBlank()) {
-            return "ext:" + ext;
-        }
 
-        IconLoader.IconType t = iconTypeFor(p);
-        if (t == null) {
-            t = IconLoader.IconType.FILE;
+    private boolean isRootDiskPath(Path path) {
+        if (path == null) {
+            return false;
         }
-        return "type:" + t.name();
+        try {
+            Path normalized = path.toAbsolutePath().normalize();
+            Path root = normalized.getRoot();
+            return root != null && normalized.equals(root.normalize()) && !isNetworkDrivePath(normalized);
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    private boolean isNetworkDrivePath(Path path) {
+        if (path == null) {
+            return false;
+        }
+        try {
+            Path normalized = path.toAbsolutePath().normalize();
+            String raw = normalized.toString();
+            if (raw.startsWith("\\") || raw.startsWith("//")) {
+                return true;
+            }
+            File file = normalized.toFile();
+            FileSystemView fsv = FileSystemView.getFileSystemView();
+            String description = fsv.getSystemTypeDescription(file);
+            return description != null && description.toLowerCase(Locale.ROOT).contains("network");
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     /**

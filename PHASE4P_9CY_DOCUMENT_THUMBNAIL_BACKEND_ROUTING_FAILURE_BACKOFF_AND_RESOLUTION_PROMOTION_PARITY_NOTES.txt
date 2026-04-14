@@ -1,0 +1,15 @@
+HOTFIX197 / Phase 4P.9CY — Document Thumbnail Backend Routing, Failure Backoff, and Resolution Promotion Parity
+
+Summary
+- Centralized document-thumbnail backend routing.
+- PDF remains on the direct PDFBox render lane.
+- Office-family document thumbnails remain on the thumbnails4j lane.
+- Added Office-family failure cooldown/backoff.
+- Added low-tier -> high-tier Office-family visible-promotion path.
+- Prevented low-tier document previews from being persisted into the disk cache.
+
+Implementation notes
+- Backend selection is now driven by `documentBackendFor(ext)`.
+- Office-family visible requests larger than the low-tier threshold render a first-pass preview edge and schedule a high-tier promotion once the viewport settles.
+- Failed Office-family requests enter a short cooldown keyed by extension + path + file version so repeated paints do not immediately retry the same failing backend call.
+- Cooldowns self-invalidate when the file changes because the stored last-modified/file-size tuple no longer matches.

@@ -1,0 +1,13 @@
+HOTFIX215 / Phase 4P.9DQ
+
+Problem:
+The View flyout labels turned white, but the actual image-backed menu graphics stayed gray because they were PNG/ImageView nodes and did not inherit text color.
+
+Fix:
+- Added white alpha-mask rendering for View-menu image icons in MainController
+- Applied the white graphic path to the View button active icon
+- Applied the white graphic path to image-backed View-mode and pane-toggle rows
+- Applied the white graphic path to Show > Navigation pane
+
+Result:
+The visible View-menu graphics now match the white label styling instead of remaining gray.

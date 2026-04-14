@@ -37,7 +37,7 @@ public final class ImageSupport {
             "webp", "avif", "heif", "heic"
     );
 
-    /** Extensions handled via thumbnails4j document renderers. */
+    /** Extensions handled by the document-thumbnail backends (PDFBox for PDF, thumbnails4j for Office-family documents). */
     private static final Set<String> DOCUMENT_THUMBNAILS = Set.of(
             "doc", "docx", "pdf", "pptx", "xls", "xlsx"
     );

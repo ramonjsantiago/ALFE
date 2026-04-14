@@ -1,0 +1,18 @@
+HOTFIX214 / Phase 4P.9DP — View Menu Icon Text Color White
+
+Scope
+- Restyle the View flyout so glyph-based icons and visible row text render in white.
+- Keep the existing View button active-icon behavior intact.
+- Avoid Java logic changes; this phase is CSS-only.
+
+Implementation
+- Updated `src/main/resources/com/fileexplorer/ui/css/app-main.css`.
+- Added white text fill for `.label.view-menu-icon`.
+- Added white text fill for `.view-menu-text`.
+- Added a white submenu chevron override for `.view-menu-submenu > .right-container > .arrow`.
+- Added white text fill for `.context-menu .view-menu-submenu > .label`.
+
+Result
+- Glyph-rendered icons in the View flyout now display in white.
+- View-menu row text also displays in white for consistent contrast.
+- Image-based PNG view-mode icons are unchanged.
