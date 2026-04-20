@@ -4,8 +4,11 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import javafx.geometry.Pos;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 
 /**
@@ -39,11 +42,35 @@ public final class FileViewHost {
         Parent root = loader.load();
         root.setVisible(false);
         root.setManaged(false);
+        configureRootForHostFill(root);
         host.getChildren().add(0, root);
         loadedViews.put(key, root);
         controller = loader.getController();
         loadedControllers.put(key, controller);
         return controller;
+    }
+
+    private void configureRootForHostFill(Parent root) {
+        if (root == null) {
+            return;
+        }
+        StackPane.setAlignment(root, Pos.TOP_LEFT);
+        if (root instanceof Region region) {
+            region.setMinWidth(0.0);
+            region.setMinHeight(0.0);
+            region.setMaxWidth(Double.MAX_VALUE);
+            region.setMaxHeight(Double.MAX_VALUE);
+            if (!region.prefWidthProperty().isBound()) {
+                region.prefWidthProperty().bind(host.widthProperty());
+            }
+            if (!region.prefHeightProperty().isBound()) {
+                region.prefHeightProperty().bind(host.heightProperty());
+            }
+        }
+        if (root instanceof ScrollPane scrollPane) {
+            scrollPane.setFitToWidth(true);
+            scrollPane.setFitToHeight(true);
+        }
     }
 
     public void activate(String key) {

@@ -1,0 +1,5 @@
+HOTFIX238 / Phase 4P.9EN — FILE_VIEW_ITEM_CONTEXT_MENU_RESTORE
+
+- restored file-view item right-click menus by showing the item menu from the secondary-press selection-prep path
+- suppressed duplicate follow-on ContextMenuRequested events from the same gesture so item clicks do not degrade into background-menu requests
+- applied the guarded item-menu path to Details rows and icon-family tiles while preserving multi-selection presentation hold

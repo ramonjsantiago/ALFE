@@ -1,0 +1,11 @@
+HOTFIX233 / Phase 4P.9EI
+
+Summary
+- Defers selection-stabilization replay until after JavaFX selection-model notifications finish.
+- Guards selection listeners so stabilization presentation updates stay immediate while structural selection mutation is postponed to a safe pulse.
+- Tightens navigation-tree branch disclosure padding by 2 px for the folder-row indent correction shown in the attached screenshot.
+
+Primary files
+- src/main/java/com/fileexplorer/controller/MainController.java
+- src/main/resources/css/explorer_tree.css
+- src/main/resources/com/fileexplorer/ui/css/navigation-pane-parity.css

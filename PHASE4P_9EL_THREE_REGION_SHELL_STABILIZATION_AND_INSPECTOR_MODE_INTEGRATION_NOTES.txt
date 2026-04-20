@@ -1,0 +1,27 @@
+PHASE4P_9EL_THREE_REGION_SHELL_STABILIZATION_AND_INSPECTOR_MODE_INTEGRATION_NOTES
+
+Summary
+- stabilized the H235 three-region shell
+- removed eager inspector FXML content and replaced it with runtime-created lazy inspector cards
+- restored/persisted navigation width, inspector width, inspector mode, and navigation visibility
+- preserved workspace focus across Details/Preview pane toggles
+- retained Operations compatibility through the shared inspector host
+
+Implementation
+1. MainLayout.fxml
+   - inspectorHost is now an empty StackPane placeholder
+   - Details / Preview / Operations content is no longer eagerly inflated at FXML load time
+
+2. MainController.java
+   - added workspace-shell preference restore/persist helpers
+   - restored geometry before shell configuration and inspector mode after view-mode initialization
+   - added lazy inspector shell/card creation helpers
+   - switched node-visibility logic to mount exactly one inspector card at a time
+   - ensured progress pane loading can instantiate the operations host lazily
+   - preserved workspace focus after pane toggles
+
+Behavioral intent
+- Tree View remains a stable left region
+- File View remains the dominant center work surface
+- Inspector region is hidden at 0 px until requested
+- Inspector content is created on first use and reused afterward

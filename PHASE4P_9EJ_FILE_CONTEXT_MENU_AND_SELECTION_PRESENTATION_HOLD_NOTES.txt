@@ -1,0 +1,7 @@
+HOTFIX234 / Phase 4P.9EJ — File Context Menu Restore and Selection Presentation Hold
+
+This hotfix continues from the H233 baseline and applies the reported follow-up fixes:
+
+1. File-item right-click now reliably opens the Explorer file-operations context menu again. Selection preparation for context menus no longer re-enters TableView selection mutation while the selection model is still broadcasting change notifications. Instead, the requested path set is reflected in presentation immediately and replayed onto the concrete TableView selection on the next safe FX pulse.
+2. Right-clicking an already multi-selected item now preserves the visible multi-selection rectangle while the context menu is open. The current Explorer selection presentation is held through the file-operations menu lifecycle and restored cleanly when the menu hides.
+3. Details-row secondary-click handling is unified with the shared path-based context-menu selection helper so row menus and icon-surface item menus follow the same safe selection-preparation path.

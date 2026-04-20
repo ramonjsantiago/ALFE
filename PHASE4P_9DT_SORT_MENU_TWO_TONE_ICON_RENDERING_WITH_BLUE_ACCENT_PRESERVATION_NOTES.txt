@@ -1,0 +1,7 @@
+HOTFIX218 / Phase 4P.9DT
+
+Applied the same two-tone white plus blue-accent preservation treatment used by the View menu to the Sort command-bar menu icon.
+
+Implementation note:
+- `buildStructuredCommandBarSortVectorIcon()` now loads `/icons/toolbar.sort.png` through the two-tone render path.
+- No sort logic, ordering, or action dispatch behavior was changed.

@@ -82,7 +82,12 @@
     -fx-effect: dropshadow(gaussian, rgba(96, 165, 250, 0.18), 10, 0.20, 0, 0);
 }
 
+.explorer-tree .tree-cell:leaf-item > .tree-disclosure-node,
+.explorer-navigation-pane .tree-cell:leaf-item > .tree-disclosure-node {
+    -fx-padding: 0 3px 0 0;
+}
+
 .explorer-tree .tree-cell > .tree-disclosure-node,
 .explorer-navigation-pane .tree-cell > .tree-disclosure-node {
-    -fx-padding: 0 8px 0 0;
+    -fx-padding: 0 6px 0 0;
 }

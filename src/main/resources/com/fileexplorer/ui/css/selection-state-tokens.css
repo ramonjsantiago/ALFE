@@ -72,8 +72,8 @@
     -fx-border-color: transparent;
     -fx-background-insets: 0;
     -fx-border-width: 1;
-    -fx-background-radius: 12;
-    -fx-border-radius: 12;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
 }
 
 .explorer-icon-tile-grid {
@@ -82,23 +82,23 @@
 
 .explorer-icon-tile-row {
     -fx-padding: 8 10 8 10;
-    -fx-background-radius: 10;
-    -fx-border-radius: 10;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
 }
 
 .explorer-icon-tile-xl {
-    -fx-background-radius: 14;
-    -fx-border-radius: 14;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
 }
 
 .explorer-icon-tile-large {
-    -fx-background-radius: 12;
-    -fx-border-radius: 12;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
 }
 
 .explorer-icon-tile-small {
-    -fx-background-radius: 9;
-    -fx-border-radius: 9;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
 }
 
 .explorer-icon-tile-tiles,

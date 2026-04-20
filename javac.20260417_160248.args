@@ -1,0 +1,9 @@
+--enable-preview
+--release
+21
+-proc:none
+-sourcepath
+src/main/java
+-d
+/tmp/fecheck
+src/main/java/com/fileexplorer/controller/MainController.java

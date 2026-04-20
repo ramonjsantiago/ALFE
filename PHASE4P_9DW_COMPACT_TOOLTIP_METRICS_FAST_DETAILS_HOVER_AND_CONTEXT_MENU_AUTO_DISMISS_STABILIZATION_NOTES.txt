@@ -1,0 +1,6 @@
+HOTFIX221 / Phase 4P.9DW — Compact Tooltip Metrics, Fast Details Hover, and Context Menu Auto-Dismiss Stabilization
+
+- reverted non-Details hover tooltips from the oversized graphic-only presentation back to a compact text-first tooltip path while retaining tooltip text normalization/fallback
+- tightened tooltip CSS padding/radius/line-spacing so icon/list/tile/content tooltips match the smaller Explorer-like geometry the user requested
+- reduced the Details metadata popup delay from 650 ms to 180 ms for faster hover response without changing the existing Details popup content layout
+- deferred file-ops and background context-menu show calls onto the next FX pulse to avoid immediate auto-hide triggered by the same right-click gesture

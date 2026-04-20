@@ -1,0 +1,6 @@
+HOTFIX223 / Phase 4P.9DY — Directory Tooltip Size Suppression, Fast First Hover, and Standard Tooltip Render Restoration
+
+- removes the `Size:` line from directory tooltips while keeping file `Type:` / `Size:` metadata when available
+- reduces non-Details tooltip show delay for faster first hover after a view receives focus
+- reduces Details hover metadata popup delay for faster initial response
+- restores non-Details tooltips to the standard JavaFX text-tooltip render path so black-rectangle graphic shells are eliminated

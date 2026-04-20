@@ -17,7 +17,6 @@
 <?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.SeparatorMenuItem?>
-<?import javafx.scene.control.SplitPane?>
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextArea?>
@@ -311,16 +310,13 @@
         </VBox>
     </top>
 
-    <!-- Center: left tree + right content / preview -->
+    <!-- Center: navigation pane + file workspace + lazy inspector host -->
     <center>
-        <SplitPane fx:id="mainSplitPane" dividerPositions="0.25" styleClass="main-split-surface, explorer-main-split">
-
-            <items>
+        <HBox fx:id="workspaceShell" fillHeight="true" styleClass="workspace-shell, explorer-workspace-shell">
+            <children>
                 <!-- Left: navigation pane shell + folder tree -->
-                <!-- Wrapped so the pane can match Explorer's dedicated left-surface background, padding, and separator. -->
-                <StackPane fx:id="navigationPaneShell" minWidth="60.0" styleClass="navigation-pane-shell">
+                <StackPane fx:id="navigationPaneShell" minWidth="60.0" prefWidth="326.0" styleClass="navigation-pane-shell">
                     <children>
-                        <!-- Compact Windows File Explorer-like navigation row pitch. -->
                         <TreeView fx:id="folderTree" styleClass="tree-view-fixed explorer-tree explorer-navigation-pane" minWidth="54.0" prefWidth="320.0" fixedCellSize="24.0">
                             <contextMenu>
                                 <ContextMenu styleClass="explorer-tree-menu">
@@ -334,15 +330,12 @@
                     </children>
                 </StackPane>
 
-                <!-- Right: content host + collapsible Details split (right defaults to 0px width) -->
-                <BorderPane fx:id="contentPane" styleClass="content-surface">
+                <Region fx:id="navigationResizer" minWidth="3.0" prefWidth="3.0" maxWidth="3.0" styleClass="workspace-resizer, navigation-resizer"/>
 
+                <!-- Middle: main file workspace -->
+                <BorderPane fx:id="contentPane" styleClass="content-surface" HBox.hgrow="ALWAYS">
                     <center>
-                        <SplitPane fx:id="contentSplitPane" dividerPositions="1.0">
-
-                            <items>
-                                <!-- Left: main views (table / icons) -->
-                                <StackPane fx:id="viewHost">
+                        <StackPane fx:id="viewHost">
 
                             <!-- HOTFIX186: individual file viewers are now lazily loaded into this host from dedicated FXML modules. -->
 
@@ -371,85 +364,16 @@
                                     </VBox>
                                 </children>
                             </VBox>
-                                </StackPane>
-
-                                <!-- Right: side panes container (Details toggle controls this split item) -->
-                                <VBox fx:id="sidePane" minWidth="0.0" prefWidth="356" spacing="12" alignment="TOP_LEFT"
-                                      visible="false" managed="false" styleClass="side-pane-surface, explorer-side-pane">
-                                    <padding>
-                                        <Insets top="12" right="12" bottom="12" left="12"/>
-                                    </padding>
-
-                            <!-- Preview pane (initially hidden) -->
-                            <VBox fx:id="previewBox" spacing="10" visible="false" managed="false" styleClass="fluent-preview-box, side-pane-card, preview-pane-card">
-                                <children>
-                                    <HBox alignment="CENTER_LEFT" spacing="8" styleClass="side-pane-card-header">
-                                        <children>
-                                            <Label text="&#xE8A5;" styleClass="fluent-icon side-pane-card-icon"/>
-                                            <VBox spacing="1" HBox.hgrow="ALWAYS">
-                                                <children>
-                                                    <Label text="Preview" styleClass="fluent-preview-title, side-pane-card-title"/>
-                                                    <Label text="Quick look at the selected item" styleClass="side-pane-card-subtitle"/>
-                                                </children>
-                                            </VBox>
-                                        </children>
-                                    </HBox>
-                                    <StackPane styleClass="preview-image-shell" minHeight="180.0" prefHeight="220.0" maxWidth="Infinity">
-                                        <children>
-                                            <ImageView fx:id="previewImage" fitWidth="304" preserveRatio="true" smooth="true"/>
-                                        </children>
-                                    </StackPane>
-                                    <TextArea fx:id="previewText" editable="false" wrapText="true" prefRowCount="8" VBox.vgrow="ALWAYS"
-                                              styleClass="side-pane-text, preview-pane-text"/>
-                                </children>
-                            </VBox>
-
-                            <!-- Details pane (initially hidden) -->
-                            <VBox fx:id="detailsBox" spacing="10" visible="false" managed="false" styleClass="fluent-preview-box, side-pane-card, details-pane-card">
-                                <children>
-                                    <HBox alignment="CENTER_LEFT" spacing="8" styleClass="side-pane-card-header">
-                                        <children>
-                                            <Label text="&#xE946;" styleClass="fluent-icon side-pane-card-icon"/>
-                                            <VBox spacing="1" HBox.hgrow="ALWAYS">
-                                                <children>
-                                                    <Label text="Details" styleClass="fluent-preview-title, side-pane-card-title"/>
-                                                    <Label text="Metadata for the selected item" styleClass="side-pane-card-subtitle"/>
-                                                </children>
-                                            </VBox>
-                                        </children>
-                                    </HBox>
-                                    <TextArea fx:id="detailsText" editable="false" wrapText="true" prefRowCount="12" VBox.vgrow="ALWAYS"
-                                              styleClass="side-pane-text, details-pane-text"/>
-                                </children>
-                            </VBox>
-                            <!-- Operations / progress pane (Phase 3.6.2) -->
-                            <VBox fx:id="operationsBox" spacing="10" visible="false" managed="false" styleClass="fluent-preview-box, side-pane-card, operations-pane-card">
-                                <children>
-                                    <HBox alignment="CENTER_LEFT" spacing="8" styleClass="side-pane-card-header">
-                                        <children>
-                                            <Label text="&#xE945;" styleClass="fluent-icon side-pane-card-icon"/>
-                                            <VBox spacing="1" HBox.hgrow="ALWAYS">
-                                                <children>
-                                                    <Label text="Operations" styleClass="fluent-preview-title, side-pane-card-title"/>
-                                                    <Label text="Transfers and file actions" styleClass="side-pane-card-subtitle"/>
-                                                </children>
-                                            </VBox>
-                                        </children>
-                                    </HBox>
-                                    <VBox fx:id="progressPaneHost" spacing="0" minHeight="0.0" prefHeight="0.0"/>
-                                </children>
-                            </VBox>
-
-                                </VBox>
-                            </items>
-
-                        </SplitPane>
+                        </StackPane>
                     </center>
-
                 </BorderPane>
-            </items>
 
-        </SplitPane>
+                <Region fx:id="inspectorResizer" minWidth="3.0" prefWidth="3.0" maxWidth="3.0" visible="false" managed="false" styleClass="workspace-resizer, inspector-resizer"/>
+
+                <!-- Right: lazy, on-demand inspector host -->
+                <StackPane fx:id="inspectorHost" minWidth="0.0" prefWidth="0.0" visible="false" managed="false" styleClass="inspector-host, explorer-inspector-host"/>
+            </children>
+        </HBox>
     </center>
 
     <!-- Bottom: status bar -->

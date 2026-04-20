@@ -1,0 +1,7 @@
+HOTFIX225 / Phase 4P.9EA
+
+Summary:
+- preserved multi-selection ownership across Details and non-Details surfaces by routing primary click selection through shared semantic selection helpers
+- restored directory double-click activation on the Details surface with an additional TableView-level fallback
+- re-baselined the Details name-column cell padding to 5 px for icon-margin parity
+- restored standard non-Details text-tooltip rendering to avoid black-square regressions

@@ -1,0 +1,10 @@
+HOTFIX224 / Phase 4P.9DZ
+
+- removed Path from Explorer tooltip text for both Details metadata popup text and non-Details hover tooltips
+- replaced the fragile non-Details tooltip text-only render path with an explicit compact label graphic using inline text styling so other views no longer degrade into black squares
+- reduced tooltip chrome radius to zero and kept minimal compact padding
+- changed icon/tile selection surfaces to square corners
+- changed Details row highlight surfaces to square corners
+- adjusted Details row background/border insets to 1 px top and bottom so adjacent rows separate by exactly 2 px and the header-to-first-row spacing is 2 px
+- raised the default Details Name column width from 336 px to 375 px
+- added 1 px of internal left padding to the Details name-cell content box so the icon sits 5 px from the left selection border

@@ -1,0 +1,7 @@
+HOTFIX235 / Phase 4P.9EK
+
+- replaced the primary SplitPane shell with a three-region horizontal workspace shell
+- introduced manual navigation and inspector resizer regions so pane sizing is no longer driven by SplitPane dividers
+- converted the right-side auxiliary region into an on-demand inspector host that renders Details or Preview only when requested
+- updated responsive table layout calculations to use workspace/content widths from the new shell
+- preserved the existing navigation tree, file-view host, and side-pane card content while moving them into the new shell structure

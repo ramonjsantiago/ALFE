@@ -1,0 +1,5 @@
+HOTFIX237 / Phase 4P.9EM — ICON_VIEW_WORKSPACE_FILL_REGRESSION_FIX
+
+- bound modular file-view roots to the shared workspace host so non-Details views fill the middle region again
+- aligned loaded view roots to TOP_LEFT and gave Region-based roots unbounded max size within the host
+- kept ScrollPane-based icon-family views fit-to-width and fit-to-height so the viewport follows the three-region shell geometry

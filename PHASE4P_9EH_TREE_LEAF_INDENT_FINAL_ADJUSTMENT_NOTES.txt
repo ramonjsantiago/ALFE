@@ -1,0 +1,3 @@
+HOTFIX232 / Phase 4P.9EH
+- reduced navigation-tree leaf disclosure padding by 2 additional pixels so non-directory items shift left without disturbing directory-row alignment
+- kept the shared tree stylesheet and navigation-pane parity override in sync so the updated leaf indent applies consistently

@@ -1,0 +1,9 @@
+HOTFIX239 / Phase 4P.9EO — FILE_VIEW_CONTEXT_MENU_EVENT_FALLBACK_RESTORE
+
+Summary
+- Added a shared file-view item target resolver for Details-row and icon-surface context-menu requests.
+- Promoted table-level and view-host ContextMenuRequested events back into the item popup path when the gesture target resolves to a concrete file item.
+- Preserved empty-space background menu behavior and the existing duplicate-gesture suppression window.
+
+Primary file
+- src/main/java/com/fileexplorer/controller/MainController.java

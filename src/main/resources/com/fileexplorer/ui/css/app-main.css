@@ -675,34 +675,50 @@
 .tooltip.explorer-rich-tooltip {
     -fx-background-color: #202020;
     -fx-background-insets: 0;
-    -fx-background-radius: 8;
+    -fx-background-radius: 0;
     -fx-border-color: #3A3A3A;
-    -fx-border-radius: 8;
+    -fx-border-radius: 0;
     -fx-border-width: 1;
-    -fx-padding: 6 10 6 10;
+    -fx-padding: 2 5 2 5;
     -fx-text-fill: #E0DFDF;
 }
 
 .tooltip .label,
 .tooltip > .label,
-.tooltip > *,
 .tooltip.explorer-rich-tooltip .label,
 .tooltip.explorer-rich-tooltip > .label,
+.tooltip.explorer-rich-tooltip .explorer-tooltip-content,
+.tooltip.explorer-rich-tooltip .explorer-tooltip-content .label,
 .tooltip.explorer-rich-tooltip .explorer-tooltip-label {
     -fx-text-fill: #E0DFDF;
+    -fx-padding: 0;
+    -fx-background-color: transparent;
+    -fx-min-width: 0;
+    -fx-min-height: 0;
 }
 
 .tooltip .text,
-.tooltip.explorer-rich-tooltip .text {
+.tooltip.explorer-rich-tooltip .text,
+.tooltip.explorer-rich-tooltip .explorer-tooltip-content .text,
+.tooltip.explorer-rich-tooltip .explorer-tooltip-label .text {
     -fx-fill: #E0DFDF;
 }
 
+.tooltip.explorer-rich-tooltip .explorer-tooltip-content {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+    -fx-min-height: 0;
+    -fx-min-width: 0;
+}
+
 .tooltip.explorer-rich-tooltip .explorer-tooltip-label {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
     -fx-text-fill: #E0DFDF;
     -fx-font-family: "Segoe UI Variable Text";
     -fx-font-size: 13px;
     -fx-font-weight: normal;
-    -fx-line-spacing: 2px;
+    -fx-line-spacing: 0px;
 }
 
 .tooltip .page-corner,

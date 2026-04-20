@@ -1,0 +1,5 @@
+HOTFIX229 / Phase 4P.9EE
+
+- Replaced non-Details file-item tooltips with the controller-owned Explorer metadata popup path already used successfully by Details-row hover handling.
+- Preserved the pre-gesture Explorer selection snapshot and reused it for Ctrl-toggle, Shift-range, and marquee-additive selection so multi-select survives control/skin follow-up pulses.
+- Made Explorer file/folder context menus persist until an outside owner-scene click, focus loss, or Escape, rather than dismissing immediately after the opening interaction.

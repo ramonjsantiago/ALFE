@@ -1,0 +1,10 @@
+HOTFIX226 / Phase 4P.9EB
+
+Summary
+- Reverted the H225 interpretation that tightened the Details Name-column cell on both sides.
+- Preserved the 5 px left icon-lane inset in the Details Name column.
+- Restored the standard 12 px trailing padding inside the Details Name column.
+- Added a 5 px right inset at the Details view container edge so the last visible Details column sits 5 px from the container boundary.
+
+Primary resource change
+- src/main/resources/com/fileexplorer/ui/css/details-view-parity.css

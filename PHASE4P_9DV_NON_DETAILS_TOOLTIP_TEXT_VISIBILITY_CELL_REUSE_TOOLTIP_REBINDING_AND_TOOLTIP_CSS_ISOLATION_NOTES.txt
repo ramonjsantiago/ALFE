@@ -1,0 +1,11 @@
+HOTFIX220 / Phase 4P.9DV — Non-Details Tooltip Text Visibility, Cell-Reuse Tooltip Rebinding, and Tooltip CSS Isolation
+
+Scope:
+- fix black-rectangle non-Details tooltips by restoring visible tooltip text content
+- rebind tooltip text on every show/hover refresh for reused virtual icon/list cells
+- isolate tooltip presentation from recent view/sort menu icon tinting work
+
+Implementation:
+- MainController.installExplorerItemTooltip now builds a dedicated tooltip label/root graphic and applies explicit tooltip text styling
+- blank tooltip text now falls back to the tagged explorer path metadata instead of rendering an empty tooltip body
+- app-main.css now includes stronger explorer tooltip content selectors to keep tooltip text visible in dark theme

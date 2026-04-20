@@ -1,7 +1,7 @@
 /* Phase 4E/4L - Details view parity + metrics/header tuning */
 
 .details-view-shell {
-    -fx-padding: 0;
+    -fx-padding: 0 5 0 0;
     -fx-background-color: transparent;
 }
 
@@ -255,10 +255,10 @@
 }
 
 .explorer-details-table .table-row-cell {
-    -fx-background-insets: 0, 1 6 1 6;
-    -fx-background-radius: 0, 7;
-    -fx-border-insets: 1 6 1 6;
-    -fx-border-radius: 7;
+    -fx-background-insets: 0, 1 8 1 8;
+    -fx-background-radius: 0, 0;
+    -fx-border-insets: 1 8 1 8;
+    -fx-border-radius: 0;
     -fx-border-width: 0, 1;
     -fx-padding: 0;
     -fx-cell-size: 32px;
@@ -315,6 +315,10 @@
 .explorer-details-table .table-cell.explorer-size-column-cell {
     -fx-padding: 0 12 0 8;
     -fx-alignment: center-right;
+}
+
+.explorer-details-table .table-cell.explorer-name-column-cell {
+    -fx-padding: 0 12 0 5;
 }
 
 .theme-dark .explorer-details-table .table-row-cell:selected .table-cell,

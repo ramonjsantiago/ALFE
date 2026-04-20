@@ -1,4 +1,20 @@
+## HOTFIX239 / Phase 4P.9EO — FILE_VIEW_CONTEXT_MENU_EVENT_FALLBACK_RESTORE
+- added shared item-target resolution for both Details rows and icon-surface tiles so container-level context-menu handlers can recover the clicked file path reliably
+- routed file-table and file-view-host ContextMenuRequested events back to the item popup menu for true item targets instead of assuming row/tile-local handlers already fired
+- kept empty-space background context menus and duplicate-gesture suppression behavior intact so only actual item requests promote to the file operations menu
+
+## HOTFIX236 / Phase 4P.9EL — THREE_REGION_SHELL_STABILIZATION_AND_INSPECTOR_MODE_INTEGRATION
+- stabilized the HOTFIX235 three-region workspace shell
+- removed eager inspector-pane FXML construction and switched to a lazy runtime-mounted inspector host
+- persisted and restored navigation width, navigation visibility, inspector width, and inspector mode
+- preserved workspace focus when toggling Details and Preview
+- retained shared inspector-host compatibility for Operations
+
 # Changelog
+
+## HOTFIX232 / Phase 4P.9EH — Tree Leaf Indent Final Adjustment
+- Reduced navigation-tree leaf disclosure padding by 2 additional pixels so non-directory items shift left while expandable directory rows keep their existing alignment.
+- Updated both the shared tree stylesheet and the navigation-pane parity override so the leaf-indent correction applies consistently anywhere the Explorer tree skin is active.
 
 ## HOTFIX217 / Phase 4P.9DS — Two-Tone View Icon Rendering with Blue Accent Preservation
 - Replaced the flat all-white View icon masking path with a two-tone conversion that preserves original blue accent pixels while recoloring neutral icon strokes to white.
@@ -296,3 +312,93 @@ HOTFIX195: integrated dedicated Home icon resources and wired Home UI surfaces t
 ## HOTFIX216 / Phase 4P.9DR
 - Finished the white-icon treatment by routing the structured command-bar View button active-view raster icon through the same white alpha-mask path used by the View flyout graphics.
 - Kept the visible `View` label next to the active icon unchanged while making the top-level View button icon visually match the now-white View menu icons.
+
+## HOTFIX218 / Phase 4P.9DT — Sort Menu Two-Tone Icon Rendering with Blue Accent Preservation
+- applied the View-menu two-tone white/blue-accent icon treatment to the structured Sort command-bar icon
+- preserved the blue accent pixels from `toolbar.sort.png` while recoloring dark/neutral pixels to white
+- no behavioral changes to sort actions or sort menu population
+
+## HOTFIX219 / Phase 4P.9DU — Non-Details View Cell Text/Tooltip Restoration and Shared Icon Pipeline Isolation
+- restored explicit filename text rendering for non-Details icon/list/tile/content view cells by reasserting label text-fill and text-column width constraints in the shared icon-tile builder
+- replaced the fragile icon-view hover popup wiring with per-tile JavaFX `Tooltip` installation so non-Details views recover reliable hover metadata without affecting Details-row tooltip behavior
+- hardened virtual icon/list cells to clear stale text state and stay in `GRAPHIC_ONLY` mode during reuse so shared menu/icon rendering changes do not leak into file-item cells
+
+## HOTFIX220 / Phase 4P.9DV — Non-Details Tooltip Text Visibility, Cell-Reuse Tooltip Rebinding, and Tooltip CSS Isolation
+- replaced the plain-text non-Details tooltip render path with an explicit rich tooltip label/graphic so hover metadata stays visible instead of collapsing to a black rectangle
+- rebound tooltip text on every show/hover refresh and added a tagged-path fallback for reused virtual cells that transiently produce blank tooltip content
+- tightened explorer tooltip CSS selectors so tooltip content styling is isolated from recent menu/icon tint work
+
+## HOTFIX221 / Phase 4P.9DW — Compact Tooltip Metrics, Fast Details Hover, and Context Menu Auto-Dismiss Stabilization
+- restored a compact text-first tooltip path for non-Details icon/list/tile/content surfaces so hover popups no longer inflate to oversized dark panels
+- reduced the Details metadata popup hover delay from 650 ms to 180 ms for faster Explorer-like hover response in Details view
+- deferred file-ops and background context-menu show calls to the next FX pulse to stabilize right-click popup lifetime and avoid immediate auto-dismiss
+
+## HOTFIX222 / Phase 4P.9DX — Tooltip Type Line for Files and Non-Details Tooltip Text Render Fix
+- added a conditional `Type:` line to Explorer tooltip metadata for files when a concrete file type string is available, while omitting that line for directories
+- replaced the fragile non-Details tooltip text-only render path with an explicit compact label graphic so other views stop collapsing to black rectangles
+- tightened tooltip content styling so the inner tooltip container stays transparent and compact across icon/list/tile/content surfaces
+## HOTFIX223 / Phase 4P.9DY — Directory Tooltip Size Suppression, Fast First Hover, and Standard Tooltip Render Restoration
+- removed the `Size:` line from directory tooltips while keeping file `Type:` / `Size:` metadata when a concrete value is available
+- restored non-Details icon/list/tile/content surfaces to a standard JavaFX text-tooltip render path so hover popups no longer collapse into black rectangles
+- reduced both the non-Details tooltip show delay and the Details metadata-popup delay for faster first-hover response after a view receives focus
+
+## HOTFIX224 / Phase 4P.9DZ — Square Selection Surfaces, Tooltip Path Removal, Non-Details Tooltip Render Repair, and Details Metrics Alignment
+- removed `Path:` from Explorer tooltip text and kept only the compact name / type / size / date metadata lines that apply to the item
+- replaced the fragile non-Details tooltip text path with an explicit compact label graphic so icon/list/tile/content hover popups stop collapsing into black squares
+- converted icon/tile selection surfaces and Details row selection surfaces to square corners, tightened Details row spacing to a 2 px gap, and raised the default Details Name column width to 375 px
+
+## HOTFIX225 / Phase 4P.9EA — Shared Multi-Selection Ownership Preservation, Directory Double-Click Restore, and Details Icon Margin Parity
+- routed Details-row primary click selection, icon-surface single selection, and icon-surface toggle selection through the shared `applyExplorerPathSelection(...)` path so Ctrl/Shift multi-selection is no longer collapsed by post-gesture presentation refreshes
+- restored directory activation in Details view by adding an explicit TableView double-click fallback for row-content clicks that should navigate into a folder
+- restored the standard non-Details text-tooltip path to avoid black-square hover regressions and tightened the Details Name-column cell padding to 5 px for icon-margin parity
+
+## HOTFIX226 / Phase 4P.9EB — Details Right Container Margin Correction and Name-Column Padding Revert
+- reverted the H225 right-side Name-column padding tightening so the Details Name cell keeps a 5 px left inset for the icon lane while restoring the standard 12 px trailing padding
+- added a 5 px right inset to the Details view shell so the last visible Details column sits exactly 5 px from the Details container edge
+
+## HOTFIX229 / Phase 4P.9EE — Shared Popup Tooltip Routing, Persistent Folder Menus, and Multi-Select Stabilization
+- routed icon/list/tile/content file-item hover metadata through the controller-owned Explorer popup path so non-Details tooltips no longer collapse into black squares
+- preserved the pre-gesture Explorer selection snapshot for Ctrl/Shift operations and replayed committed selection across follow-up FX pulses so multi-select no longer collapses back to a single item
+- made Explorer file and folder popup menus persist until an outside click, focus loss, or Escape instead of dropping immediately after the opening gesture
+
+## HOTFIX230 / Phase 4P.9EF — Details Marquee Selection, Persistent Item Menus, Tree Leaf Indent Tuning, and Inline Rename Focus Guarding
+- changed Details-view marquee drag to maintain a presentation-only preview selection during the gesture and commit the final path set on mouse release so marquee multi-select can complete reliably
+- added an opening-gesture dismissal guard to Explorer item context menus so right-click menus stay open instead of immediately collapsing
+- reduced navigation-tree leaf disclosure padding by 2 px so non-directory items sit two pixels closer to the folder alignment target
+- added initial focus-commit guards to Explorer inline-rename editors in tree and file surfaces so rename fields do not pop down immediately after opening
+
+
+## HOTFIX231 / Phase 4P.9EG — Shared Selection Persistence and Tree Leaf Indent Fine-Tuning
+- persisted committed Ctrl/Shift and marquee selections across additional FX pulses and replayed them whenever downstream control churn attempted to collapse selection back to a single item
+- routed Details marquee completion through the same shared stabilization path used by additive and range selection so marquee selection no longer appears to work briefly and then revert
+- taught selection-presentation refreshes in Details and icon surfaces to respect the stabilized path set while the gesture settles, eliminating visible snap-back
+- reduced navigation-tree leaf disclosure padding by 1 additional pixel so non-directory items sit one pixel closer to the requested alignment target
+
+## HOTFIX233 / Phase 4P.9EI — Deferred Selection Stabilization Reapply and Tree Branch Indent Correction
+- deferred selection-stabilization reapply work until after JavaFX selection-model notifications complete so Ctrl/Shift multi-select and marquee selection no longer snap back to a single row or throw during metadata-driven table churn
+- wrapped Details-table selection listeners in an explicit model-notification guard so stabilization logic updates presentation immediately but replays concrete TableView selection only on the next safe FX pulse
+- reduced navigation-tree branch disclosure padding by 2 px so expandable folder rows sit 2 pixels closer to the left and match the requested screenshot alignment more closely
+
+
+## HOTFIX234 / Phase 4P.9EJ — File Context Menu Restore and Selection Presentation Hold
+- prevented Explorer context-menu selection preparation from re-entering `TableView.clearSelection()` during active selection-model notifications by deferring the concrete selection replay to the next safe FX pulse
+- preserved the visible Explorer multi-selection presentation while the file-operations context menu is open so right-clicking a selected group no longer drops the selection rectangle
+- unified Details-row secondary-click selection prep with the shared path-based context-menu helper so file-item context menus open reliably again
+
+
+## HOTFIX235 / Phase 4P.9EK — Three-Region Workspace Shell and Lazy Inspector Host
+- replaced the primary workspace `SplitPane` shell with a three-region horizontal `HBox` shell so Tree, File View, and Inspector now live as sibling regions instead of nested split items
+- converted the right-side auxiliary region into a collapsed-by-default inspector host that expands only when Details, Preview, or Operations is requested
+- added explicit drag resizers for the navigation pane and inspector host and updated responsive viewport sizing to measure the new shell geometry
+
+
+## HOTFIX237 / Phase 4P.9EM — Icon View Workspace Fill Regression Fix
+- bound modular file-view roots to the shared `viewHost` width and height so icon, list, tiles, and content views fill the full file workspace again instead of collapsing to their computed size within the three-region shell
+- aligned loaded view roots to the top-left and gave Region-based roots unbounded max size so the middle workspace remains dominant across non-Details view switches
+- kept `ScrollPane`-based icon surfaces fit-to-width and fit-to-height so the visible viewport tracks shell geometry during relayout
+
+
+## HOTFIX238 / Phase 4P.9EN — File View Item Context Menu Restore
+- restored item right-click context menus across file views by scheduling item menu opening from the secondary-press selection-prep path instead of relying on a later `ContextMenuRequested` event that could be lost after item-surface refreshes
+- suppressed follow-on background context-menu events for the same gesture so file and folder item menus are not replaced by the file-view background menu while the selection model is being restabilized
+- kept tree-view behavior unchanged and preserved multi-selection presentation while the item menu is open

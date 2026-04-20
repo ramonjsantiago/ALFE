@@ -1,0 +1,7 @@
+HOTFIX222 / Phase 4P.9DX — Tooltip Type Line for Files and Non-Details Tooltip Text Render Fix
+
+Changes included:
+- Adds a conditional Type line to tooltip metadata for files when a concrete file type is available.
+- Suppresses the Type line for directories.
+- Replaces the fragile plain-text non-Details tooltip content path with an explicit compact label/graphic binding.
+- Reinforces tooltip CSS so the label stays visible with transparent inner containers and minimal padding.

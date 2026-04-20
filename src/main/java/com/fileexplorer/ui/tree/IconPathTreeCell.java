@@ -55,6 +55,7 @@ public class IconPathTreeCell extends TreeCell<Path> {
     private final StackPane inlineRenameIconContainer = new StackPane();
     private final TextField inlineRenameField = new TextField();
     private boolean suppressFocusCommit;
+    private int focusCommitGuardPulsesRemaining;
 
     private final ChangeListener<Boolean> expandedListener = (obs, oldV, newV) -> updateDisclosure();
     private TreeItem<Path> observedTreeItem;
@@ -119,6 +120,15 @@ public class IconPathTreeCell extends TreeCell<Path> {
         inlineRenameField.setOnAction(e -> commitInlineRename());
         inlineRenameField.focusedProperty().addListener((obs, oldV, newV) -> {
             if (!newV && isEditing() && !suppressFocusCommit) {
+                if (isFocusCommitGuardActive()) {
+                    Platform.runLater(() -> {
+                        if (isEditing() && inlineRenameField.getScene() != null) {
+                            inlineRenameField.requestFocus();
+                            inlineRenameField.selectAll();
+                        }
+                    });
+                    return;
+                }
                 commitInlineRename();
             }
         });
@@ -186,6 +196,7 @@ public class IconPathTreeCell extends TreeCell<Path> {
         }
         super.startEdit();
         suppressFocusCommit = false;
+        armFocusCommitGuard();
         showInlineRenameEditor(item);
         Platform.runLater(() -> {
             inlineRenameField.requestFocus();
@@ -197,6 +208,7 @@ public class IconPathTreeCell extends TreeCell<Path> {
     public void cancelEdit() {
         super.cancelEdit();
         suppressFocusCommit = false;
+        focusCommitGuardPulsesRemaining = 0;
         restoreNormalPresentation(getItem());
     }
 
@@ -227,6 +239,25 @@ public class IconPathTreeCell extends TreeCell<Path> {
         double baseCenterY = node.getBoundsInParent().getMinY() + (height * 0.5) - node.getTranslateY();
         double targetTranslateY = (rowCenterY - baseCenterY) + extraNudgeY;
         node.setTranslateY(Math.rint(targetTranslateY));
+    }
+
+    private boolean isFocusCommitGuardActive() {
+        return focusCommitGuardPulsesRemaining > 0;
+    }
+
+    private void armFocusCommitGuard() {
+        focusCommitGuardPulsesRemaining = Math.max(focusCommitGuardPulsesRemaining, 3);
+        Platform.runLater(this::advanceFocusCommitGuard);
+    }
+
+    private void advanceFocusCommitGuard() {
+        if (focusCommitGuardPulsesRemaining <= 0) {
+            return;
+        }
+        focusCommitGuardPulsesRemaining--;
+        if (focusCommitGuardPulsesRemaining > 0) {
+            Platform.runLater(this::advanceFocusCommitGuard);
+        }
     }
 
     @Override

@@ -266,19 +266,26 @@
     -fx-padding: 10;
 }
 
-.main-split-surface .split-pane-divider,
-#contentSplitPane .split-pane-divider {
-    -fx-padding: 0 1 0 1;
+.workspace-shell {
+    -fx-spacing: 0;
+    -fx-fill-height: true;
 }
 
-.theme-dark .main-split-surface .split-pane-divider,
-.theme-dark #contentSplitPane .split-pane-divider {
+.workspace-resizer {
+    -fx-padding: 0;
+    -fx-cursor: h_resize;
+}
+
+.theme-dark .workspace-resizer {
     -fx-background-color: #2f2f2f;
 }
 
-.theme-light .main-split-surface .split-pane-divider,
-.theme-light #contentSplitPane .split-pane-divider {
+.theme-light .workspace-resizer {
     -fx-background-color: #d9d9d9;
+}
+
+.inspector-host {
+    -fx-min-width: 0;
 }
 
 .status-bar-surface {

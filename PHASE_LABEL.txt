@@ -1,1 +1,1 @@
-HOTFIX217 / Phase 4P.9DS — Two-Tone View Icon Rendering with Blue Accent Preservation
+HOTFIX239 / Phase 4P.9EO — FILE_VIEW_CONTEXT_MENU_EVENT_FALLBACK_RESTORE

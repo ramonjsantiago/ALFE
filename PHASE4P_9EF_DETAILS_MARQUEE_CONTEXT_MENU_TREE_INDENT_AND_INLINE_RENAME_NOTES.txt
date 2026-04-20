@@ -1,0 +1,5 @@
+HOTFIX230 / Phase 4P.9EF
+- kept Details marquee selection in a presentation-only preview state during drag and committed the final selection set on release
+- guarded Explorer context-menu dismissal against the opening gesture so right-click item menus stay open until an explicit outside interaction
+- reduced leaf-node disclosure padding by 2 px in the navigation tree so non-directory items sit slightly closer to Explorer parity
+- added initial inline-rename focus guards to tree and file-surface editors so rename fields do not collapse immediately after opening

@@ -1,0 +1,5 @@
+HOTFIX231 / Phase 4P.9EG
+- persisted committed Ctrl/Shift and marquee selections across additional FX pulses and replayed them when downstream control behavior attempted to collapse selection
+- routed Details marquee completion through the same shared stabilization path used by additive and range selection
+- prevented selection-presentation refreshes from snapping back to the transient single-selection state while stabilization is active
+- reduced navigation-tree leaf disclosure padding by 1 additional pixel so non-directory items align closer to the target Explorer indent

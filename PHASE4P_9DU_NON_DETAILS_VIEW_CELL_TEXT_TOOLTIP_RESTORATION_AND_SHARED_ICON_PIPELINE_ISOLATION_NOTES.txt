@@ -1,0 +1,9 @@
+HOTFIX219 / Phase 4P.9DU
+
+Summary
+- Restored filename text rendering for non-Details icon/tile/list/content views.
+- Restored hover tooltips for non-Details views using standard JavaFX Tooltip installation.
+- Isolated virtual cell reuse state so stale text/content-display state does not leak across reused non-Details cells.
+
+Primary code touchpoint
+- src/main/java/com/fileexplorer/controller/MainController.java
