@@ -1,0 +1,11 @@
+HOTFIX242D / Phase 4P.9ER — FILE_VIEW_CONTEXT_MENU_RELEASE_ARMING_AND_STABLE_ANCHOR
+
+Summary
+- changed file-view item context menus from immediate secondary-press showing to a press-arm / secondary-release show model
+- retained native ContextMenuRequested as a fallback path, but the opening gesture is now primarily completed from secondary release
+- restored JavaFX native ContextMenu auto-hide behavior now that menus open on release instead of during the held right-click gesture
+- anchored file-operations menus to the stable controller root scene node before falling back to active file-view surfaces, reducing popup teardown caused by dynamic virtual/icon surface churn
+- applied the release-show path to details rows, icon tiles, virtual icon grid cells, virtual icon list cells, and the shared icon-surface host
+
+Primary file
+- src/main/java/com/fileexplorer/controller/MainController.java

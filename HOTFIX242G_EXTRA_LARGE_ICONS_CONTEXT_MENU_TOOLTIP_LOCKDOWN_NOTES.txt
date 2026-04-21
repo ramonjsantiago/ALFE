@@ -1,0 +1,21 @@
+HOTFIX242G / EXTRA_LARGE_ICONS_CONTEXT_MENU_TOOLTIP_LOCKDOWN
+
+Summary
+- Strengthened file-view hover tooltip suppression during the full right-click context-menu lifecycle.
+- Right-click arming/request/show/hide now actively suppresses the Explorer hover metadata popup.
+- Tooltip handlers now refuse to arm or refresh while a file-view context menu is pending, visible, or under a brief post-hide cooldown.
+
+Primary file changed
+- src/main/java/com/fileexplorer/controller/MainController.java
+
+Key changes
+- Added a dedicated hover-tooltip suppression deadline for file-view context-menu gestures.
+- Suppression is engaged on:
+  - item context-menu arm
+  - item context-menu request
+  - file-ops menu show lifecycle
+  - file-view background menu show lifecycle
+- Tooltip MOUSE_ENTERED and MOUSE_MOVED handlers now bail out immediately during suppression and hide any active tooltip popup.
+
+Intent
+- Prevent Explorer hover tooltips from re-arming or repainting while the right-click context menu is being opened or is active, especially in EXTRA_LARGE_ICONS virtualized surfaces.

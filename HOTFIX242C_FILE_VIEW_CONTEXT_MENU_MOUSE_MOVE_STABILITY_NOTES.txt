@@ -1,0 +1,13 @@
+HOTFIX242C — File View Context Menu Mouse-Move Stability
+
+Summary
+- moved file-view item popup opening onto the secondary-press path for Details and icon-family surfaces so the menu no longer depends on the later ContextMenuRequested gesture lifecycle
+- kept duplicate ContextMenuRequested suppression in place with a longer suppression window so the native follow-on request from the same right-click does not reopen or destabilize the popup while the button remains held
+- removed owner-window focus-loss dismissal from shared Explorer popup wiring and added explicit popup-scene mouse-release dismissal so moving the pointer across the shown menu does not immediately hide it
+
+Primary file changed
+- src/main/java/com/fileexplorer/controller/MainController.java
+
+Notes
+- this change is targeted at the specific symptom where the file-view context menu appears, but collapses as soon as the mouse is moved while the right button is still depressed
+- tree-view context menu behavior was not changed here

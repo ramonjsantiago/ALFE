@@ -1,0 +1,4 @@
+HOTFIX241 / Phase 4P.9EQ
+- Added direct virtual ListCell secondary-click and ContextMenuRequested handling for icon-family views.
+- Resolved context-menu targets from virtual list/grid cells so large directories no longer depend solely on shared host tile ancestry.
+- Added row-child screen hit testing for virtual icon-grid rows to map a right-click back to the visible tile path.

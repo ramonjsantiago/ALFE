@@ -1,0 +1,15 @@
+HOTFIX242B — File View Context Menu Release-Only Dismissal
+
+Goal
+- keep file-view right-click popup menus open through owner-scene mouse press activity
+- dismiss the popup only after the corresponding outside mouse release, not on press
+
+Implementation
+- restore controlled Explorer context-menu lifetime management for file-view menus
+- change owner-scene dismissal from MOUSE_PRESSED to MOUSE_RELEASED
+- remove owner-scene CONTEXT_MENU_REQUESTED dismissal so a secondary-click gesture does not tear down the popup before release
+- keep Escape and window-focus-loss dismissal behavior intact
+- retain the opening-gesture ignore window to avoid immediate teardown from the same gesture that opened the popup
+
+Primary file
+- src/main/java/com/fileexplorer/controller/MainController.java

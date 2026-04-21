@@ -510,8 +510,13 @@ public final class TableHeaderContextMenuInstaller {
 
         if (table.getContextMenu() != null) table.getContextMenu().hide();
 
-        Object other = table.getProperties().get(PROP_FILEOPS_MENU);
-        if (other instanceof ContextMenu cm) cm.hide();
+        // Do not hide the shared file-operations context menu here.
+        // resetEphemeralHeaderState() is called by many details-surface refresh paths
+        // (items/comparator/sort/visibility changes), including background refresh churn
+        // while icon views are active. Hiding PROP_FILEOPS_MENU from this generic header-reset
+        // path causes row/item context menus to flash open and immediately collapse even when the
+        // user has not clicked outside the popup. File-ops/background menu replacement is handled
+        // explicitly by MainController when a competing popup is shown.
 
         Object preset = table.getProperties().get(PROP_HEADER_PRESET_MENU);
         if (preset instanceof ContextMenu cm) {

@@ -1,3 +1,44 @@
+## HOTFIX244 — File View Context Menu Console Lifecycle Logging
+- added explicit console and logger lifecycle traces for Explorer context menus covering `window-showing`, `window-shown`, `window-hiding`, and `window-hidden`
+- tagged each Explorer popup instance with a menu kind (`tree`, `file-ops`, `file-view-background`) so right-click investigations can distinguish which popup is opening or closing
+- logged hide-request reasons for owner-scene mouse presses, owner-window focus loss, popup replacement before re-show, command execution, and transient-UI teardown to expose why a menu collapses immediately
+
+## HOTFIX243 — File View Context Menu Sticky Lifetime and Hover Freeze
+- switched Explorer file-view and tree context menus to an explicit sticky lifetime model so the popup stays open until the user clicks outside, presses Escape, or the owner window loses focus
+- disabled native JavaFX auto-hide for shared Explorer menus and installed explicit owner-scene outside-click dismissal plus parent-popup close on action execution
+- froze file-view hover presentation while context menus are pending or visible so extra-large-icons and details hover repaint churn cannot immediately collapse the popup
+
+## HOTFIX242F — Context Menu Tooltip Suppression Hardening and Right-Click Selection Stabilization
+- suppress the file-view hover tooltip as soon as an item context menu is armed or pending so the delayed metadata popup can no longer appear during right-click menu open and collapse the menu
+- make item right-click selection an immediate single-target selection update instead of routing through the heavier deferred selection stabilization path, reducing large-directory churn during popup open
+- keep the file-view context-menu pending state alive until the popup is shown or cancelled so item and background menus remain tooltip-suppressed until the user clicks away
+
+## HOTFIX242C — File View Context Menu Mouse-Move Stability
+- moved file-view item popup opening onto the secondary-press path for Details and icon-family surfaces so the menu is no longer tied to the later `ContextMenuRequested` lifecycle while the right button remains down
+- extended duplicate-request suppression for the same right-click gesture so the follow-on native context-menu event does not immediately retrigger or destabilize the popup after the menu is already visible
+- removed owner-window focus-loss dismissal from the shared Explorer popup wiring and added popup-scene mouse-release dismissal so moving the pointer across the shown popup no longer collapses it before the release gesture completes
+
+## HOTFIX242B — File View Context Menu Release-Only Dismissal
+- restored controlled file-view context-menu lifetime management so popup dismissal happens on owner-scene mouse release instead of mouse press
+- removed owner-scene `ContextMenuRequested` teardown from the shared Explorer popup wiring so the opening secondary-click gesture no longer dismisses the menu before release
+- preserved Escape and window-focus-loss dismissal behavior while keeping the existing opening-gesture ignore window in place
+
+## HOTFIX242 / Phase 4P.9ER — File View Item Context Menu Release Stabilization
+- split file-item secondary-click handling into an arming pass on mouse press and a popup-show pass on the later `ContextMenuRequested` event so the menu opens after the right-click release instead of being dismissed by the same gesture
+- retained a short-lived armed item path plus tight screen-position matching so virtualized icon grid/list surfaces can still resolve the correct item even when the later context-menu event no longer points at the original tile node
+- cleared stale armed item requests before showing the file-view background menu so empty-space right clicks stay on the background path instead of reviving an older item target
+
+## HOTFIX241 / Phase 4P.9EQ — Virtual File View Item Context Menu Restore
+- targeted the large-folder-only file-view context-menu regression by wiring explicit secondary-click and context-menu handlers onto the virtualized icon grid and virtualized icon list cells
+- resolved the requested item path from the virtual cell itself, including child screen-bounds hit testing for multi-item virtual grid rows, so right-clicking visible file items in large directories reaches the file operations menu reliably
+- kept the existing small-folder FlowPane icon-surface item popup behavior unchanged while preserving the shared background-menu separation path
+
+## HOTFIX240 / Phase 4P.9EP — File View Context Menu Capture Fix and Tree Secondary-Nav Guard
+- added a shared file-view host secondary-press capture path for icon-family views so right-clicking an item resolves the target before virtualized or modular surfaces can drop the gesture
+- deferred icon-surface item popup display by an additional FX pulse so the file-operations menu opens after the secondary-click gesture settles instead of racing the opening release event
+- added diagnostic logging that prints resolved Extra Large Icons item names and full paths when the item popup target is found
+- prevented tree-view secondary-click selection from auto-loading the clicked directory while preserving double-click activation for opening folders
+
 ## HOTFIX239 / Phase 4P.9EO — FILE_VIEW_CONTEXT_MENU_EVENT_FALLBACK_RESTORE
 - added shared item-target resolution for both Details rows and icon-surface tiles so container-level context-menu handlers can recover the clicked file path reliably
 - routed file-table and file-view-host ContextMenuRequested events back to the item popup menu for true item targets instead of assuming row/tile-local handlers already fired

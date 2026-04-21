@@ -1,0 +1,16 @@
+HOTFIX244 — File View Context Menu Console Lifecycle Logging
+
+Summary
+- added explicit popup lifecycle logging for Explorer context menus so the console shows when the popup is showing, shown, hiding, and hidden
+- tagged each popup by kind (`tree`, `file-ops`, `file-view-background`) so file-view right-click traces can be separated from tree and background menu traces
+- logged hide-request reasons for owner-scene clicks, owner-window focus loss, command execution, popup replacement, and transient UI teardown
+
+Expected console lines
+- `EXPLORER_CONTEXT_MENU[file-ops][window-showing]: ...`
+- `EXPLORER_CONTEXT_MENU[file-ops][window-shown]: ...`
+- `EXPLORER_CONTEXT_MENU[file-ops][hide-request]: reason=owner-scene-mouse-press ...`
+- `EXPLORER_CONTEXT_MENU[file-ops][window-hiding]: ...`
+- `EXPLORER_CONTEXT_MENU[file-ops][window-hidden]: ...`
+
+Primary file changed
+- src/main/java/com/fileexplorer/controller/MainController.java

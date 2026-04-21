@@ -1,0 +1,12 @@
+HOTFIX242F — Context Menu Tooltip Pending Suppression and Right-Click Selection Stability
+
+Summary
+- suppress hover metadata tooltips for the full item-context-menu open pipeline, not just while the menu is already visible
+- make right-clicking an item immediately single-select that item
+- avoid the heavier deferred icon/details selection stabilization path during context-menu open so large directories do not churn the surface while the menu is being shown
+
+Implementation notes
+- MainController now tracks a pending file-view context-menu state from secondary-press through popup show/hide cancellation
+- shouldSuppressExplorerMetadataPopup() now returns true while a file-view context menu is visible or pending
+- prepareSelectionForContextMenuPath() now performs a direct single-item selection/focus update for the right-click target instead of delegating to applyExplorerPathSelection()
+- fileOpsMenu and fileViewBackgroundMenu clear the pending flag when shown/hidden, and tooltip suppression is armed before scheduled popup show

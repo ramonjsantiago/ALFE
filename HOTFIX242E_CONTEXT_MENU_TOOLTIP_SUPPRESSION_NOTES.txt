@@ -1,0 +1,14 @@
+HOTFIX242E — Context-menu tooltip suppression
+
+Change summary:
+- Suppress Explorer hover metadata tooltip while a file-view context menu is visible.
+- Hide any already-visible tooltip immediately when the file item context menu opens.
+- Re-allow tooltip arming and refresh after the context menu is no longer visible.
+
+Primary source touched:
+- src/main/java/com/fileexplorer/controller/MainController.java
+
+Implementation details:
+- Added file-view context-menu visibility check based on fileOpsMenu and fileViewBackgroundMenu.
+- Guarded tooltip arm/refresh paths so delayed popup timers do not show while a file-view context menu is showing.
+- Hid the tooltip from file and background menu onShowing handlers to cancel any pending or visible hover popup.

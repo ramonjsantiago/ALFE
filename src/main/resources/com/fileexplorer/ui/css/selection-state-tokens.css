@@ -172,14 +172,33 @@
     -fx-fill-width: true;
 }
 
+.explorer-icon-tile.explorer-context-menu-owned {
+    -fx-background-color: -fx-explorer-selection-active-bg;
+    -fx-border-color: -fx-explorer-selection-active-border;
+    -fx-effect: dropshadow(three-pass-box, -fx-explorer-selection-focus-ring, 5, 0.15, 0, 0);
+}
+
+.explorer-icon-tile.explorer-context-menu-owned.explorer-hover {
+    -fx-background-color: -fx-explorer-selection-active-bg-strong;
+}
+
 .explorer-icon-tile.explorer-selected .label {
+    -fx-text-fill: -fx-explorer-selection-text-selected;
+}
+
+.explorer-icon-tile.explorer-context-menu-owned .label,
+.explorer-icon-tile.explorer-context-menu-owned .explorer-icon-name-label,
+.explorer-icon-tile.explorer-context-menu-owned .explorer-icon-meta-label {
     -fx-text-fill: -fx-explorer-selection-text-selected;
 }
 
 .theme-dark .explorer-icon-tile.explorer-selected .label,
 .theme-dark .explorer-icon-tile.explorer-selected .explorer-icon-name-label,
-.theme-dark .explorer-icon-tile.explorer-selected .explorer-icon-meta-label {
-    -fx-text-fill: #dedede;
+.theme-dark .explorer-icon-tile.explorer-selected .explorer-icon-meta-label,
+.theme-dark .explorer-icon-tile.explorer-context-menu-owned .label,
+.theme-dark .explorer-icon-tile.explorer-context-menu-owned .explorer-icon-name-label,
+.theme-dark .explorer-icon-tile.explorer-context-menu-owned .explorer-icon-meta-label {
+    -fx-text-fill: #ffffff;
 }
 
 .explorer-icon-flow-xl .explorer-icon-tile-grid {

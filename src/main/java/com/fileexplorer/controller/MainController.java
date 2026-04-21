@@ -736,8 +736,18 @@ private volatile long hugeFolderScannedTotal = 0L;
     private Path deferredExplorerPathSelectionFocusPath = null;
     private boolean deferredExplorerPathSelectionApplyScheduled = false;
     private boolean explorerContextMenuSelectionPresentationHold = false;
+    private final java.util.LinkedHashSet<Path> explorerContextMenuHeldSelectionPaths = new java.util.LinkedHashSet<>();
+    private Path explorerContextMenuHeldFocusPath = null;
+    private Path explorerContextMenuOwnedPath = null;
     private long explorerItemContextMenuSuppressUntilNanos = 0L;
     private long explorerItemContextMenuRequestTicket = 0L;
+    private long explorerMetadataPopupSuppressUntilNanos = 0L;
+    private boolean explorerFileViewContextMenuPending = false;
+    private long explorerFileViewContextMenuPendingUntilNanos = 0L;
+    private Path armedExplorerItemContextMenuPath = null;
+    private double armedExplorerItemContextMenuScreenX = Double.NaN;
+    private double armedExplorerItemContextMenuScreenY = Double.NaN;
+    private long armedExplorerItemContextMenuUntilNanos = 0L;
     private boolean virtualIconViewsInstalled;
     private boolean iconScrollPagingInstalled;
     private long iconBuildGeneration;
@@ -786,6 +796,7 @@ private volatile long hugeFolderScannedTotal = 0L;
     private volatile FolderSnapshotCache.FolderSnapshot activeHydrationSnapshot;
     private boolean suppressTreeSelection;
     private boolean treeSelectionUserInitiated;
+    private boolean suppressTreeSelectionDirectoryLoadOnce;
     private final List<Path> cutBuffer;
     private boolean cutMode;
     private ViewMode viewMode;
@@ -970,6 +981,7 @@ this.tableIndexByPath = new HashMap<>();
         this.cutMode = false;
         this.suppressTreeSelection = false;
         this.treeSelectionUserInitiated = false;
+        this.suppressTreeSelectionDirectoryLoadOnce = false;
         this.viewMode = ViewMode.DETAILS;
         this.lastIconViewMode = ViewMode.MEDIUM_ICONS;
         this.iconSizePx = 88.0;
@@ -4080,6 +4092,10 @@ folderTree.setCellFactory(tv -> {
             if (p == null) {
                 return;
             }
+            if (suppressTreeSelectionDirectoryLoadOnce) {
+                suppressTreeSelectionDirectoryLoadOnce = false;
+                return;
+            }
             // UX: selecting a directory should expand it even if it only has a single child.
             if (!newItem.isExpanded() && !newItem.isLeaf()) {
                 newItem.setExpanded(true);
@@ -4130,6 +4146,15 @@ folderTree.setCellFactory(tv -> {
             if (node instanceof TreeCell<?> cell) {
                 TreeItem<?> item = cell.getTreeItem();
                 if (item != null) {
+                    if (e.getButton() == MouseButton.SECONDARY) {
+                        suppressTreeSelectionDirectoryLoadOnce = true;
+                        folderTree.getSelectionModel().select((TreeItem<Path>) item);
+                        e.consume();
+                        return;
+                    }
+                    if (e.getButton() != MouseButton.PRIMARY) {
+                        return;
+                    }
                     folderTree.getSelectionModel().select((TreeItem<Path>) item);
                     e.consume();
                 }
@@ -4455,7 +4480,7 @@ folderTree.setCellFactory(tv -> {
                     return;
                 }
                 Path selectedPath = sel.getValue();
-                javafx.scene.control.ContextMenu menu = createExplorerContextMenu();
+                javafx.scene.control.ContextMenu menu = createExplorerContextMenu("tree");
                 javafx.scene.control.MenuItem openItem = createExplorerMenuItem("Open", "", () -> navigateToFolder(selectedPath, true));
                 javafx.scene.control.MenuItem expandCollapseItem = createExplorerMenuItem(
                         sel.isExpanded() ? "Collapse" : "Expand",
@@ -4945,6 +4970,12 @@ colType.setCellValueFactory(param -> {
         });
 
         row.addEventFilter(MouseEvent.MOUSE_RELEASED, ev -> {
+            if (ev.getButton() == MouseButton.SECONDARY && !row.isEmpty()) {
+                if (showArmedExplorerItemContextMenuOnSecondaryRelease(ev)) {
+                    ev.consume();
+                }
+                return;
+            }
             if (ev.getButton() == MouseButton.PRIMARY && !row.isEmpty()) {
                 ev.consume();
             }
@@ -5002,7 +5033,7 @@ colType.setCellValueFactory(param -> {
             }
             FileItem item = row.getItem();
             Path path = item != null ? item.path() : null;
-            requestExplorerItemContextMenu(path, ev.getScreenX(), ev.getScreenY());
+            armExplorerItemContextMenu(path, ev.getScreenX(), ev.getScreenY());
             ev.consume();
         });
         row.setOnContextMenuRequested(ev -> {
@@ -5075,7 +5106,7 @@ colType.setCellValueFactory(param -> {
     };
 
     private void handleDetailsTableMouseMoved(MouseEvent event) {
-        if (fileTable == null || viewMode != ViewMode.DETAILS) {
+        if (fileTable == null || viewMode != ViewMode.DETAILS || shouldFreezeExplorerFileViewHoverPresentation()) {
             clearDetailsHoveredRow();
             hideExplorerMetadataPopup();
             return;
@@ -5094,12 +5125,22 @@ colType.setCellValueFactory(param -> {
         if (row == null || event == null || row.isEmpty() || row.getItem() == null || viewMode != ViewMode.DETAILS) {
             return;
         }
+        if (shouldFreezeExplorerFileViewHoverPresentation()) {
+            clearDetailsHoveredRow();
+            hideExplorerMetadataPopup();
+            return;
+        }
         setDetailsHoveredRow(row);
         armExplorerMetadataPopupForDetailsRow(row.getIndex(), () -> buildExplorerItemTooltipText(row.getItem()), event.getScreenX(), event.getScreenY());
     }
 
     private void handleDetailsRowTooltipMoved(TableRow<FileItem> row, MouseEvent event) {
         if (row == null || event == null || row.isEmpty() || row.getItem() == null || viewMode != ViewMode.DETAILS) {
+            return;
+        }
+        if (shouldFreezeExplorerFileViewHoverPresentation()) {
+            clearDetailsHoveredRow();
+            hideExplorerMetadataPopup();
             return;
         }
         setDetailsHoveredRow(row);
@@ -5188,6 +5229,15 @@ colType.setCellValueFactory(param -> {
         if (viewMode != ViewMode.DETAILS || fileTable == null) {
             return;
         }
+        if (explorerContextMenuSelectionPresentationHold) {
+            maintainExplorerContextMenuSelectionHold();
+            Platform.runLater(() -> {
+                if (explorerContextMenuSelectionPresentationHold) {
+                    maintainExplorerContextMenuSelectionHold();
+                }
+            });
+            return;
+        }
         if (isExplorerSelectionStabilizationActive()) {
             applyExplorerSelectionPresentationSnapshot(explorerSelectionStabilizationPaths);
             Platform.runLater(() -> {
@@ -5267,6 +5317,10 @@ colType.setCellValueFactory(param -> {
         if (anchor == null || textSupplier == null) {
             return;
         }
+        if (shouldSuppressExplorerMetadataPopup()) {
+            hideExplorerMetadataPopup();
+            return;
+        }
         boolean sameAnchorArmed = explorerMetadataPopupAnchor == anchor && explorerMetadataPopupDetailsRowIndex < 0;
         explorerMetadataPopupAnchor = anchor;
         explorerMetadataPopupDetailsRowIndex = -1;
@@ -5289,6 +5343,10 @@ colType.setCellValueFactory(param -> {
 
     private void armExplorerMetadataPopupForDetailsRow(int rowIndex, java.util.function.Supplier<String> textSupplier, double screenX, double screenY) {
         if (fileTable == null || textSupplier == null || rowIndex < 0) {
+            return;
+        }
+        if (shouldSuppressExplorerMetadataPopup()) {
+            hideExplorerMetadataPopup();
             return;
         }
         boolean sameRowArmed = explorerMetadataPopupAnchor == fileTable && explorerMetadataPopupDetailsRowIndex == rowIndex;
@@ -5341,6 +5399,10 @@ colType.setCellValueFactory(param -> {
         if (item == null || explorerMetadataPopup == null || !explorerMetadataPopup.isShowing()) {
             return;
         }
+        if (shouldSuppressExplorerMetadataPopup()) {
+            hideExplorerMetadataPopup();
+            return;
+        }
         explorerMetadataPopupTextSupplier = () -> buildExplorerItemTooltipText(item);
         if (viewMode == ViewMode.DETAILS && fileTable != null && fileTable.getSelectionModel() != null) {
             explorerMetadataPopupAnchor = fileTable;
@@ -5353,6 +5415,10 @@ colType.setCellValueFactory(param -> {
 
 
     private void refreshExplorerMetadataPopupNow() {
+        if (shouldSuppressExplorerMetadataPopup()) {
+            hideExplorerMetadataPopup();
+            return;
+        }
         Popup popup = ensureExplorerMetadataPopup();
         if (explorerMetadataPopupAnchor == null || explorerMetadataPopupTextSupplier == null) {
             hideExplorerMetadataPopup();
@@ -5414,6 +5480,59 @@ colType.setCellValueFactory(param -> {
         }
     }
 
+    private boolean isExplorerFileViewContextMenuShowing() {
+        return (fileOpsMenu != null && fileOpsMenu.isShowing())
+                || (fileViewBackgroundMenu != null && fileViewBackgroundMenu.isShowing());
+    }
+
+    private boolean isExplorerFileViewContextMenuPending() {
+        if (!explorerFileViewContextMenuPending) {
+            return false;
+        }
+        if (explorerFileViewContextMenuPendingUntilNanos > System.nanoTime()) {
+            return true;
+        }
+        explorerFileViewContextMenuPending = false;
+        explorerFileViewContextMenuPendingUntilNanos = 0L;
+        return false;
+    }
+
+    private void suppressExplorerMetadataPopupForMillis(long millis) {
+        if (millis <= 0L) {
+            return;
+        }
+        long candidate = System.nanoTime() + millis * 1_000_000L;
+        if (candidate > explorerMetadataPopupSuppressUntilNanos) {
+            explorerMetadataPopupSuppressUntilNanos = candidate;
+        }
+        hideExplorerMetadataPopup();
+    }
+
+    private void markExplorerFileViewContextMenuPending() {
+        explorerFileViewContextMenuPending = true;
+        explorerFileViewContextMenuPendingUntilNanos = System.nanoTime() + 3_000_000_000L;
+        suppressExplorerMetadataPopupForMillis(1500L);
+    }
+
+    private void clearExplorerFileViewContextMenuPending() {
+        explorerFileViewContextMenuPending = false;
+        explorerFileViewContextMenuPendingUntilNanos = 0L;
+    }
+
+    private boolean isExplorerMetadataPopupTemporarilySuppressed() {
+        return explorerMetadataPopupSuppressUntilNanos > System.nanoTime();
+    }
+
+    private boolean shouldFreezeExplorerFileViewHoverPresentation() {
+        return isExplorerMetadataPopupTemporarilySuppressed()
+                || isExplorerFileViewContextMenuShowing()
+                || isExplorerFileViewContextMenuPending();
+    }
+
+    private boolean shouldSuppressExplorerMetadataPopup() {
+        return shouldFreezeExplorerFileViewHoverPresentation();
+    }
+
     private void hideExplorerMetadataPopup() {
         explorerMetadataPopupDelay.stop();
         if (explorerMetadataPopup != null) {
@@ -5444,6 +5563,10 @@ colType.setCellValueFactory(param -> {
         node.getProperties().put(tooltipHandlersInstalledKey, Boolean.TRUE);
 
         node.addEventHandler(MouseEvent.MOUSE_ENTERED, event -> {
+            if (event.getButton() == MouseButton.SECONDARY || event.isSecondaryButtonDown() || shouldSuppressExplorerMetadataPopup()) {
+                hideExplorerMetadataPopup();
+                return;
+            }
             @SuppressWarnings("unchecked")
             java.util.function.Supplier<String> supplier = (java.util.function.Supplier<String>) node.getProperties().get(tooltipSupplierKey);
             if (supplier == null) {
@@ -5452,6 +5575,10 @@ colType.setCellValueFactory(param -> {
             armExplorerMetadataPopup(node, () -> normalizeExplorerTooltipText(node, supplier.get()), event.getScreenX(), event.getScreenY());
         });
         node.addEventHandler(MouseEvent.MOUSE_MOVED, event -> {
+            if (event.getButton() == MouseButton.SECONDARY || event.isSecondaryButtonDown() || shouldSuppressExplorerMetadataPopup()) {
+                hideExplorerMetadataPopup();
+                return;
+            }
             @SuppressWarnings("unchecked")
             java.util.function.Supplier<String> supplier = (java.util.function.Supplier<String>) node.getProperties().get(tooltipSupplierKey);
             if (supplier == null) {
@@ -5673,11 +5800,38 @@ colType.setCellValueFactory(param -> {
         if (iconPath != null) {
             return iconPath;
         }
+        Path virtualIconPath = resolveExplorerVirtualIconCellContextMenuPath(target);
+        if (virtualIconPath != null) {
+            return virtualIconPath;
+        }
         return findExplorerDetailsRowPath(target);
+    }
+
+    private Path resolveExplorerVirtualIconCellContextMenuPath(Node target) {
+        if (!isIconMode(viewMode) || target == null) {
+            return null;
+        }
+        for (Node current = target; current != null; current = current.getParent()) {
+            if (current instanceof ListCell<?> listCell) {
+                Object item = listCell.getItem();
+                if (item instanceof Path path) {
+                    return path;
+                }
+                if (item instanceof List<?> row) {
+                    if (row.size() == 1 && row.get(0) instanceof Path path) {
+                        return path;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private boolean handleExplorerItemContextMenuRequest(Node target, double screenX, double screenY) {
         Path path = resolveExplorerItemContextMenuPath(target);
+        if (path == null) {
+            path = resolveArmedExplorerItemContextMenuPath(screenX, screenY);
+        }
         if (path == null) {
             return false;
         }
@@ -5726,7 +5880,8 @@ colType.setCellValueFactory(param -> {
         if (row == null) {
             return;
         }
-        boolean active = !row.isEmpty()
+        boolean active = !shouldFreezeExplorerFileViewHoverPresentation()
+                && !row.isEmpty()
                 && row.getItem() != null
                 && row.getIndex() >= 0
                 && row.getIndex() == detailsHoverRowIndex.get();
@@ -6265,7 +6420,7 @@ colType.setCellValueFactory(param -> {
         if (tile == null) {
             return;
         }
-        if (iconMarqueeGestureOwnsSelection) {
+        if (iconMarqueeGestureOwnsSelection || shouldFreezeExplorerFileViewHoverPresentation()) {
             active = false;
         }
         setStyleClass(tile, "explorer-hover", active);
@@ -6280,8 +6435,13 @@ colType.setCellValueFactory(param -> {
         if (tile == null) {
             return;
         }
-        setStyleClass(tile, "explorer-selected", selected);
-        tile.pseudoClassStateChanged(PSEUDO_EXPLORER_SELECTED, selected);
+        Object taggedPath = tile.getProperties().get(EXPLORER_ICON_TILE_PATH_KEY);
+        Path tilePath = taggedPath instanceof Path path ? path : null;
+        boolean contextMenuOwned = isExplorerContextMenuOwnedPath(tilePath);
+        boolean effectiveSelected = selected || contextMenuOwned;
+        setStyleClass(tile, "explorer-selected", effectiveSelected);
+        setStyleClass(tile, "explorer-context-menu-owned", contextMenuOwned);
+        tile.pseudoClassStateChanged(PSEUDO_EXPLORER_SELECTED, effectiveSelected);
         tile.applyCss();
         if (tile instanceof Parent parent) {
             parent.requestLayout();
@@ -6304,6 +6464,9 @@ colType.setCellValueFactory(param -> {
         if (path == null) {
             return false;
         }
+        if (isExplorerContextMenuOwnedPath(path)) {
+            return true;
+        }
         if (isIconMode(viewMode) && iconPresentationSelectedPaths.contains(path)) {
             return true;
         }
@@ -6323,6 +6486,12 @@ colType.setCellValueFactory(param -> {
             }
         }
         return false;
+    }
+
+    private boolean isExplorerContextMenuOwnedPath(Path path) {
+        return explorerContextMenuSelectionPresentationHold
+                && path != null
+                && java.util.Objects.equals(path, explorerContextMenuOwnedPath);
     }
 
     private void refreshVisibleIconTileSelectionState() {
@@ -7106,14 +7275,110 @@ colType.setCellValueFactory(param -> {
         }
     }
 
-    private javafx.scene.control.ContextMenu createExplorerContextMenu() {
+    private javafx.scene.control.ContextMenu createExplorerContextMenu(String menuKind) {
         javafx.scene.control.ContextMenu menu = new javafx.scene.control.ContextMenu();
         menu.getStyleClass().addAll("explorer-context-menu", "explorer-flyout-menu");
+        menu.getProperties().put("explorer.context.menu.kind", menuKind == null || menuKind.isBlank() ? "unknown" : menuKind);
+        // Keep Explorer-style menus open until the user explicitly clicks outside the popup.
+        // Native JavaFX auto-hide is vulnerable to the heavy hover/layout churn produced by the
+        // virtual file-view surfaces, so we keep the popup alive ourselves and dismiss it only on
+        // deliberate outside-owner interaction, Escape, or window-focus loss.
         menu.setAutoHide(false);
         menu.setHideOnEscape(true);
         menu.setConsumeAutoHidingEvents(false);
+        installExplorerContextMenuLifecycleLogging(menu);
         installExplorerContextMenuDismissOnOwnerInteraction(menu);
         return menu;
+    }
+
+    private void installExplorerContextMenuLifecycleLogging(javafx.scene.control.ContextMenu menu) {
+        if (menu == null) {
+            return;
+        }
+        menu.addEventHandler(javafx.stage.WindowEvent.WINDOW_SHOWING,
+                event -> logExplorerContextMenuLifecycle(menu, "window-showing"));
+        menu.addEventHandler(javafx.stage.WindowEvent.WINDOW_SHOWN,
+                event -> logExplorerContextMenuLifecycle(menu, "window-shown"));
+        menu.addEventHandler(javafx.stage.WindowEvent.WINDOW_HIDING,
+                event -> logExplorerContextMenuLifecycle(menu, "window-hiding"));
+        menu.addEventHandler(javafx.stage.WindowEvent.WINDOW_HIDDEN,
+                event -> logExplorerContextMenuLifecycle(menu, "window-hidden"));
+    }
+
+    private void logExplorerContextMenuLifecycle(javafx.scene.control.ContextMenu menu, String phase) {
+        String menuKind = explorerContextMenuKind(menu);
+        String selectedPath = explorerContextMenuPathLabel(getFocusedOrSelectedPath());
+        String currentPath = explorerContextMenuPathLabel(currentDirectory);
+        String ownerFocused = "unknown";
+        double anchorX = Double.NaN;
+        double anchorY = Double.NaN;
+        boolean showing = false;
+        if (menu != null) {
+            showing = menu.isShowing();
+            anchorX = menu.getAnchorX();
+            anchorY = menu.getAnchorY();
+            Window ownerWindow = menu.getOwnerWindow();
+            if (ownerWindow != null) {
+                ownerFocused = Boolean.toString(ownerWindow.isFocused());
+            }
+        }
+        String message = "EXPLORER_CONTEXT_MENU[" + menuKind + "][" + phase + "]: showing=" + showing
+                + " pending=" + isExplorerFileViewContextMenuPending()
+                + " view=" + (viewMode == null ? "null" : viewMode.name())
+                + " selected=" + selectedPath
+                + " currentDir=" + currentPath
+                + " anchor=(" + explorerContextMenuCoordinateLabel(anchorX) + ", "
+                + explorerContextMenuCoordinateLabel(anchorY) + ")"
+                + " ownerFocused=" + ownerFocused;
+        LOG.info(message);
+        System.out.println(message);
+    }
+
+    private void logExplorerContextMenuHideRequest(javafx.scene.control.ContextMenu menu,
+                                                   String reason,
+                                                   MouseEvent mouseEvent) {
+        String menuKind = explorerContextMenuKind(menu);
+        String pointer = "mouse=none";
+        if (mouseEvent != null) {
+            pointer = "mouseButton=" + mouseEvent.getButton()
+                    + " scene=(" + explorerContextMenuCoordinateLabel(mouseEvent.getSceneX()) + ", "
+                    + explorerContextMenuCoordinateLabel(mouseEvent.getSceneY()) + ")"
+                    + " screen=(" + explorerContextMenuCoordinateLabel(mouseEvent.getScreenX()) + ", "
+                    + explorerContextMenuCoordinateLabel(mouseEvent.getScreenY()) + ")"
+                    + " consumed=" + mouseEvent.isConsumed();
+        }
+        String message = "EXPLORER_CONTEXT_MENU[" + menuKind + "][hide-request]: reason=" + reason + " " + pointer;
+        LOG.info(message);
+        System.out.println(message);
+    }
+
+    private String explorerContextMenuKind(javafx.scene.control.ContextMenu menu) {
+        if (menu == null) {
+            return "unknown";
+        }
+        Object value = menu.getProperties().get("explorer.context.menu.kind");
+        if (value instanceof String s && !s.isBlank()) {
+            return s;
+        }
+        return "unknown";
+    }
+
+    private String explorerContextMenuPathLabel(Path path) {
+        if (path == null) {
+            return "<none>";
+        }
+        try {
+            return path.toString();
+        } catch (Exception ex) {
+            return "<path-error:" + ex.getClass().getSimpleName() + ">";
+        }
+    }
+
+    private String explorerContextMenuCoordinateLabel(double value) {
+        if (!Double.isFinite(value)) {
+            return "NaN";
+        }
+        return String.format(java.util.Locale.ROOT, "%.1f", value);
     }
 
     private void installExplorerContextMenuDismissOnOwnerInteraction(javafx.scene.control.ContextMenu menu) {
@@ -7121,73 +7386,59 @@ colType.setCellValueFactory(param -> {
             return;
         }
         final String installedKey = "explorer.context.menu.dismiss.installed";
-        final String sceneMouseHandlerKey = "explorer.context.menu.dismiss.scene.mouse";
-        final String sceneContextHandlerKey = "explorer.context.menu.dismiss.scene.context";
-        final String windowFocusListenerKey = "explorer.context.menu.dismiss.window.focus";
-        final String sceneRefKey = "explorer.context.menu.dismiss.scene.ref";
-        final String windowRefKey = "explorer.context.menu.dismiss.window.ref";
+        final String ownerSceneMouseHandlerKey = "explorer.context.menu.dismiss.owner.scene.mouse.press";
+        final String ownerSceneRefKey = "explorer.context.menu.dismiss.owner.scene.ref";
+        final String ownerWindowFocusListenerKey = "explorer.context.menu.dismiss.owner.window.focus.listener";
+        final String ownerWindowRefKey = "explorer.context.menu.dismiss.owner.window.ref";
         if (Boolean.TRUE.equals(menu.getProperties().get(installedKey))) {
             return;
         }
         menu.getProperties().put(installedKey, Boolean.TRUE);
 
-        javafx.event.EventHandler<MouseEvent> sceneMouseHandler = event -> {
-            if (!menu.isShowing()) {
+        javafx.event.EventHandler<MouseEvent> ownerSceneMouseHandler = event -> {
+            if (!shouldDismissExplorerContextMenuOnOwnerMousePress(menu, event)) {
                 return;
             }
-            long ignoreUntilNanos = 0L;
-            Object rawIgnoreUntil = menu.getProperties().get("explorer.context.menu.dismiss.ignore.until");
-            if (rawIgnoreUntil instanceof Long value) {
-                ignoreUntilNanos = value.longValue();
-            }
-            if (ignoreUntilNanos > 0L && System.nanoTime() < ignoreUntilNanos) {
-                return;
-            }
+            logExplorerContextMenuHideRequest(menu, "owner-scene-mouse-press", event);
             menu.hide();
         };
-        javafx.event.EventHandler<javafx.scene.input.ContextMenuEvent> sceneContextHandler = event -> {
-            if (!menu.isShowing()) {
-                return;
-            }
-            long ignoreUntilNanos = 0L;
-            Object rawIgnoreUntil = menu.getProperties().get("explorer.context.menu.dismiss.ignore.until");
-            if (rawIgnoreUntil instanceof Long value) {
-                ignoreUntilNanos = value.longValue();
-            }
-            if (ignoreUntilNanos > 0L && System.nanoTime() < ignoreUntilNanos) {
-                return;
-            }
-            menu.hide();
-        };
-        javafx.beans.value.ChangeListener<Boolean> windowFocusListener = (obs, wasFocused, isFocused) -> {
+        javafx.beans.value.ChangeListener<Boolean> ownerWindowFocusListener = (obs, wasFocused, isFocused) -> {
             if (!Boolean.TRUE.equals(isFocused) && menu.isShowing()) {
+                logExplorerContextMenuHideRequest(menu, "owner-window-focus-lost", null);
                 menu.hide();
             }
         };
 
-        menu.getProperties().put(sceneMouseHandlerKey, sceneMouseHandler);
-        menu.getProperties().put(sceneContextHandlerKey, sceneContextHandler);
-        menu.getProperties().put(windowFocusListenerKey, windowFocusListener);
+        menu.getProperties().put(ownerSceneMouseHandlerKey, ownerSceneMouseHandler);
+        menu.getProperties().put(ownerWindowFocusListenerKey, ownerWindowFocusListener);
 
         menu.addEventHandler(javafx.stage.WindowEvent.WINDOW_SHOWING, event -> {
-            menu.getProperties().put("explorer.context.menu.dismiss.ignore.until", System.nanoTime() + 300_000_000L);
             Window ownerWindow = menu.getOwnerWindow();
             if (ownerWindow == null) {
                 return;
             }
             Scene ownerScene = ownerWindow.getScene();
             if (ownerScene != null) {
-                ownerScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, sceneMouseHandler);
-                ownerScene.removeEventFilter(javafx.scene.input.ContextMenuEvent.CONTEXT_MENU_REQUESTED, sceneContextHandler);
-                ownerScene.addEventFilter(MouseEvent.MOUSE_PRESSED, sceneMouseHandler);
-                ownerScene.addEventFilter(javafx.scene.input.ContextMenuEvent.CONTEXT_MENU_REQUESTED, sceneContextHandler);
-                menu.getProperties().put(sceneRefKey, ownerScene);
+                ownerScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, ownerSceneMouseHandler);
+                ownerScene.addEventFilter(MouseEvent.MOUSE_PRESSED, ownerSceneMouseHandler);
+                menu.getProperties().put(ownerSceneRefKey, ownerScene);
             }
-            ownerWindow.focusedProperty().removeListener(windowFocusListener);
-            ownerWindow.focusedProperty().addListener(windowFocusListener);
-            menu.getProperties().put(windowRefKey, ownerWindow);
+            ownerWindow.focusedProperty().removeListener(ownerWindowFocusListener);
+            ownerWindow.focusedProperty().addListener(ownerWindowFocusListener);
+            menu.getProperties().put(ownerWindowRefKey, ownerWindow);
         });
         menu.addEventHandler(javafx.stage.WindowEvent.WINDOW_HIDING, event -> uninstallExplorerContextMenuDismissHandlers(menu));
+    }
+
+    private boolean shouldDismissExplorerContextMenuOnOwnerMousePress(javafx.scene.control.ContextMenu menu, MouseEvent event) {
+        if (menu == null || !menu.isShowing() || event == null) {
+            return false;
+        }
+        if (event.getEventType() != MouseEvent.MOUSE_PRESSED) {
+            return false;
+        }
+        MouseButton button = event.getButton();
+        return button == MouseButton.SECONDARY || button == MouseButton.PRIMARY || button == MouseButton.MIDDLE;
     }
 
     @SuppressWarnings("unchecked")
@@ -7195,29 +7446,23 @@ colType.setCellValueFactory(param -> {
         if (menu == null) {
             return;
         }
-        final String sceneMouseHandlerKey = "explorer.context.menu.dismiss.scene.mouse";
-        final String sceneContextHandlerKey = "explorer.context.menu.dismiss.scene.context";
-        final String windowFocusListenerKey = "explorer.context.menu.dismiss.window.focus";
-        final String sceneRefKey = "explorer.context.menu.dismiss.scene.ref";
-        final String windowRefKey = "explorer.context.menu.dismiss.window.ref";
+        final String ownerSceneMouseHandlerKey = "explorer.context.menu.dismiss.owner.scene.mouse.press";
+        final String ownerSceneRefKey = "explorer.context.menu.dismiss.owner.scene.ref";
+        final String ownerWindowFocusListenerKey = "explorer.context.menu.dismiss.owner.window.focus.listener";
+        final String ownerWindowRefKey = "explorer.context.menu.dismiss.owner.window.ref";
 
-        Scene ownerScene = (Scene) menu.getProperties().remove(sceneRefKey);
-        Window ownerWindow = (Window) menu.getProperties().remove(windowRefKey);
-        javafx.event.EventHandler<MouseEvent> sceneMouseHandler =
-                (javafx.event.EventHandler<MouseEvent>) menu.getProperties().get(sceneMouseHandlerKey);
-        javafx.event.EventHandler<javafx.scene.input.ContextMenuEvent> sceneContextHandler =
-                (javafx.event.EventHandler<javafx.scene.input.ContextMenuEvent>) menu.getProperties().get(sceneContextHandlerKey);
-        javafx.beans.value.ChangeListener<Boolean> windowFocusListener =
-                (javafx.beans.value.ChangeListener<Boolean>) menu.getProperties().get(windowFocusListenerKey);
+        Scene ownerScene = (Scene) menu.getProperties().remove(ownerSceneRefKey);
+        Window ownerWindow = (Window) menu.getProperties().remove(ownerWindowRefKey);
+        javafx.event.EventHandler<MouseEvent> ownerSceneMouseHandler =
+                (javafx.event.EventHandler<MouseEvent>) menu.getProperties().get(ownerSceneMouseHandlerKey);
+        javafx.beans.value.ChangeListener<Boolean> ownerWindowFocusListener =
+                (javafx.beans.value.ChangeListener<Boolean>) menu.getProperties().get(ownerWindowFocusListenerKey);
 
-        if (ownerScene != null && sceneMouseHandler != null) {
-            ownerScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, sceneMouseHandler);
+        if (ownerScene != null && ownerSceneMouseHandler != null) {
+            ownerScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, ownerSceneMouseHandler);
         }
-        if (ownerScene != null && sceneContextHandler != null) {
-            ownerScene.removeEventFilter(javafx.scene.input.ContextMenuEvent.CONTEXT_MENU_REQUESTED, sceneContextHandler);
-        }
-        if (ownerWindow != null && windowFocusListener != null) {
-            ownerWindow.focusedProperty().removeListener(windowFocusListener);
+        if (ownerWindow != null && ownerWindowFocusListener != null) {
+            ownerWindow.focusedProperty().removeListener(ownerWindowFocusListener);
         }
     }
 
@@ -7230,7 +7475,16 @@ colType.setCellValueFactory(param -> {
             item.setGraphic(icon);
         }
         if (action != null) {
-            item.setOnAction(e -> action.run());
+            item.setOnAction(e -> {
+                try {
+                    action.run();
+                } finally {
+                    if (item.getParentPopup() instanceof javafx.scene.control.ContextMenu parentPopup) {
+                        logExplorerContextMenuHideRequest(parentPopup, "menu-item-action:" + text, null);
+                        parentPopup.hide();
+                    }
+                }
+            });
         }
         return item;
     }
@@ -7563,9 +7817,11 @@ colType.setCellValueFactory(param -> {
 
     private void hideExplorerTransientUi() {
         if (fileOpsMenu != null) {
+            logExplorerContextMenuHideRequest(fileOpsMenu, "hideExplorerTransientUi", null);
             fileOpsMenu.hide();
         }
         if (fileViewBackgroundMenu != null) {
+            logExplorerContextMenuHideRequest(fileViewBackgroundMenu, "hideExplorerTransientUi", null);
             fileViewBackgroundMenu.hide();
         }
         if (fileTable != null) {
@@ -7613,8 +7869,9 @@ colType.setCellValueFactory(param -> {
  */
     private void showFileOpsContextMenu(double screenX, double screenY) {
         if (fileTable == null) return;
+        suppressExplorerMetadataPopupForMillis(1500L);
         if (fileOpsMenu == null) {
-            fileOpsMenu = createExplorerContextMenu();
+            fileOpsMenu = createExplorerContextMenu("file-ops");
             fileOpsOpenItem = createExplorerMenuItem("Open", "", this::openSelection);
             fileOpsOpenInNewTabItem = createExplorerMenuItem("Open in new tab", "", this::openSelectionInNewTab);
             fileOpsPinToQuickAccessItem = createExplorerMenuItem("Pin to Quick access", "", this::toggleSelectionQuickAccessPin);
@@ -7639,29 +7896,52 @@ colType.setCellValueFactory(param -> {
                     createExplorerSeparator(),
                     fileOpsPropertiesItem);
             fileOpsMenu.setOnShowing(e -> {
+                markExplorerFileViewContextMenuPending();
+                suppressExplorerMetadataPopupForMillis(1500L);
                 preserveExplorerSelectionPresentationForContextMenu();
+                maintainExplorerContextMenuSelectionHold();
                 syncFileOpsMenuState();
             });
-            fileOpsMenu.setOnHiding(e -> clearExplorerContextMenuSelectionPresentationHold());
+            fileOpsMenu.setOnShown(e -> {
+                clearExplorerFileViewContextMenuPending();
+                suppressExplorerMetadataPopupForMillis(300L);
+                maintainExplorerContextMenuSelectionHold();
+                Platform.runLater(this::maintainExplorerContextMenuSelectionHold);
+            });
+            fileOpsMenu.setOnHiding(e -> {
+                suppressExplorerMetadataPopupForMillis(300L);
+                clearExplorerContextMenuSelectionPresentationHold();
+            });
+            fileOpsMenu.setOnHidden(e -> {
+                clearExplorerFileViewContextMenuPending();
+                suppressExplorerMetadataPopupForMillis(300L);
+            });
             fileTable.getProperties().put(com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.PROP_FILEOPS_MENU, fileOpsMenu);
         }
         com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.resetEphemeralHeaderState(fileTable);
         if (fileViewBackgroundMenu != null) {
+            logExplorerContextMenuHideRequest(fileViewBackgroundMenu, "file-ops-show-hides-background-menu", null);
             fileViewBackgroundMenu.hide();
         }
         preserveExplorerSelectionPresentationForContextMenu();
+        markExplorerFileViewContextMenuPending();
+        logExplorerContextMenuLifecycle(fileOpsMenu, "show-request");
+        logExplorerContextMenuHideRequest(fileOpsMenu, "showFileOpsContextMenu-reset-before-show", null);
         fileOpsMenu.hide();
         Node anchor = getActiveFileOpsMenuAnchor();
         if (anchor == null) {
+            clearExplorerFileViewContextMenuPending();
             clearExplorerContextMenuSelectionPresentationHold();
             return;
         }
         final Node finalAnchor = anchor;
         Platform.runLater(() -> {
             if (finalAnchor.getScene() == null) {
+                clearExplorerFileViewContextMenuPending();
                 clearExplorerContextMenuSelectionPresentationHold();
                 return;
             }
+            logExplorerContextMenuHideRequest(fileOpsMenu, "showFileOpsContextMenu-replace-before-show", null);
             fileOpsMenu.hide();
             fileOpsMenu.show(finalAnchor, screenX, screenY);
         });
@@ -8877,12 +9157,16 @@ colType.setCellValueFactory(param -> {
     }
 
     private void showFileViewBackgroundContextMenu(Node requestedAnchor, double screenX, double screenY) {
+        clearArmedExplorerItemContextMenu();
+        markExplorerFileViewContextMenuPending();
+        suppressExplorerMetadataPopupForMillis(1500L);
         Node anchor = resolveExplorerContextMenuAnchor(requestedAnchor);
         if (anchor == null) {
+            clearExplorerFileViewContextMenuPending();
             return;
         }
         if (fileViewBackgroundMenu == null) {
-            fileViewBackgroundMenu = createExplorerContextMenu();
+            fileViewBackgroundMenu = createExplorerContextMenu("file-view-background");
             fileViewBackgroundViewMenu = buildFileViewBackgroundViewMenu();
             fileViewBackgroundSortMenu = buildFileViewBackgroundSortMenu();
             fileViewBackgroundGroupMenu = buildFileViewBackgroundGroupMenu();
@@ -8908,26 +9192,52 @@ colType.setCellValueFactory(param -> {
                     fileViewBackgroundRefreshItem,
                     createExplorerSeparator(),
                     fileViewBackgroundPropertiesItem);
-            fileViewBackgroundMenu.setOnShowing(e -> syncFileViewBackgroundMenuState());
+            fileViewBackgroundMenu.setOnShowing(e -> {
+                markExplorerFileViewContextMenuPending();
+                suppressExplorerMetadataPopupForMillis(1500L);
+                syncFileViewBackgroundMenuState();
+            });
+            fileViewBackgroundMenu.setOnShown(e -> {
+                clearExplorerFileViewContextMenuPending();
+                suppressExplorerMetadataPopupForMillis(300L);
+            });
+            fileViewBackgroundMenu.setOnHidden(e -> {
+                clearExplorerFileViewContextMenuPending();
+                suppressExplorerMetadataPopupForMillis(300L);
+            });
         }
         if (fileOpsMenu != null) {
+            logExplorerContextMenuHideRequest(fileOpsMenu, "background-menu-show-hides-file-ops-menu", null);
             fileOpsMenu.hide();
         }
         if (fileTable != null) {
             com.fileexplorer.ui.table.TableHeaderContextMenuInstaller.resetEphemeralHeaderState(fileTable);
         }
+        logExplorerContextMenuLifecycle(fileViewBackgroundMenu, "show-request");
+        logExplorerContextMenuHideRequest(fileViewBackgroundMenu, "showFileViewBackgroundContextMenu-reset-before-show", null);
         fileViewBackgroundMenu.hide();
         final Node finalAnchor = anchor;
         Platform.runLater(() -> {
             if (finalAnchor.getScene() == null) {
+                clearExplorerFileViewContextMenuPending();
                 return;
             }
+            logExplorerContextMenuHideRequest(fileViewBackgroundMenu, "showFileViewBackgroundContextMenu-replace-before-show", null);
             fileViewBackgroundMenu.hide();
             fileViewBackgroundMenu.show(finalAnchor, screenX, screenY);
         });
     }
 
     private Node getActiveFileOpsMenuAnchor() {
+        if (root != null && root.getScene() != null) {
+            return root;
+        }
+        if (boundScene != null && boundScene.getRoot() != null) {
+            return boundScene.getRoot();
+        }
+        if (viewHost != null && viewHost.getScene() != null) {
+            return viewHost;
+        }
         if (viewMode == ViewMode.DETAILS) {
             if (fileTable != null && fileTable.getScene() != null) {
                 return fileTable;
@@ -8947,9 +9257,6 @@ colType.setCellValueFactory(param -> {
         }
         if (iconScroll != null && iconScroll.isVisible() && iconScroll.getScene() != null) {
             return iconScroll;
-        }
-        if (viewHost != null && viewHost.getScene() != null) {
-            return viewHost;
         }
         return fileTable != null && fileTable.getScene() != null ? fileTable : null;
     }
@@ -11119,10 +11426,21 @@ private String displayNameForTable(Path p) {
     }
 
     private ExplorerCommandStateSnapshot captureExplorerCommandStateSnapshot() {
-        int selectionCount = !homeActive && fileTable != null && fileTable.getSelectionModel() != null
-                ? fileTable.getSelectionModel().getSelectedItems().size()
+        java.util.LinkedHashSet<Path> heldSelection = explorerContextMenuSelectionPresentationHold
+                ? explorerContextMenuHeldSelectionSnapshot()
+                : new java.util.LinkedHashSet<>();
+        int selectionCount = !homeActive
+                ? (!heldSelection.isEmpty()
+                        ? heldSelection.size()
+                        : (fileTable != null && fileTable.getSelectionModel() != null
+                                ? fileTable.getSelectionModel().getSelectedItems().size()
+                                : 0))
                 : 0;
-        Path primarySelection = selectionCount > 0 ? getPrimarySelection() : null;
+        Path primarySelection = selectionCount > 0
+                ? (!heldSelection.isEmpty()
+                        ? (explorerContextMenuHeldFocusPath != null ? explorerContextMenuHeldFocusPath : heldSelection.iterator().next())
+                        : getPrimarySelection())
+                : null;
         boolean canPaste = !homeActive && canPasteIntoCurrentDirectory();
         boolean hasDirectory = resolveActiveDirectoryForShellCommands() != null;
         boolean hasVisibleItems = fileTable != null && fileTable.getItems() != null && !fileTable.getItems().isEmpty();
@@ -13653,6 +13971,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                 rowPane.setAlignment(Pos.TOP_LEFT);
                 rowPane.setPickOnBounds(false);
                 installExplorerVirtualCellGestureSuppression(this);
+                installVirtualIconGridCellContextMenuHandlers(this, rowPane);
             }
             @Override
 /**
@@ -13695,6 +14014,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         virtualIconListView.setCellFactory(_ -> new ListCell<>() {
             {
                 installExplorerVirtualCellGestureSuppression(this);
+                installVirtualIconListCellContextMenuHandlers(this);
             }
             @Override
 /**
@@ -13779,6 +14099,163 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                 event.consume();
             }
         });
+    }
+
+    private void installVirtualIconGridCellContextMenuHandlers(ListCell<List<Path>> cell, FlowPane rowPane) {
+        if (cell == null) {
+            return;
+        }
+        cell.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> {
+            if (event.getButton() != MouseButton.SECONDARY || !isIconMode(viewMode)) {
+                return;
+            }
+            if (isInlineRenameFocusGuardActive()) {
+                event.consume();
+                return;
+            }
+            Path path = resolveVirtualIconGridCellContextMenuPath(cell, rowPane, resolveEventTargetNode(event), event.getScreenX(), event.getScreenY());
+            if (path == null) {
+                return;
+            }
+            if (viewMode == ViewMode.EXTRA_LARGE_ICONS) {
+                debugExplorerContextMenuTarget("virtual-grid-secondary-press", path);
+            }
+            armExplorerItemContextMenu(path, event.getScreenX(), event.getScreenY());
+            event.consume();
+        });
+        cell.addEventFilter(MouseEvent.MOUSE_RELEASED, event -> {
+            if (event.getButton() != MouseButton.SECONDARY || !isIconMode(viewMode)) {
+                return;
+            }
+            if (showArmedExplorerItemContextMenuOnSecondaryRelease(event)) {
+                event.consume();
+            }
+        });
+        cell.setOnContextMenuRequested(event -> {
+            if (!isIconMode(viewMode)) {
+                return;
+            }
+            if (shouldSuppressExplorerItemContextMenuRequestedEvent()) {
+                event.consume();
+                return;
+            }
+            if (isInlineRenameFocusGuardActive()) {
+                event.consume();
+                return;
+            }
+            Node target = event.getPickResult() != null && event.getPickResult().getIntersectedNode() != null
+                    ? event.getPickResult().getIntersectedNode()
+                    : (event.getTarget() instanceof Node node ? node : null);
+            Path path = resolveVirtualIconGridCellContextMenuPath(cell, rowPane, target, event.getScreenX(), event.getScreenY());
+            if (path == null) {
+                path = resolveArmedExplorerItemContextMenuPath(event.getScreenX(), event.getScreenY());
+            }
+            if (path == null) {
+                return;
+            }
+            if (viewMode == ViewMode.EXTRA_LARGE_ICONS) {
+                debugExplorerContextMenuTarget("virtual-grid-context-menu-requested", path);
+            }
+            requestExplorerItemContextMenu(path, event.getScreenX(), event.getScreenY());
+            event.consume();
+        });
+    }
+
+    private void installVirtualIconListCellContextMenuHandlers(ListCell<Path> cell) {
+        if (cell == null) {
+            return;
+        }
+        cell.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> {
+            if (event.getButton() != MouseButton.SECONDARY || !isIconMode(viewMode)) {
+                return;
+            }
+            if (isInlineRenameFocusGuardActive()) {
+                event.consume();
+                return;
+            }
+            Path path = resolveVirtualIconListCellContextMenuPath(cell, resolveEventTargetNode(event));
+            if (path == null) {
+                return;
+            }
+            armExplorerItemContextMenu(path, event.getScreenX(), event.getScreenY());
+            event.consume();
+        });
+        cell.addEventFilter(MouseEvent.MOUSE_RELEASED, event -> {
+            if (event.getButton() != MouseButton.SECONDARY || !isIconMode(viewMode)) {
+                return;
+            }
+            if (showArmedExplorerItemContextMenuOnSecondaryRelease(event)) {
+                event.consume();
+            }
+        });
+        cell.setOnContextMenuRequested(event -> {
+            if (!isIconMode(viewMode)) {
+                return;
+            }
+            if (shouldSuppressExplorerItemContextMenuRequestedEvent()) {
+                event.consume();
+                return;
+            }
+            if (isInlineRenameFocusGuardActive()) {
+                event.consume();
+                return;
+            }
+            Node target = event.getPickResult() != null && event.getPickResult().getIntersectedNode() != null
+                    ? event.getPickResult().getIntersectedNode()
+                    : (event.getTarget() instanceof Node node ? node : null);
+            Path path = resolveVirtualIconListCellContextMenuPath(cell, target);
+            if (path == null) {
+                path = resolveArmedExplorerItemContextMenuPath(event.getScreenX(), event.getScreenY());
+            }
+            if (path == null) {
+                return;
+            }
+            requestExplorerItemContextMenu(path, event.getScreenX(), event.getScreenY());
+            event.consume();
+        });
+    }
+
+    private Path resolveVirtualIconListCellContextMenuPath(ListCell<Path> cell, Node target) {
+        Path path = findExplorerIconTilePath(target);
+        if (path != null) {
+            return path;
+        }
+        if (cell == null || cell.isEmpty()) {
+            return null;
+        }
+        return cell.getItem();
+    }
+
+    private Path resolveVirtualIconGridCellContextMenuPath(ListCell<List<Path>> cell, FlowPane rowPane, Node target, double screenX, double screenY) {
+        Path path = findExplorerIconTilePath(target);
+        if (path != null) {
+            return path;
+        }
+        if (rowPane != null) {
+            for (Node child : rowPane.getChildren()) {
+                if (child == null || !child.isVisible()) {
+                    continue;
+                }
+                Bounds bounds = child.localToScreen(child.getBoundsInLocal());
+                if (bounds != null && bounds.contains(screenX, screenY)) {
+                    Path childPath = pathForExplorerIconTile(child);
+                    if (childPath != null) {
+                        return childPath;
+                    }
+                }
+            }
+        }
+        if (cell == null || cell.isEmpty()) {
+            return null;
+        }
+        List<Path> row = cell.getItem();
+        if (row == null || row.isEmpty()) {
+            return null;
+        }
+        if (row.size() == 1) {
+            return row.get(0);
+        }
+        return null;
     }
 
     private void hideVirtualIconViews() {
@@ -14077,7 +14554,10 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                 captureExplorerSelectionSnapshotBeforePrimaryPress();
             }
             if (event.getButton() == MouseButton.SECONDARY) {
-                requestExplorerItemContextMenu(path, event.getScreenX(), event.getScreenY());
+                if (viewMode == ViewMode.EXTRA_LARGE_ICONS) {
+                    debugExplorerContextMenuTarget("tile-secondary-press", path);
+                }
+                armExplorerItemContextMenu(path, event.getScreenX(), event.getScreenY());
                 event.consume();
                 return;
             }
@@ -14094,6 +14574,12 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             event.consume();
         });
         tile.addEventFilter(MouseEvent.MOUSE_RELEASED, event -> {
+            if (event.getButton() == MouseButton.SECONDARY) {
+                if (showArmedExplorerItemContextMenuOnSecondaryRelease(event)) {
+                    event.consume();
+                }
+                return;
+            }
             if (event.getButton() == MouseButton.PRIMARY) {
                 event.consume();
             }
@@ -14130,45 +14616,136 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (path == null || fileTable == null || fileTable.getSelectionModel() == null) {
             return;
         }
-        if (!isPathCurrentlySelected(path)) {
-            applyExplorerPathSelection(java.util.Set.of(path), path);
-        } else {
-            int index = findTableIndexForPath(path);
-            if (index >= 0) {
+        explorerContextMenuOwnedPath = path;
+        java.util.LinkedHashSet<Path> currentSelection = currentTableSelectionSnapshot();
+        boolean alreadySoleSelection = currentSelection.size() == 1 && currentSelection.contains(path);
+        int index = findTableIndexForPath(path);
+        if (!alreadySoleSelection && index >= 0) {
+            beginExplorerSelectionPresentationTransaction();
+            try {
+                fileTable.getSelectionModel().clearAndSelect(index);
                 if (fileTable.getFocusModel() != null) {
                     fileTable.getFocusModel().focus(index);
                 }
-                setExplorerSelectionAnchorPath(path);
-                lastIconActivatedPath = path;
+            } finally {
+                endExplorerSelectionPresentationTransaction();
             }
-            preserveExplorerSelectionPresentationForContextMenu();
+            if (viewMode == ViewMode.DETAILS) {
+                replaceDetailsPresentationSelectedPaths(java.util.Set.of(path));
+                syncVisibleDetailsHoverRows();
+                fileTable.refresh();
+            } else if (isIconMode(viewMode)) {
+                replaceIconPresentationSelectedPaths(java.util.Set.of(path));
+                refreshVisibleIconTileSelectionState();
+            }
+        } else if (index >= 0 && fileTable.getFocusModel() != null) {
+            fileTable.getFocusModel().focus(index);
         }
+        setExplorerSelectionAnchorPath(path);
+        lastIconActivatedPath = path;
+        preserveExplorerSelectionPresentationForContextMenu();
+    }
+
+    private void armExplorerItemContextMenu(Path path, double screenX, double screenY) {
+        if (path == null) {
+            return;
+        }
+        suppressExplorerMetadataPopupForMillis(1500L);
+        armedExplorerItemContextMenuPath = path;
+        armedExplorerItemContextMenuScreenX = screenX;
+        armedExplorerItemContextMenuScreenY = screenY;
+        armedExplorerItemContextMenuUntilNanos = System.nanoTime() + 1_500_000_000L;
+        markExplorerFileViewContextMenuPending();
+        prepareSelectionForContextMenuPath(path);
+        preserveExplorerSelectionPresentationForContextMenu();
+        if (viewMode == ViewMode.EXTRA_LARGE_ICONS) {
+            debugExplorerContextMenuTarget("arm", path);
+        }
+    }
+
+    private void clearArmedExplorerItemContextMenu() {
+        armedExplorerItemContextMenuPath = null;
+        armedExplorerItemContextMenuScreenX = Double.NaN;
+        armedExplorerItemContextMenuScreenY = Double.NaN;
+        armedExplorerItemContextMenuUntilNanos = 0L;
+    }
+
+    private Path resolveArmedExplorerItemContextMenuPath(double screenX, double screenY) {
+        if (armedExplorerItemContextMenuPath == null) {
+            return null;
+        }
+        if (armedExplorerItemContextMenuUntilNanos <= System.nanoTime()) {
+            clearArmedExplorerItemContextMenu();
+            return null;
+        }
+        if (Double.isFinite(screenX) && Double.isFinite(screenY)
+                && Double.isFinite(armedExplorerItemContextMenuScreenX)
+                && Double.isFinite(armedExplorerItemContextMenuScreenY)) {
+            double dx = Math.abs(screenX - armedExplorerItemContextMenuScreenX);
+            double dy = Math.abs(screenY - armedExplorerItemContextMenuScreenY);
+            if (dx > 24.0 || dy > 24.0) {
+                return null;
+            }
+        }
+        return armedExplorerItemContextMenuPath;
     }
 
     private void requestExplorerItemContextMenu(Path path, double screenX, double screenY) {
         if (path == null) {
             return;
         }
+        suppressExplorerMetadataPopupForMillis(1500L);
+        clearArmedExplorerItemContextMenu();
+        markExplorerFileViewContextMenuPending();
         prepareSelectionForContextMenuPath(path);
         preserveExplorerSelectionPresentationForContextMenu();
-        hideExplorerMetadataPopup();
-        if (viewMode == ViewMode.DETAILS) {
-            requestActiveDetailsSurfaceFocus();
-        } else {
-            requestActiveIconSurfaceFocus();
+        if (viewMode == ViewMode.EXTRA_LARGE_ICONS) {
+            debugExplorerContextMenuTarget("request", path);
         }
-        explorerItemContextMenuSuppressUntilNanos = System.nanoTime() + 750_000_000L;
+        explorerItemContextMenuSuppressUntilNanos = System.nanoTime() + 5_000_000_000L;
         long requestTicket = ++explorerItemContextMenuRequestTicket;
-        Platform.runLater(() -> {
+        Runnable showMenu = () -> {
             if (requestTicket != explorerItemContextMenuRequestTicket) {
                 return;
             }
             showFileOpsContextMenu(screenX, screenY);
-        });
+        };
+        Platform.runLater(showMenu);
+    }
+
+    private boolean showArmedExplorerItemContextMenuOnSecondaryRelease(MouseEvent event) {
+        if (event == null || event.getButton() != MouseButton.SECONDARY) {
+            return false;
+        }
+        Node target = resolveEventTargetNode(event);
+        Path path = resolveExplorerItemContextMenuPath(target);
+        if (path == null) {
+            path = resolveArmedExplorerItemContextMenuPath(event.getScreenX(), event.getScreenY());
+        }
+        if (path == null) {
+            return false;
+        }
+        requestExplorerItemContextMenu(path, event.getScreenX(), event.getScreenY());
+        return true;
     }
 
     private boolean shouldSuppressExplorerItemContextMenuRequestedEvent() {
         return explorerItemContextMenuSuppressUntilNanos > System.nanoTime();
+    }
+
+    private void debugExplorerContextMenuTarget(String source, Path path) {
+        if (path == null) {
+            return;
+        }
+        String name;
+        try {
+            name = displayNameForTable(path);
+        } catch (Exception ex) {
+            name = path.getFileName() == null ? path.toString() : path.getFileName().toString();
+        }
+        String message = "EXPLORER_CONTEXT_MENU_TARGET[" + source + "]: " + name + " :: " + path;
+        LOG.info(message);
+        System.out.println(message);
     }
 
     private void beginExplorerIconMarqueeGestureOwnership() {
@@ -14313,6 +14890,9 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
     }
 
     private java.util.LinkedHashSet<Path> currentExplorerSelectionSnapshot() {
+        if (explorerContextMenuSelectionPresentationHold && !explorerContextMenuHeldSelectionPaths.isEmpty()) {
+            return new java.util.LinkedHashSet<>(explorerContextMenuHeldSelectionPaths);
+        }
         java.util.LinkedHashSet<Path> selectedPaths = new java.util.LinkedHashSet<>();
         if (viewMode == ViewMode.DETAILS) {
             selectedPaths.addAll(detailsPresentationSelectedPaths);
@@ -14656,16 +15236,81 @@ private boolean isActiveIconSurfaceFocused() {
         applyExplorerPathSelection(pendingPaths, pendingFocusPath);
     }
 
+    private java.util.LinkedHashSet<Path> explorerContextMenuHeldSelectionSnapshot() {
+        return new java.util.LinkedHashSet<>(explorerContextMenuHeldSelectionPaths);
+    }
+
+    private void maintainExplorerContextMenuSelectionHold() {
+        if (!explorerContextMenuSelectionPresentationHold) {
+            return;
+        }
+        java.util.LinkedHashSet<Path> heldSelection = explorerContextMenuHeldSelectionSnapshot();
+        if (explorerContextMenuOwnedPath != null) {
+            heldSelection.add(explorerContextMenuOwnedPath);
+        }
+        if (heldSelection.isEmpty()) {
+            return;
+        }
+        Path heldFocusPath = explorerContextMenuOwnedPath != null
+                ? explorerContextMenuOwnedPath
+                : explorerContextMenuHeldFocusPath;
+        if (heldFocusPath == null || !heldSelection.contains(heldFocusPath)) {
+            heldFocusPath = heldSelection.iterator().next();
+            explorerContextMenuHeldFocusPath = heldFocusPath;
+        }
+        applyExplorerSelectionPresentationSnapshot(heldSelection);
+        if (fileTable == null || fileTable.getSelectionModel() == null) {
+            return;
+        }
+        if (!selectionPathsEqual(currentTableSelectionSnapshot(), heldSelection)) {
+            if (isExplorerSelectionModelNotificationActive()) {
+                scheduleDeferredExplorerPathSelectionApply(heldSelection, heldFocusPath);
+            } else {
+                applyExplorerPathSelection(heldSelection, heldFocusPath);
+            }
+            return;
+        }
+        if (heldFocusPath != null && fileTable.getFocusModel() != null) {
+            int focusIndex = indexOfTableItem(heldFocusPath);
+            if (focusIndex >= 0 && fileTable.getFocusModel().getFocusedIndex() != focusIndex) {
+                fileTable.getFocusModel().focus(focusIndex);
+            }
+        }
+    }
+
     private void preserveExplorerSelectionPresentationForContextMenu() {
         explorerContextMenuSelectionPresentationHold = true;
-        applyExplorerSelectionPresentationSnapshot(currentExplorerSelectionSnapshot());
+        explorerContextMenuHeldSelectionPaths.clear();
+        java.util.LinkedHashSet<Path> snapshot = currentExplorerSelectionSnapshot();
+        if (snapshot.isEmpty()) {
+            Path fallbackPath = explorerContextMenuOwnedPath != null ? explorerContextMenuOwnedPath : getFocusedOrSelectedPath();
+            if (fallbackPath != null) {
+                snapshot.add(fallbackPath);
+            }
+        }
+        if (explorerContextMenuOwnedPath != null) {
+            snapshot.add(explorerContextMenuOwnedPath);
+        }
+        explorerContextMenuHeldSelectionPaths.addAll(snapshot);
+        explorerContextMenuHeldFocusPath = explorerContextMenuOwnedPath != null
+                ? explorerContextMenuOwnedPath
+                : getFocusedOrSelectedPath();
+        if ((explorerContextMenuHeldFocusPath == null || !explorerContextMenuHeldSelectionPaths.contains(explorerContextMenuHeldFocusPath))
+                && !explorerContextMenuHeldSelectionPaths.isEmpty()) {
+            explorerContextMenuHeldFocusPath = explorerContextMenuHeldSelectionPaths.iterator().next();
+        }
+        maintainExplorerContextMenuSelectionHold();
     }
 
     private void clearExplorerContextMenuSelectionPresentationHold() {
         if (!explorerContextMenuSelectionPresentationHold) {
+            explorerContextMenuOwnedPath = null;
             return;
         }
         explorerContextMenuSelectionPresentationHold = false;
+        explorerContextMenuHeldSelectionPaths.clear();
+        explorerContextMenuHeldFocusPath = null;
+        explorerContextMenuOwnedPath = null;
         refreshActiveSelectionPresentation();
     }
 
@@ -14749,6 +15394,15 @@ private boolean isActiveIconSurfaceFocused() {
     }
 
     private void refreshVisibleIconSelectionPresentation() {
+        if (explorerContextMenuSelectionPresentationHold) {
+            maintainExplorerContextMenuSelectionHold();
+            Platform.runLater(() -> {
+                if (explorerContextMenuSelectionPresentationHold) {
+                    maintainExplorerContextMenuSelectionHold();
+                }
+            });
+            return;
+        }
         if (isExplorerSelectionStabilizationActive()) {
             applyExplorerSelectionPresentationSnapshot(explorerSelectionStabilizationPaths);
             Platform.runLater(() -> {
@@ -14788,6 +15442,7 @@ private boolean isActiveIconSurfaceFocused() {
             viewHost.getChildren().add(iconMarqueeSelectionRect);
         }
         bringIconMarqueeOverlayToFront();
+        viewHost.addEventFilter(MouseEvent.MOUSE_PRESSED, this::handleExplorerFileViewItemSecondaryPress);
         viewHost.addEventFilter(MouseEvent.MOUSE_PRESSED, this::handleExplorerFileViewMousePressed);
         viewHost.addEventFilter(MouseEvent.MOUSE_DRAGGED, this::handleExplorerFileViewMouseDragged);
         viewHost.addEventFilter(MouseEvent.MOUSE_RELEASED, this::handleExplorerFileViewMouseReleased);
@@ -14799,6 +15454,26 @@ private boolean isActiveIconSurfaceFocused() {
         if (iconMarqueeSelectionRect != null) {
             iconMarqueeSelectionRect.toFront();
         }
+    }
+
+    private void handleExplorerFileViewItemSecondaryPress(MouseEvent event) {
+        if (event == null || event.getButton() != MouseButton.SECONDARY || !isIconMode(viewMode)) {
+            return;
+        }
+        if (isInlineRenameFocusGuardActive()) {
+            event.consume();
+            return;
+        }
+        Node target = resolveEventTargetNode(event);
+        Path path = findExplorerIconTilePath(target);
+        if (path == null) {
+            return;
+        }
+        if (viewMode == ViewMode.EXTRA_LARGE_ICONS) {
+            debugExplorerContextMenuTarget("secondary-press", path);
+        }
+        armExplorerItemContextMenu(path, event.getScreenX(), event.getScreenY());
+        event.consume();
     }
 
     private void handleExplorerFileViewMousePressed(MouseEvent event) {
@@ -14885,6 +15560,12 @@ private boolean isActiveIconSurfaceFocused() {
     }
 
     private void handleExplorerFileViewMouseReleased(MouseEvent event) {
+        if (event != null && event.getButton() == MouseButton.SECONDARY && isIconMode(viewMode)) {
+            if (showArmedExplorerItemContextMenuOnSecondaryRelease(event)) {
+                event.consume();
+            }
+            return;
+        }
         if (isInlineRenameFocusGuardActive()) {
             if (event != null) {
                 event.consume();
@@ -14974,6 +15655,10 @@ private boolean isActiveIconSurfaceFocused() {
                 ? event.getPickResult().getIntersectedNode()
                 : (event.getTarget() instanceof Node node ? node : null);
         if (handleExplorerItemContextMenuRequest(target, event.getScreenX(), event.getScreenY())) {
+            Path path = findExplorerIconTilePath(target);
+            if (viewMode == ViewMode.EXTRA_LARGE_ICONS && path != null) {
+                debugExplorerContextMenuTarget("context-menu-requested", path);
+            }
             event.consume();
             return;
         }
@@ -16034,6 +16719,11 @@ private boolean isActiveIconSurfaceFocused() {
     }
 
     private void refreshActiveSelectionPresentation() {
+        if (explorerContextMenuSelectionPresentationHold) {
+            maintainExplorerContextMenuSelectionHold();
+            scheduleSelectionCommandStateRefresh();
+            return;
+        }
         if (isExplorerSelectionStabilizationActive()) {
             applyExplorerSelectionPresentationSnapshot(explorerSelectionStabilizationPaths);
             scheduleSelectionCommandStateRefresh();

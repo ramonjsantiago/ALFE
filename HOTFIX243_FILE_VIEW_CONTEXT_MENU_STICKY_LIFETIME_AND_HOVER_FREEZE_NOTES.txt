@@ -1,0 +1,10 @@
+HOTFIX243 — File View Context Menu Sticky Lifetime and Hover Freeze
+
+Summary
+- switched Explorer context menus to an explicit sticky lifetime model so file-view menus stay open until the user clicks outside, presses Escape, or the window loses focus
+- disabled native JavaFX auto-hide for Explorer menus and installed owner-scene outside-click dismissal plus owner-window focus-loss dismissal
+- hid the parent popup explicitly after command execution so menu actions still close cleanly
+- froze file-view hover presentation while item/background context menus are pending or visible so icon/details hover repaint churn cannot destabilize the popup
+
+Primary file changed
+- src/main/java/com/fileexplorer/controller/MainController.java

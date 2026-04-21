@@ -1,0 +1,12 @@
+HOTFIX242A — File View Context Menu Auto-Dismiss Fix
+
+Goal
+- stop file-view right-click popup menus from auto-dismissing immediately after they open
+
+Implementation
+- switch Explorer context menus back to JavaFX native auto-hide handling
+- remove the custom owner-scene dismissal hook from the context-menu factory path
+- preserve existing selection-hold and shell-state sync behavior while letting the framework own popup lifetime
+
+Primary file
+- src/main/java/com/fileexplorer/controller/MainController.java

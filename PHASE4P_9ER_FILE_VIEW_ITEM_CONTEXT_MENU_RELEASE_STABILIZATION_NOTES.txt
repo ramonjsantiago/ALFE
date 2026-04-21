@@ -1,0 +1,9 @@
+HOTFIX242 / Phase 4P.9ER — File View Item Context Menu Release Stabilization
+
+Goal
+- stop file-view item right-click popup menus from appearing and then immediately dismissing across Details and icon-family views
+
+Implementation
+- split item popup handling into a secondary-press arming step and a later ContextMenuRequested show step so the menu opens only after the right-click gesture has settled
+- keep the pressed item path, screen position, and short-lived request window so virtualized icon surfaces can still recover the exact clicked item even if the later context-menu event loses the direct tile target
+- clear stale armed requests when showing the background menu so empty-space right clicks do not reuse an older item target

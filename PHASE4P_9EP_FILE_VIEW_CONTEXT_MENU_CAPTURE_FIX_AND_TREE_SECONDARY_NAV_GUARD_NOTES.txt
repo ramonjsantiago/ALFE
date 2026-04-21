@@ -1,0 +1,10 @@
+HOTFIX240 / Phase 4P.9EP — FILE_VIEW_CONTEXT_MENU_CAPTURE_FIX_AND_TREE_SECONDARY_NAV_GUARD
+
+Summary
+- Added a file-view host secondary-press capture path for icon-family views so item right-clicks resolve before modular or virtualized surfaces can lose the gesture.
+- Deferred icon-surface file-operations menu showing by an extra FX pulse to avoid the opening right-click gesture immediately collapsing the popup.
+- Added diagnostic printing for resolved Extra Large Icons item names and paths when item context-menu targets are found.
+- Prevented tree-view secondary-click selection from auto-loading the clicked directory while preserving double-click open behavior.
+
+Primary file
+- src/main/java/com/fileexplorer/controller/MainController.java
