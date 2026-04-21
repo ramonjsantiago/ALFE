@@ -1,3 +1,8 @@
+## HOTFIX249 / Phase 4P.9EM — Inspector Mode Persistence and Cross-View Parity
+- persisted the last non-operations inspector content mode separately from transient Operations visibility so Details vs Preview restores consistently after restart and after temporary Operations-pane takeover
+- added a shared inspector refresh path that reapplies the active inspector card and current selection content after file-view switches and directory listing refreshes, improving cross-view inspector parity
+- increased Details view inter-row spacing from 2px to 3px and matched the row-height envelope to 33px
+
 ## HOTFIX244 — File View Context Menu Console Lifecycle Logging
 - added explicit console and logger lifecycle traces for Explorer context menus covering `window-showing`, `window-shown`, `window-hiding`, and `window-hidden`
 - tagged each Explorer popup instance with a menu kind (`tree`, `file-ops`, `file-view-background`) so right-click investigations can distinguish which popup is opening or closing
@@ -443,3 +448,9 @@ HOTFIX195: integrated dedicated Home icon resources and wired Home UI surfaces t
 - restored item right-click context menus across file views by scheduling item menu opening from the secondary-press selection-prep path instead of relying on a later `ContextMenuRequested` event that could be lost after item-surface refreshes
 - suppressed follow-on background context-menu events for the same gesture so file and folder item menus are not replaced by the file-view background menu while the selection model is being restabilized
 - kept tree-view behavior unchanged and preserved multi-selection presentation while the item menu is open
+
+## HOTFIX250 / Phase 4P.9EO — Preview Thumbnail Retention and Selection Refresh Guard
+- prevented `updateSelectionDetails(...)` from reapplying the preview placeholder/default icon after a real thumbnail had already resolved for the same selected file
+- tracked resolved preview-thumbnail state on the bound preview image so inspector refreshes can preserve the live thumbnail while continuing to use placeholders for new selections
+- kept preview fallback text hidden when a valid thumbnail is already shown for the active selection
+

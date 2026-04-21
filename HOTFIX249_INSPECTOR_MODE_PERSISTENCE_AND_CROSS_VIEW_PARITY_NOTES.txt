@@ -1,0 +1,5 @@
+HOTFIX249 / Phase 4P.9EM — Inspector Mode Persistence and Cross-View Parity
+
+- Added separate persistence for the last non-operations inspector content mode so Details and Preview restore correctly after restart and after temporary Operations pane ownership.
+- Added a shared inspector refresh path that re-applies the active inspector card, width/visibility, and current selection content after view-mode changes and directory refreshes.
+- Updated Details view row metrics to use 3px inter-row spacing with a matching 33px row height envelope.

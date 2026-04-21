@@ -1,0 +1,5 @@
+HOTFIX250 / Phase 4P.9EO — Preview Thumbnail Retention and Selection Refresh Guard
+
+- Prevented `updateSelectionDetails(...)` from replacing an already-resolved preview thumbnail with the placeholder/default icon when the same selected path is refreshed again.
+- Added a preview-resolution flag on the preview image binding state so inspector refreshes can distinguish a real thumbnail from the temporary placeholder.
+- Kept the preview text pane hidden when a resolved thumbnail for the current selection is already being shown.

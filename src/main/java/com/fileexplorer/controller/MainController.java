@@ -478,6 +478,7 @@ private static final boolean SAFE_MODE = Boolean.getBoolean("fileexplorer.safeMo
         OPERATIONS
     }
     private InspectorMode inspectorMode = InspectorMode.HIDDEN;
+    private InspectorMode lastContentInspectorMode = InspectorMode.DETAILS;
     private Path inlineRenameTablePath;
     private Path inlineRenameTreePath;
     private Path pendingInlineRenameSelectionPath;
@@ -768,6 +769,7 @@ private volatile long hugeFolderScannedTotal = 0L;
     private static final String PREF_WORKSPACE_NAV_VISIBLE = "workspace.nav.visible";
     private static final String PREF_WORKSPACE_INSPECTOR_WIDTH_PX = "workspace.inspector.width.px";
     private static final String PREF_WORKSPACE_INSPECTOR_MODE = "workspace.inspector.mode";
+    private static final String PREF_WORKSPACE_INSPECTOR_CONTENT_MODE = "workspace.inspector.content.mode";
     private final ToggleGroup viewModeToggleGroup;
     private boolean windowPrefsInstalled;
     private boolean windowChromeStateInstalled;
@@ -865,6 +867,12 @@ private final ExecutorService hoverPrefetchExecutor;
     private final javafx.animation.PauseTransition previewLoadDebounce = new javafx.animation.PauseTransition(
             javafx.util.Duration.millis(Long.getLong("fileexplorer.preview.selectionDebounceMs", 60L))
     );
+    // Phase 4P.9EM follow-up: selection refresh churn can briefly clear selection while thumbnails
+    // are being refreshed. Delay the preview clear slightly so a resolved image is not replaced by
+    // a temporary placeholder or blank state during those transient null-selection windows.
+    private final javafx.animation.PauseTransition previewClearDebounce = new javafx.animation.PauseTransition(
+            javafx.util.Duration.millis(Long.getLong("fileexplorer.preview.clearDebounceMs", 220L))
+    );
     private final java.util.concurrent.atomic.AtomicLong previewLoadSeq = new java.util.concurrent.atomic.AtomicLong(0L);
     private volatile java.nio.file.Path pendingPreviewPath;
     // Phase 4O.6: warm only the current folder's thumbnail candidates after navigation settles.
@@ -946,6 +954,28 @@ private boolean hoverPrefetchEnabled;
             applySelectionCommandStateNow(false);
         });
         this.previewLoadDebounce.setOnFinished(_ -> loadPreviewThumbnailNow(previewLoadSeq.get(), pendingPreviewPath));
+        this.previewClearDebounce.setOnFinished(_ -> {
+            if (previewImage == null) {
+                return;
+            }
+            if (getPrimarySelection() != null) {
+                return;
+            }
+            boolean retainRenderedPreviewOnTransientNull = shouldRetainDisplayedPreviewOnTransientNullSelection();
+            if (retainRenderedPreviewOnTransientNull) {
+                return;
+            }
+            previewImage.setImage(null);
+            previewImage.getProperties().put("previewResolved", Boolean.FALSE);
+            previewImage.getProperties().put("previewLastResolvedPath", null);
+            previewImage.getProperties().put("previewPath", null);
+            previewImage.getProperties().put("previewIdentity", null);
+            if (previewText != null) {
+                previewText.setText(buildPreviewFallbackText(null));
+                previewText.setVisible(true);
+                previewText.setManaged(true);
+            }
+        });
         this.folderThumbnailWarmupDebounce.setOnFinished(_ -> warmCurrentFolderThumbnailsNow(folderThumbnailWarmupSeq.get()));
         this.startupThumbnailGateDebounce.setOnFinished(_ -> openStartupThumbnailWarmupGate());
         this.startupFirstInteractionFallback.setOnFinished(_ -> noteStartupInteractionReady());
@@ -2220,6 +2250,15 @@ private void initializeWithContext() {
         }
         contextInitialized = true;
         restoreWorkspaceShellGeometryPreferences();
+        if (detailsToggle != null) {
+            detailsToggle.setOnAction(this::onDetailsToggle);
+        }
+        if (previewToggle != null) {
+            previewToggle.setOnAction(this::onPreviewToggle);
+        }
+        if (operationsToggle != null) {
+            operationsToggle.setOnAction(this::onOperationsToggle);
+        }
         configureTree();
         configureNavigationPaneParity();
         configureTable();
@@ -3497,6 +3536,20 @@ private void adjustUiFontSize(double deltaPx) {
  */
 private double clamp(double v, double lo, double hi) {
     LogSupport.enter(LOG, "clamp");
+        if (Double.isNaN(v) || Double.isInfinite(v)) {
+            return lo;
+        }
+        if (Double.isNaN(lo) || Double.isInfinite(lo)) {
+            lo = 0.0;
+        }
+        if (Double.isNaN(hi) || Double.isInfinite(hi)) {
+            hi = lo;
+        }
+        if (hi < lo) {
+            double swap = lo;
+            lo = hi;
+            hi = swap;
+        }
         if (v < lo) {
             return lo;
         }
@@ -3506,23 +3559,96 @@ private double clamp(double v, double lo, double hi) {
         return v;
     }
 
+    private double sanitizeInspectorWidth(double widthPx) {
+        double sanitized = widthPx;
+        if (Double.isNaN(sanitized) || Double.isInfinite(sanitized) || sanitized <= 0.0) {
+            sanitized = SIDE_PANE_PREF_WIDTH_PX;
+        }
+        return clamp(sanitized, SIDE_PANE_MIN_WIDTH_PX, INSPECTOR_HOST_MAX_WIDTH_PX);
+    }
+
+    private void forceInspectorVisibilityState(boolean show) {
+        double targetWidth = sanitizeInspectorWidth(lastKnownInspectorWidthPx);
+        if (show) {
+            lastKnownInspectorWidthPx = targetWidth;
+        }
+        if (inspectorHost != null) {
+            inspectorHost.setVisible(show);
+            inspectorHost.setManaged(show);
+            if (show) {
+                inspectorHost.setMinWidth(SIDE_PANE_MIN_WIDTH_PX);
+                inspectorHost.setPrefWidth(targetWidth);
+                inspectorHost.setMaxWidth(INSPECTOR_HOST_MAX_WIDTH_PX);
+            } else {
+                inspectorHost.setMinWidth(0.0);
+                inspectorHost.setPrefWidth(0.0);
+            }
+            inspectorHost.requestLayout();
+        }
+        if (sidePane != null) {
+            sidePane.setVisible(show);
+            sidePane.setManaged(show);
+            if (show) {
+                sidePane.setMinWidth(SIDE_PANE_MIN_WIDTH_PX);
+                sidePane.setPrefWidth(targetWidth);
+                sidePane.setMaxWidth(INSPECTOR_HOST_MAX_WIDTH_PX);
+            } else {
+                sidePane.setMinWidth(0.0);
+                sidePane.setPrefWidth(0.0);
+            }
+            sidePane.requestLayout();
+        }
+        if (inspectorResizer != null) {
+            inspectorResizer.setVisible(show);
+            inspectorResizer.setManaged(show);
+        }
+        if (workspaceShell != null) {
+            workspaceShell.requestLayout();
+        }
+        if (root != null) {
+            root.requestLayout();
+        }
+    }
+
+    private void forceInspectorModePresentation(InspectorMode mode) {
+        if (mode == null || mode == InspectorMode.HIDDEN) {
+            applyInspectorModeNodeVisibility(InspectorMode.HIDDEN);
+            forceInspectorVisibilityState(false);
+            return;
+        }
+        ensureInspectorShellCreated();
+        if (mode == InspectorMode.DETAILS) {
+            ensureDetailsInspectorCardCreated();
+        } else if (mode == InspectorMode.PREVIEW) {
+            ensurePreviewInspectorCardCreated();
+        } else if (mode == InspectorMode.OPERATIONS) {
+            ensureOperationsInspectorCardCreated();
+        }
+        applyInspectorModeNodeVisibility(mode);
+        forceInspectorVisibilityState(true);
+    }
+
 private void restoreWorkspaceShellGeometryPreferences() {
     lastKnownNavigationPaneShellWidthPx = clamp(
             prefs.getDouble(PREF_WORKSPACE_NAV_WIDTH_PX, lastKnownNavigationPaneShellWidthPx),
             NAV_TREE_SHELL_MIN_WIDTH_PX,
             NAV_TREE_SHELL_MAX_WIDTH_PX);
-    lastKnownInspectorWidthPx = clamp(
-            prefs.getDouble(PREF_WORKSPACE_INSPECTOR_WIDTH_PX, lastKnownInspectorWidthPx),
-            SIDE_PANE_MIN_WIDTH_PX,
-            INSPECTOR_HOST_MAX_WIDTH_PX);
+    lastKnownInspectorWidthPx = sanitizeInspectorWidth(
+            prefs.getDouble(PREF_WORKSPACE_INSPECTOR_WIDTH_PX, lastKnownInspectorWidthPx));
     showNavigationPane = prefs.getBoolean(PREF_WORKSPACE_NAV_VISIBLE, showNavigationPane);
 }
 
 private void restoreInspectorModePreference() {
     InspectorMode restored = parseInspectorModePreference(
             prefs.get(PREF_WORKSPACE_INSPECTOR_MODE, InspectorMode.HIDDEN.name()));
+    InspectorMode restoredContentMode = normalizeContentInspectorMode(parseInspectorModePreference(
+            prefs.get(PREF_WORKSPACE_INSPECTOR_CONTENT_MODE, lastContentInspectorMode.name())));
+    lastContentInspectorMode = restoredContentMode;
     if (homeActive) {
         restored = InspectorMode.HIDDEN;
+    }
+    if (isContentInspectorMode(restored)) {
+        lastContentInspectorMode = restored;
     }
     inspectorMode = restored;
     sidePaneMasterVisible = restored == InspectorMode.DETAILS
@@ -3531,6 +3657,61 @@ private void restoreInspectorModePreference() {
     if (operationsToggle != null) {
         operationsToggle.setSelected(restored == InspectorMode.OPERATIONS);
     }
+}
+
+private boolean isContentInspectorMode(InspectorMode mode) {
+    return mode == InspectorMode.DETAILS || mode == InspectorMode.PREVIEW;
+}
+
+private InspectorMode normalizeContentInspectorMode(InspectorMode mode) {
+    return mode == InspectorMode.PREVIEW ? InspectorMode.PREVIEW : InspectorMode.DETAILS;
+}
+
+private InspectorMode preferredContentInspectorMode() {
+    return normalizeContentInspectorMode(lastContentInspectorMode);
+}
+
+private void rememberInspectorContentMode(InspectorMode mode) {
+    if (isContentInspectorMode(mode)) {
+        lastContentInspectorMode = normalizeContentInspectorMode(mode);
+    }
+}
+
+private void refreshInspectorPresentationForCurrentContext() {
+    if (homeActive) {
+        applyWorkspaceInspectorVisibility(false);
+        applyInspectorModeNodeVisibility(InspectorMode.HIDDEN);
+        syncPaneTogglesFromUiState();
+        return;
+    }
+    if (inspectorMode == InspectorMode.HIDDEN && operationsToggle != null && operationsToggle.isSelected()) {
+        inspectorMode = InspectorMode.OPERATIONS;
+    }
+    if (inspectorMode == InspectorMode.OPERATIONS && (operationsToggle == null || !operationsToggle.isSelected())) {
+        inspectorMode = sidePaneMasterVisible ? preferredContentInspectorMode() : InspectorMode.HIDDEN;
+    }
+    if (isContentInspectorMode(inspectorMode)) {
+        rememberInspectorContentMode(inspectorMode);
+    }
+    boolean show = inspectorMode != InspectorMode.HIDDEN;
+    forceInspectorModePresentation(inspectorMode);
+    applyWorkspaceInspectorVisibility(show);
+    if (show && (inspectorMode == InspectorMode.DETAILS || inspectorMode == InspectorMode.PREVIEW)) {
+        updateSelectionDetails(getPrimarySelection());
+    }
+    if (inspectorHost != null) {
+        inspectorHost.requestLayout();
+    }
+    if (sidePane != null) {
+        sidePane.requestLayout();
+    }
+    if (workspaceShell != null) {
+        workspaceShell.requestLayout();
+    }
+    if (root != null) {
+        root.requestLayout();
+    }
+    syncPaneTogglesFromUiState();
 }
 
 private InspectorMode parseInspectorModePreference(String raw) {
@@ -3551,10 +3732,10 @@ private void persistWorkspaceShellPreferences() {
     prefs.putDouble(PREF_WORKSPACE_NAV_WIDTH_PX, clamp(lastKnownNavigationPaneShellWidthPx,
             NAV_TREE_SHELL_MIN_WIDTH_PX, NAV_TREE_SHELL_MAX_WIDTH_PX));
     prefs.putBoolean(PREF_WORKSPACE_NAV_VISIBLE, showNavigationPane);
-    prefs.putDouble(PREF_WORKSPACE_INSPECTOR_WIDTH_PX, clamp(lastKnownInspectorWidthPx,
-            SIDE_PANE_MIN_WIDTH_PX, INSPECTOR_HOST_MAX_WIDTH_PX));
+    prefs.putDouble(PREF_WORKSPACE_INSPECTOR_WIDTH_PX, sanitizeInspectorWidth(lastKnownInspectorWidthPx));
     InspectorMode persistedMode = homeActive ? InspectorMode.HIDDEN : inspectorMode;
     prefs.put(PREF_WORKSPACE_INSPECTOR_MODE, persistedMode.name());
+    prefs.put(PREF_WORKSPACE_INSPECTOR_CONTENT_MODE, preferredContentInspectorMode().name());
 }
 
     // ---------------------------------------------------------------------
@@ -3687,7 +3868,7 @@ private void persistWorkspaceShellPreferences() {
     }
 
     private void applyInspectorHostWidth(double widthPx) {
-        double clamped = clamp(widthPx, SIDE_PANE_MIN_WIDTH_PX, INSPECTOR_HOST_MAX_WIDTH_PX);
+        double clamped = sanitizeInspectorWidth(widthPx);
         lastKnownInspectorWidthPx = clamped;
         persistWorkspaceShellPreferences();
         if (inspectorHost != null) {
@@ -3707,7 +3888,7 @@ private void persistWorkspaceShellPreferences() {
             inspectorHost.setVisible(show);
             inspectorHost.setManaged(show);
             if (show) {
-                applyInspectorHostWidth(lastKnownInspectorWidthPx > 0.0 ? lastKnownInspectorWidthPx : SIDE_PANE_PREF_WIDTH_PX);
+                applyInspectorHostWidth(sanitizeInspectorWidth(lastKnownInspectorWidthPx));
             } else {
                 inspectorHost.setMinWidth(0.0);
                 inspectorHost.setPrefWidth(0.0);
@@ -3718,7 +3899,7 @@ private void persistWorkspaceShellPreferences() {
             sidePane.setManaged(show);
             if (show) {
                 sidePane.setMinWidth(SIDE_PANE_MIN_WIDTH_PX);
-                sidePane.setPrefWidth(Math.max(lastKnownInspectorWidthPx, SIDE_PANE_PREF_WIDTH_PX));
+                sidePane.setPrefWidth(sanitizeInspectorWidth(lastKnownInspectorWidthPx));
             } else {
                 sidePane.setMinWidth(0.0);
                 sidePane.setPrefWidth(0.0);
@@ -3774,7 +3955,7 @@ private void ensureInspectorShellCreated() {
     VBox shell = new VBox(12.0);
     shell.setAlignment(Pos.TOP_LEFT);
     shell.setMinWidth(0.0);
-    shell.setPrefWidth(Math.max(SIDE_PANE_PREF_WIDTH_PX, lastKnownInspectorWidthPx));
+    shell.setPrefWidth(sanitizeInspectorWidth(lastKnownInspectorWidthPx));
     shell.setMaxWidth(Double.MAX_VALUE);
     shell.setFillWidth(true);
     shell.getStyleClass().addAll("side-pane-surface", "explorer-side-pane");
@@ -3813,12 +3994,16 @@ private void ensurePreviewInspectorCardCreated() {
     imageShell.getStyleClass().add("preview-image-shell");
     imageShell.setMinHeight(180.0);
     imageShell.setPrefHeight(220.0);
+    imageShell.setMaxHeight(Double.MAX_VALUE);
     imageShell.setMaxWidth(Double.MAX_VALUE);
+    VBox.setVgrow(imageShell, Priority.ALWAYS);
 
     ImageView imageView = new ImageView();
-    imageView.setFitWidth(304.0);
     imageView.setPreserveRatio(true);
     imageView.setSmooth(true);
+    imageView.setPickOnBounds(true);
+    imageView.fitWidthProperty().bind(imageShell.widthProperty().subtract(24.0));
+    imageView.fitHeightProperty().bind(imageShell.heightProperty().subtract(24.0));
     previewImage = imageView;
     imageShell.getChildren().add(imageView);
 
@@ -4655,7 +4840,7 @@ colType.setCellValueFactory(param -> {
             colModified.setPrefWidth(184.0);
         }
         if (fileTable != null) {
-            fileTable.setFixedCellSize(32.0);
+            fileTable.setFixedCellSize(33.0);
         }
         syncDetailsSortHeaderState();
         fileTable.getSelectionModel().selectedItemProperty().addListener((_, oldSel, newSel) ->
@@ -10745,6 +10930,7 @@ private String displayNameForTable(Path p) {
         if (restoreVisiblePath != null) {
             scheduleExplorerPathVisibilityStabilization(restoreVisiblePath, false);
         }
+        refreshInspectorPresentationForCurrentContext();
         if (pendingCreateAndRenamePath != null && java.util.Objects.equals(directory, pendingCreateAndRenamePath.getParent())) {
             Path createdPath = pendingCreateAndRenamePath;
             boolean present = false;
@@ -11574,6 +11760,7 @@ private String displayNameForTable(Path p) {
         setNavigationPaneVisible(showNavigationPane);
         setCompactView(compactView);
         syncViewMenuSelection();
+        refreshInspectorPresentationForCurrentContext();
     }
 
 private Node captureWorkspaceFocusOwner() {
@@ -11636,6 +11823,7 @@ private boolean isDescendantOf(Node child, Node ancestor) {
         Node focusOwner = captureWorkspaceFocusOwner();
         if (show) {
             inspectorMode = InspectorMode.DETAILS;
+            rememberInspectorContentMode(InspectorMode.DETAILS);
             sidePaneMasterVisible = true;
         } else if (inspectorMode == InspectorMode.DETAILS) {
             sidePaneMasterVisible = false;
@@ -11644,6 +11832,7 @@ private boolean isDescendantOf(Node child, Node ancestor) {
                     : InspectorMode.HIDDEN;
         }
         updateSidePaneVisibility();
+        forceInspectorModePresentation(inspectorMode);
         if (show && fileTable != null) {
             FileItem fi = fileTable.getSelectionModel().getSelectedItem();
             updateSelectionDetails(fi != null ? fi.path() : null);
@@ -11662,6 +11851,7 @@ private boolean isDescendantOf(Node child, Node ancestor) {
         Node focusOwner = captureWorkspaceFocusOwner();
         if (show) {
             inspectorMode = InspectorMode.PREVIEW;
+            rememberInspectorContentMode(InspectorMode.PREVIEW);
             sidePaneMasterVisible = true;
         } else if (inspectorMode == InspectorMode.PREVIEW) {
             sidePaneMasterVisible = false;
@@ -11670,6 +11860,7 @@ private boolean isDescendantOf(Node child, Node ancestor) {
                     : InspectorMode.HIDDEN;
         }
         updateSidePaneVisibility();
+        forceInspectorModePresentation(inspectorMode);
         if (show && fileTable != null) {
             FileItem fi = fileTable.getSelectionModel().getSelectedItem();
             updateSelectionDetails(fi != null ? fi.path() : null);
@@ -11697,6 +11888,7 @@ private boolean isDescendantOf(Node child, Node ancestor) {
             }
             sidePaneMasterVisible = false;
             updateSidePaneVisibility();
+            forceInspectorModePresentation(inspectorMode);
             syncPaneTogglesFromUiState();
             restoreWorkspaceFocus(focusOwner);
         }
@@ -11716,16 +11908,10 @@ private boolean isDescendantOf(Node child, Node ancestor) {
             inspectorMode = InspectorMode.OPERATIONS;
         }
         if (inspectorMode == InspectorMode.OPERATIONS && (operationsToggle == null || !operationsToggle.isSelected())) {
-            inspectorMode = sidePaneMasterVisible ? InspectorMode.DETAILS : InspectorMode.HIDDEN;
+            inspectorMode = sidePaneMasterVisible ? preferredContentInspectorMode() : InspectorMode.HIDDEN;
         }
         boolean show = inspectorMode != InspectorMode.HIDDEN;
-        applyInspectorModeNodeVisibility(inspectorMode);
-        applyWorkspaceInspectorVisibility(show);
-        if (show && fileTable != null && (inspectorMode == InspectorMode.DETAILS || inspectorMode == InspectorMode.PREVIEW)) {
-            FileItem fi = fileTable.getSelectionModel().getSelectedItem();
-            updateSelectionDetails(fi != null ? fi.path() : null);
-        }
-        syncPaneTogglesFromUiState();
+        refreshInspectorPresentationForCurrentContext();
         persistWorkspaceShellPreferences();
         Platform.runLater(() -> {
             scheduleResponsiveTableViewportLayoutRefresh();
@@ -12556,16 +12742,39 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (detailsText != null) {
             detailsText.setText(buildDetailsPaneText(selected));
         }
-        // Preview: update lightweight fallback immediately and keep the correct placeholder icon
-        // visible while any thumbnail request is still pending.
-        if (previewImage != null) {
+        boolean keepResolvedPreview = isResolvedPreviewBoundTo(selected) || wasResolvedPreviewRenderedFor(selected);
+        boolean previewThumbCandidate = selected != null && previewImage != null
+                && ImageSupport.isThumbCandidate(selected) && Files.isRegularFile(selected);
+        boolean retainRenderedPreviewOnTransientNull = selected == null && shouldRetainDisplayedPreviewOnTransientNullSelection();
+
+        if (selected != null) {
+            previewClearDebounce.stop();
+        }
+
+        // Preview: keep the resolved image in place for the same selected path while refresh churn
+        // or a replacement thumbnail request is pending. For thumbnail candidates, do not swap a
+        // temporary placeholder icon back over a successfully resolved preview.
+        if (previewImage != null && !retainRenderedPreviewOnTransientNull) {
             previewImage.getProperties().put("previewPath", selected);
             String previewIdentity = selected == null ? null : resolveIconIdentityForPath(selected);
             previewImage.getProperties().put("previewIdentity", previewIdentity);
-            previewImage.setImage(resolvePreviewPlaceholderImage(selected));
+            if (!keepResolvedPreview) {
+                previewImage.getProperties().put("previewResolved", Boolean.FALSE);
+                Object lastResolvedPath = previewImage.getProperties().get("previewLastResolvedPath");
+                if (previewThumbCandidate) {
+                    if (!java.util.Objects.equals(lastResolvedPath, selected)) {
+                        previewImage.setImage(null);
+                    }
+                } else {
+                    previewImage.setImage(null);
+                    previewImage.getProperties().put("previewLastResolvedPath", null);
+                }
+            }
         }
-        if (previewText != null) {
-            previewText.setText(buildPreviewFallbackText(selected));
+        if (previewText != null && !keepResolvedPreview && !retainRenderedPreviewOnTransientNull) {
+            previewText.setText(previewThumbCandidate
+                    ? "Loading preview...\n\n" + selected
+                    : buildPreviewFallbackText(selected));
             previewText.setVisible(true);
             previewText.setManaged(true);
         }
@@ -12573,6 +12782,17 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             pendingPreviewPath = null;
             previewLoadSeq.incrementAndGet();
             previewLoadDebounce.stop();
+            if (retainRenderedPreviewOnTransientNull) {
+                previewClearDebounce.setDuration(javafx.util.Duration.millis(
+                        Long.getLong("fileexplorer.preview.transientNullClearDebounceMs", 900L)
+                ));
+                previewClearDebounce.playFromStart();
+                return;
+            }
+            previewClearDebounce.setDuration(javafx.util.Duration.millis(
+                    Long.getLong("fileexplorer.preview.clearDebounceMs", 220L)
+            ));
+            previewClearDebounce.playFromStart();
             return;
         }
         // Only do heavier preview work if the preview pane is enabled/visible.
@@ -12583,10 +12803,15 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             previewLoadDebounce.stop();
             return;
         }
-        if (previewImage != null && ImageSupport.isThumbCandidate(selected) && Files.isRegularFile(selected)) {
-            pendingPreviewPath = selected;
-            previewLoadSeq.incrementAndGet();
-            previewLoadDebounce.playFromStart();
+        if (previewThumbCandidate) {
+            if (keepResolvedPreview) {
+                pendingPreviewPath = null;
+                previewLoadDebounce.stop();
+            } else {
+                pendingPreviewPath = selected;
+                previewLoadSeq.incrementAndGet();
+                previewLoadDebounce.playFromStart();
+            }
         }
     }
 
@@ -12601,19 +12826,17 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         if (!ImageSupport.isThumbCandidate(selected) || !Files.isRegularFile(selected)) {
             return;
         }
-        int px = 280;
-        try {
-            if (previewImage.getFitWidth() > 0) {
-                px = (int) Math.round(previewImage.getFitWidth());
-            }
-        } catch (Exception ignored) {
-        }
+        int px = currentPreviewRenderTargetSizePx();
         final Path captured = selected;
         final long stamp = ticket;
         final String capturedIdentity = resolveIconIdentityForPath(captured);
+        boolean keepExistingResolvedPreview = isResolvedPreviewBoundTo(captured) || wasResolvedPreviewRenderedFor(captured);
         previewImage.getProperties().put("previewStamp", stamp);
         previewImage.getProperties().put("previewPath", captured);
         previewImage.getProperties().put("previewIdentity", capturedIdentity);
+        if (!keepExistingResolvedPreview) {
+            previewImage.getProperties().put("previewResolved", Boolean.FALSE);
+        }
         AsyncThumbnailService.getInstance()
                 .request(captured, px, AsyncThumbnailService.RequestPriority.USER_ACTION)
                 .thenAccept(img -> Platform.runLater(() -> {
@@ -12633,6 +12856,8 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                         return;
                     }
                     previewImage.setImage(img);
+                    previewImage.getProperties().put("previewResolved", Boolean.TRUE);
+                    previewImage.getProperties().put("previewLastResolvedPath", captured);
                     if (previewText != null) {
                         previewText.setVisible(false);
                         previewText.setManaged(false);
@@ -12640,15 +12865,46 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
                 }));
     }
 
-    private int currentPreviewPlaceholderSizePx() {
+    private int currentPreviewRenderTargetSizePx() {
         int px = 280;
         try {
-            if (previewImage != null && previewImage.getFitWidth() > 0) {
-                px = (int) Math.round(previewImage.getFitWidth());
+            if (previewImage != null) {
+                double fitWidth = previewImage.getFitWidth();
+                double fitHeight = previewImage.getFitHeight();
+                px = (int) Math.round(Math.max(Math.max(fitWidth, fitHeight), 16.0));
             }
         } catch (Exception ignored) {
         }
         return Math.max(16, px);
+    }
+
+    private int currentPreviewPlaceholderSizePx() {
+        return currentPreviewRenderTargetSizePx();
+    }
+
+    private boolean isResolvedPreviewBoundTo(Path selected) {
+        if (selected == null || previewImage == null) {
+            return false;
+        }
+        Object boundPath = previewImage.getProperties().get("previewPath");
+        Object resolved = previewImage.getProperties().get("previewResolved");
+        return java.util.Objects.equals(boundPath, selected) && java.lang.Boolean.TRUE.equals(resolved);
+    }
+
+    private boolean wasResolvedPreviewRenderedFor(Path selected) {
+        if (selected == null || previewImage == null || previewImage.getImage() == null) {
+            return false;
+        }
+        Object lastResolvedPath = previewImage.getProperties().get("previewLastResolvedPath");
+        return java.util.Objects.equals(lastResolvedPath, selected);
+    }
+
+    private boolean shouldRetainDisplayedPreviewOnTransientNullSelection() {
+        if (inspectorMode != InspectorMode.PREVIEW || previewImage == null || previewImage.getImage() == null) {
+            return false;
+        }
+        Object lastResolvedPath = previewImage.getProperties().get("previewLastResolvedPath");
+        return lastResolvedPath instanceof Path;
     }
 
     private String resolveIconIdentityForPath(Path path) {
@@ -12672,18 +12928,6 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         }
     }
 
-    private Image resolvePreviewPlaceholderImage(Path selected) {
-        if (selected == null || previewImage == null) {
-            return null;
-        }
-        if (!Files.isRegularFile(selected)) {
-            return null;
-        }
-        if (!ImageSupport.isThumbCandidate(selected)) {
-            return null;
-        }
-        return resolvePlaceholderImageForPath(selected, currentPreviewPlaceholderSizePx());
-    }
 
     private void scheduleCurrentFolderThumbnailWarmup() {
         if (SAFE_MODE) {
@@ -12801,7 +13045,6 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
         }
         if (previewImage != null) {
             previewImage.setPreserveRatio(true);
-            previewImage.setFitWidth(Math.max(previewImage.getFitWidth(), SIDE_PANE_MIN_WIDTH_PX));
         }
     }
 
@@ -13068,6 +13311,7 @@ private void startFillAllMetadataPassIfNeeded(long requestId) {
             applyIconFlowPadding(viewMode);
         }
         syncViewMenuSelection();
+        refreshInspectorPresentationForCurrentContext();
         if (!homeActive && !SAFE_MODE && isIconMode(viewMode)) {
             rebuildIconTiles();
             Platform.runLater(this::scheduleResponsiveIconViewportLayoutRefresh);

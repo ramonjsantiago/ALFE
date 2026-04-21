@@ -255,13 +255,13 @@
 }
 
 .explorer-details-table .table-row-cell {
-    -fx-background-insets: 0, 1 8 1 8;
+    -fx-background-insets: 0, 1.5 8 1.5 8;
     -fx-background-radius: 0, 0;
-    -fx-border-insets: 1 8 1 8;
+    -fx-border-insets: 1.5 8 1.5 8;
     -fx-border-radius: 0;
     -fx-border-width: 0, 1;
     -fx-padding: 0;
-    -fx-cell-size: 32px;
+    -fx-cell-size: 33px;
     -fx-background-color: transparent, transparent;
     -fx-border-color: transparent, transparent;
     -fx-selection-bar: transparent;
